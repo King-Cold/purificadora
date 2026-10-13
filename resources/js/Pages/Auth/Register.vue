@@ -1,0 +1,229 @@
+<script setup>
+import InputError from '@/Components/InputError.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+
+const form = useForm({
+    name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+});
+
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
+
+const submit = () => {
+    form.post(route('register'), {
+        onFinish: () => form.reset('password', 'password_confirmation'),
+    });
+};
+</script>
+
+<template>
+    <Head title="Crear Cuenta - Puritronic" />
+
+    <div class="min-h-screen w-full bg-white font-['Poppins',sans-serif] text-slate-800 flex flex-col justify-between selection:bg-[#0084ff] selection:text-white">
+        
+        <!-- Header superior / Barra de navegación -->
+        <header class="w-full px-4 py-3 sm:px-8 sm:py-4 flex items-center justify-between">
+            <Link
+                :href="route('auth.portal')"
+                class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-200/90 text-slate-600 hover:text-[#0084ff] hover:border-[#0084ff]/40 hover:bg-blue-50/50 shadow-xs transition-all"
+                title="Volver"
+                aria-label="Volver"
+            >
+                <i class="fa-solid fa-chevron-left text-xs sm:text-sm"></i>
+            </Link>
+
+            <Link href="/" class="flex items-center">
+                <img
+                    src="/images/logo.png"
+                    alt="Puritronic"
+                    class="h-7 sm:h-9 w-auto object-contain drop-shadow-xs"
+                />
+            </Link>
+
+            <Link
+                href="/"
+                class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-200/90 text-slate-600 hover:text-[#0084ff] hover:border-[#0084ff]/40 hover:bg-blue-50/50 shadow-xs transition-all"
+                title="Ir al inicio"
+                aria-label="Ir al inicio"
+            >
+                <i class="fa-solid fa-house text-xs sm:text-sm"></i>
+            </Link>
+        </header>
+
+        <!-- Contenido principal a Pantalla Completa: ilustración reducida en móvil para visibilidad total de los 4 campos -->
+        <main class="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 lg:px-12 py-2 sm:py-4 flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-6 lg:gap-14">
+            
+            <!-- Columna Ilustración (Tamaño balanceado y nítido) -->
+            <div class="w-full lg:w-1/2 flex justify-center items-center">
+                <div class="w-56 sm:w-68 md:w-80 lg:w-full lg:max-w-lg">
+                    <img
+                        src="/images/register.svg"
+                        alt="Crear Cuenta"
+                        class="w-full h-auto max-h-[210px] sm:max-h-[280px] lg:max-h-[480px] object-contain drop-shadow-sm transform hover:scale-[1.02] transition-transform duration-300 mx-auto"
+                    />
+                </div>
+            </div>
+
+            <!-- Columna Formulario Registro -->
+            <div class="w-full lg:w-1/2 flex justify-center">
+                <div class="w-full max-w-sm sm:max-w-md space-y-3 sm:space-y-4">
+                    
+                    <!-- Encabezado del Formulario -->
+                    <div class="space-y-0.5 sm:space-y-1 text-center lg:text-left">
+                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-black text-[#0e1c2e] tracking-tight">
+                            Crear Cuenta
+                        </h1>
+                        <p class="text-xs sm:text-sm text-slate-500 font-normal">
+                            Completa tus datos para empezar a pedir agua.
+                        </p>
+                    </div>
+
+                    <!-- Formulario de Registro compacto -->
+                    <form @submit.prevent="submit" class="space-y-2 sm:space-y-3">
+                        
+                        <!-- Campo: Nombre Completo -->
+                        <div class="space-y-0.5">
+                            <label for="name" class="block text-xs font-bold text-slate-700">
+                                Nombre Completo
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-regular fa-user text-xs sm:text-sm"></i>
+                                </div>
+                                <input
+                                    id="name"
+                                    type="text"
+                                    v-model="form.name"
+                                    required
+                                    autofocus
+                                    autocomplete="name"
+                                    placeholder="Tu nombre y apellido"
+                                    class="w-full pl-9 pr-4 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
+                                />
+                            </div>
+                            <InputError class="mt-0.5" :message="form.errors.name" />
+                        </div>
+
+                        <!-- Campo: Correo Electrónico -->
+                        <div class="space-y-0.5">
+                            <label for="email" class="block text-xs font-bold text-slate-700">
+                                Correo Electrónico
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-regular fa-envelope text-xs sm:text-sm"></i>
+                                </div>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    v-model="form.email"
+                                    required
+                                    autocomplete="username"
+                                    placeholder="ejemplo@correo.com"
+                                    class="w-full pl-9 pr-4 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
+                                />
+                            </div>
+                            <InputError class="mt-0.5" :message="form.errors.email" />
+                        </div>
+
+                        <!-- Campo: Contraseña -->
+                        <div class="space-y-0.5">
+                            <label for="password" class="block text-xs font-bold text-slate-700">
+                                Contraseña
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-lock text-xs sm:text-sm"></i>
+                                </div>
+                                <input
+                                    id="password"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    v-model="form.password"
+                                    required
+                                    autocomplete="new-password"
+                                    placeholder="Mínimo 8 caracteres"
+                                    class="w-full pl-9 pr-9 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPassword = !showPassword"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                                >
+                                    <i :class="showPassword ? 'fa-regular fa-eye-slash text-xs sm:text-sm' : 'fa-regular fa-eye text-xs sm:text-sm'"></i>
+                                </button>
+                            </div>
+                            <InputError class="mt-0.5" :message="form.errors.password" />
+                        </div>
+
+                        <!-- Campo: Confirmar Contraseña -->
+                        <div class="space-y-0.5">
+                            <label for="password_confirmation" class="block text-xs font-bold text-slate-700">
+                                Confirmar Contraseña
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-lock-open text-xs sm:text-sm"></i>
+                                </div>
+                                <input
+                                    id="password_confirmation"
+                                    :type="showConfirmPassword ? 'text' : 'password'"
+                                    v-model="form.password_confirmation"
+                                    required
+                                    autocomplete="new-password"
+                                    placeholder="Repite tu contraseña"
+                                    class="w-full pl-9 pr-9 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showConfirmPassword = !showConfirmPassword"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                                >
+                                    <i :class="showConfirmPassword ? 'fa-regular fa-eye-slash text-xs sm:text-sm' : 'fa-regular fa-eye text-xs sm:text-sm'"></i>
+                                </button>
+                            </div>
+                            <InputError class="mt-0.5" :message="form.errors.password_confirmation" />
+                        </div>
+
+                        <!-- Botón de Envío -->
+                        <div class="pt-1">
+                            <button
+                                type="submit"
+                                :disabled="form.processing"
+                                class="w-full py-2.5 sm:py-3 px-6 rounded-2xl bg-gradient-to-r from-[#0084ff] to-[#009bf5] hover:from-[#0070dc] hover:to-[#008fe0] text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                            >
+                                <span v-if="form.processing">Creando cuenta...</span>
+                                <span v-else>CREAR MI CUENTA</span>
+                                <i class="fa-solid fa-arrow-right text-xs"></i>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Enlace a Login -->
+                    <div class="pt-2 border-t border-slate-100 text-center">
+                        <p class="text-xs text-slate-500">
+                            ¿Ya tienes una cuenta registrada?
+                            <Link
+                                :href="route('login')"
+                                class="font-bold text-[#0084ff] hover:text-[#006bd6] ml-1 transition-colors underline"
+                            >
+                                Inicia sesión aquí
+                            </Link>
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer inferior simple -->
+        <footer class="w-full py-2.5 sm:py-3 text-center text-[11px] sm:text-xs text-slate-400">
+            Puritronic &copy; {{ new Date().getFullYear() }}
+        </footer>
+
+    </div>
+</template>
