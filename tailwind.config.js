@@ -17,16 +17,21 @@ export default {
             },
             colors: {
                 brand: {
-                    dark: '#0f172a',
-                    navy: '#0b192c',
-                    footer: '#0e1c2e',
-                    primary: '#0084ff',
-                    sky: '#14b8a6',
-                    cyan: '#00b4d8',
-                    teal: '#00d084',
-                    accent: '#06d6a0',
-                    lightBg: '#f8fafc',
-                    grayText: '#64748b',
+                    blue: '#0E1E42',       // PANTONE 2767C Glory Blue
+                    'blue-hover': '#162C5B',
+                    'blue-light': '#F0F4FA',
+                    red: '#AF143C',        // PANTONE 202C Glory Red
+                    'red-hover': '#8F1031',
+                    'red-light': '#FDF2F4',
+                    white: '#FFFFFF',      // PANTONE 663C Pure White
+                    cream: '#EFE7DC',      // Warm Cream / Sand
+                    'cream-light': '#FAF7F2',
+                    silver: '#BABABA',     // Neutral Silver
+                    dark: '#0E1E42',
+                    navy: '#0E1E42',
+                    footer: '#0E1E42',
+                    primary: '#0E1E42',
+                    accent: '#AF143C',
                 },
             },
         },

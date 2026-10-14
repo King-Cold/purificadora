@@ -35,9 +35,23 @@ const showingNavigationDropdown = ref(false);
                             >
                                 <NavLink
                                     :href="route('dashboard')"
-                                    :active="route().current('dashboard')"
+                                    :active="route().current('dashboard') || route().current('admin.dashboard')"
                                 >
                                     Dashboard
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user?.roles?.includes('Administrador') || $page.props.auth.user?.roles?.includes('Super Admin')"
+                                    :href="route('admin.users.index')"
+                                    :active="route().current('admin.users.*')"
+                                >
+                                    Usuarios
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user?.roles?.includes('Administrador') || $page.props.auth.user?.roles?.includes('Super Admin')"
+                                    :href="route('admin.customers.index')"
+                                    :active="route().current('admin.customers.*')"
+                                >
+                                    Clientes
                                 </NavLink>
                             </div>
                         </div>
@@ -142,9 +156,23 @@ const showingNavigationDropdown = ref(false);
                     <div class="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink
                             :href="route('dashboard')"
-                            :active="route().current('dashboard')"
+                            :active="route().current('dashboard') || route().current('admin.dashboard')"
                         >
                             Dashboard
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user?.roles?.includes('Administrador') || $page.props.auth.user?.roles?.includes('Super Admin')"
+                            :href="route('admin.users.index')"
+                            :active="route().current('admin.users.*')"
+                        >
+                            Usuarios
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user?.roles?.includes('Administrador') || $page.props.auth.user?.roles?.includes('Super Admin')"
+                            :href="route('admin.customers.index')"
+                            :active="route().current('admin.customers.*')"
+                        >
+                            Clientes
                         </ResponsiveNavLink>
                     </div>
 

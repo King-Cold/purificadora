@@ -198,20 +198,33 @@ const comments = [
 
                     <!-- BOTONES DE ACCIÓN (AUTH) -->
                     <div class="hidden sm:flex items-center gap-3">
-                        <Link
-                            v-if="canLogin"
-                            :href="route('login')"
-                            class="px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-[#0084ff] transition-all shadow-sm"
-                        >
-                            Iniciar Sesión
-                        </Link>
-                        <Link
-                            v-if="canRegister"
-                            :href="route('register')"
-                            class="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
-                        >
-                            Crear Cuenta
-                        </Link>
+                        <template v-if="$page.props.auth?.user">
+                            <Link
+                                :href="route('dashboard')"
+                                class="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                            >
+                                <span>Ir a mi Panel</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </Link>
+                        </template>
+                        <template v-else>
+                            <Link
+                                v-if="canLogin"
+                                :href="route('login')"
+                                class="px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-[#0084ff] transition-all shadow-sm"
+                            >
+                                Iniciar Sesión
+                            </Link>
+                            <Link
+                                v-if="canRegister"
+                                :href="route('register')"
+                                class="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
+                            >
+                                Crear Cuenta
+                            </Link>
+                        </template>
                     </div>
 
                     <!-- BOTÓN MÓVIL HAMBURGUESA -->
@@ -244,20 +257,30 @@ const comments = [
                         {{ item.label }}
                     </a>
                     <div class="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                        <Link
-                            v-if="canLogin"
-                            :href="route('login')"
-                            class="w-full text-center py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-full hover:bg-slate-50"
-                        >
-                            Iniciar Sesión
-                        </Link>
-                        <Link
-                            v-if="canRegister"
-                            :href="route('register')"
-                            class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0084ff] rounded-full shadow-md shadow-blue-500/20"
-                        >
-                            Crear Cuenta
-                        </Link>
+                        <template v-if="$page.props.auth?.user">
+                            <Link
+                                :href="route('dashboard')"
+                                class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0084ff] rounded-full shadow-md shadow-blue-500/20"
+                            >
+                                Ir a mi Panel
+                            </Link>
+                        </template>
+                        <template v-else>
+                            <Link
+                                v-if="canLogin"
+                                :href="route('login')"
+                                class="w-full text-center py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-full hover:bg-slate-50"
+                            >
+                                Iniciar Sesión
+                            </Link>
+                            <Link
+                                v-if="canRegister"
+                                :href="route('register')"
+                                class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0084ff] rounded-full shadow-md shadow-blue-500/20"
+                            >
+                                Crear Cuenta
+                            </Link>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -744,7 +767,7 @@ const comments = [
                     <p>© {{ new Date().getFullYear() }} Puritronic. Todos los derechos reservados.</p>
                     <div class="flex items-center gap-6">
                         <a href="#inicio" @click="scrollToSection($event, 'inicio')" class="hover:text-slate-300 transition-colors">Volver arriba</a>
-                        <Link :href="route('login')" class="hover:text-slate-300 transition-colors">Acceso Clientes</Link>
+                        <Link :href="$page.props.auth?.user ? route('dashboard') : route('login')" class="hover:text-slate-300 transition-colors">{{ $page.props.auth?.user ? 'Mi Panel' : 'Acceso Clientes' }}</Link>
                     </div>
                 </div>
             </div>

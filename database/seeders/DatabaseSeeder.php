@@ -15,11 +15,20 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // 1. Roles y Permisos de Spatie
+        $this->call(RolesAndPermissionsSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // 2. Usuario Administrador Inicial (si no existe)
+        $adminUser = User::firstOrCreate(
+            ['email' => 'admin@purificadora.com'],
+            [
+                'name' => 'Administrador General',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        if (!$adminUser->hasRole('Super Admin')) {
+            $adminUser->assignRole('Super Admin');
+        }
     }
 }
