@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,30 +17,116 @@ use Inertia\Response;
 class ProfileController extends Controller
 {
     /**
-     * Display the user's profile form.
+     * Muestra la vista de edición del perfil de usuario o "Mi perfil" de Cliente.
      */
     public function edit(Request $request): Response
     {
+        $user = $request->user();
+        $isClient = $user && $user->hasRole('Cliente');
+
+        $clientData = null;
+        if ($isClient) {
+            $customer = $user->customer;
+            if (!$customer) {
+                // Manejo seguro: si no existe registro Customer vinculado, se crea atómicamente
+                $customer = Customer::create([
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => 'No registrado',
+                    'customer_type' => 'particular',
+                    'price_tier' => 'general',
+                    'status' => 'active',
+                    'fixed_bottles_count' => 0,
+                    'exchange_bottles_count' => 0,
+                ]);
+            }
+
+            $address = $customer->address;
+
+            $clientData = [
+                'customer' => [
+                    'id' => $customer->id,
+                    'code' => $customer->code,
+                    'name' => $customer->name ?? $user->name,
+                    'nickname' => $customer->nickname ?? '',
+                    'phone' => ($customer->phone && $customer->phone !== 'No registrado') ? $customer->phone : '',
+                    'email' => $user->email,
+                    'status' => $customer->status ?? Customer::STATUS_ACTIVE,
+                    'status_label' => $customer->status_label,
+                    'can_place_orders' => $customer->canPlaceOrders(),
+                    'fixed_bottles_count' => (int) ($customer->fixed_bottles_count ?? 0),
+                    'exchange_bottles_count' => (int) ($customer->exchange_bottles_count ?? 0),
+                    'total_bottles' => (int) $customer->total_bottles,
+                ],
+                'address' => $address ? [
+                    'id' => $address->id,
+                    'street_and_number' => $address->street,
+                    'municipality' => $address->city ?: 'Hocabá',
+                    'delivery_zone' => $address->delivery_zone,
+                    'zone_label' => $address->zone_label ?: 'Sin zona asignada',
+                    'reference' => $address->reference,
+                    'has_address' => true,
+                ] : [
+                    'has_address' => false,
+                ],
+            ];
+        }
+
         return Inertia::render('Profile/Edit', [
-            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+            'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
+            'isClient' => $isClient,
+            'clientData' => $clientData,
         ]);
     }
 
     /**
-     * Update the user's profile information.
+     * Actualiza la información personal del usuario y sincroniza con Customer.
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $validated = $request->validated();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
+        DB::transaction(function () use ($user, $validated) {
+            $user->name = trim($validated['name']);
+            $user->email = trim($validated['email']);
 
-        $request->user()->save();
+            if ($user->isDirty('email')) {
+                $user->email_verified_at = null;
+            }
 
-        return Redirect::route('profile.edit');
+            $user->save();
+
+            // Sincronización transaccional con la entidad Customer si el usuario es Cliente
+            if ($user->hasRole('Cliente')) {
+                $customer = $user->customer;
+                if (!$customer) {
+                    $customer = new Customer();
+                    $customer->user_id = $user->id;
+                    $customer->customer_type = 'particular';
+                    $customer->price_tier = 'general';
+                    $customer->status = 'active';
+                    $customer->fixed_bottles_count = 0;
+                    $customer->exchange_bottles_count = 0;
+                }
+
+                $customer->name = $user->name;
+                $customer->email = $user->email;
+                if (isset($validated['phone'])) {
+                    $customer->phone = trim($validated['phone']);
+                }
+
+                // Apodo opcional: agregar, modificar o eliminar (guardar null si viene vacío)
+                $nickname = isset($validated['nickname']) ? trim((string) $validated['nickname']) : null;
+                $customer->nickname = ($nickname !== '') ? $nickname : null;
+
+                $customer->save();
+            }
+        });
+
+        return Redirect::route('profile.edit')->with('success', 'Tu información personal ha sido actualizada correctamente.');
     }
 
     /**

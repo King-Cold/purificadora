@@ -57,6 +57,8 @@ class RegisteredUserController extends Controller
                 'email' => $createdUser->email,
                 'customer_type' => 'particular',
                 'price_tier' => 'general',
+                'fixed_bottles_count' => 0,
+                'exchange_bottles_count' => 0,
                 'status' => 'active',
             ]);
 

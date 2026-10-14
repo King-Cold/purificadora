@@ -18,6 +18,22 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_INACTIVE = 'inactive';
+    public const STATUS_SUSPENDED = 'suspended';
+
+    public const ALLOWED_STATUSES = [
+        self::STATUS_ACTIVE,
+        self::STATUS_INACTIVE,
+        self::STATUS_SUSPENDED,
+    ];
+
+    public const STATUSES = [
+        self::STATUS_ACTIVE => 'Activo',
+        self::STATUS_INACTIVE => 'Inactivo',
+        self::STATUS_SUSPENDED => 'Suspendido',
+    ];
+
     /**
      * The table associated with the model.
      *
@@ -44,7 +60,14 @@ class Customer extends Model
         'price_tier',
         'credit_limit',
         'credit_days',
-        'has_deposit_bottles',
+        // Cantidad de botellones en posesión del cliente
+        'fixed_bottles_count',
+        'exchange_bottles_count',
+
+        // NOTA DE ARQUITECTURA: 'max_credit_bottles' queda obsoleto.
+        // El límite de garrafones fiados será GENERAL para toda la purificadora desde Configuración General en un sprint futuro.
+        'max_credit_bottles',
+
         'status',
         'notes',
     ];
@@ -60,6 +83,9 @@ class Customer extends Model
             'credit_limit' => 'decimal:2',
             'credit_days' => 'integer',
             'has_deposit_bottles' => 'boolean',
+            'max_credit_bottles' => 'integer',
+            'fixed_bottles_count' => 'integer',
+            'exchange_bottles_count' => 'integer',
         ];
     }
 
@@ -111,7 +137,7 @@ class Customer extends Model
                 'max:30',
                 Rule::unique('customers', 'code')->ignore($customerId),
             ],
-            'name' => ['required', 'string', 'max:150'],
+            'name' => ['nullable', 'string', 'max:150'],
             'nickname' => ['nullable', 'string', 'max:100'],
             'contact_name' => ['nullable', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:25'],
@@ -122,10 +148,19 @@ class Customer extends Model
             'price_tier' => ['required', Rule::in(['general', 'mayoreo', 'especial'])],
             'credit_limit' => ['numeric', 'min:0'],
             'credit_days' => ['integer', 'min:0'],
-            'has_deposit_bottles' => ['boolean'],
+            'fixed_bottles_count' => ['required', 'integer', 'min:0'],
+            'exchange_bottles_count' => ['required', 'integer', 'min:0'],
             'status' => ['required', Rule::in(['active', 'suspended', 'inactive'])],
             'notes' => ['nullable', 'string'],
         ];
+    }
+
+    /**
+     * Accesor informativo: Total de botellones en posesión del cliente (Fijos + Cambio).
+     */
+    public function getTotalBottlesAttribute(): int
+    {
+        return (int) (($this->fixed_bottles_count ?? 0) + ($this->exchange_bottles_count ?? 0));
     }
 
     /**
@@ -137,7 +172,15 @@ class Customer extends Model
     }
 
     /**
-     * Todos los domicilios asociados al cliente.
+     * Domicilio único del cliente particular.
+     */
+    public function address(): HasOne
+    {
+        return $this->hasOne(CustomerAddress::class)->whereNull('deleted_at');
+    }
+
+    /**
+     * Domicilios asociados al cliente (relación histórica conservada).
      */
     public function addresses(): HasMany
     {
@@ -145,11 +188,51 @@ class Customer extends Model
     }
 
     /**
-     * Domicilio predeterminado del cliente.
+     * Domicilio predeterminado del cliente (compatibilidad).
      */
     public function defaultAddress(): HasOne
     {
-        return $this->hasOne(CustomerAddress::class)->where('is_default', true);
+        return $this->hasOne(CustomerAddress::class)->whereNull('deleted_at');
+    }
+
+    /**
+     * Historial de cambios de estado comercial.
+     */
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(CustomerStatusHistory::class)->orderBy('id', 'desc');
+    }
+
+    /**
+     * Determina si el cliente está habilitado para realizar nuevos pedidos.
+     * Solo los clientes comerciales en estado 'active' pueden pedir garrafones.
+     */
+    public function canPlaceOrders(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE && is_null($this->deleted_at);
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED;
+    }
+
+    public function isInactive(): bool
+    {
+        return $this->status === self::STATUS_INACTIVE;
+    }
+
+    /**
+     * Accesor para el nombre legible del estado comercial.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return self::STATUSES[$this->status] ?? $this->status;
     }
 
     /**

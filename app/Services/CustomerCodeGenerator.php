@@ -36,8 +36,8 @@ class CustomerCodeGenerator
      */
     private static function getNextCode(): string
     {
-        // Obtenemos el último código numérico bloqueando la fila para actualización
-        $lastCustomer = Customer::query()
+        // Obtenemos el último código numérico bloqueando la fila para actualización (incluyendo soft-deletes)
+        $lastCustomer = Customer::withTrashed()
             ->lockForUpdate()
             ->where('code', 'LIKE', self::PREFIX . '%')
             ->orderBy('id', 'desc')
@@ -50,10 +50,10 @@ class CustomerCodeGenerator
             $nextNumber = $lastNumber + 1;
         }
 
-        // Aseguramos que no exista (en caso de que los IDs no sean estrictamente correlativos)
+        // Aseguramos que no exista en ningún registro activo ni eliminado (evita colisión de clave única)
         do {
             $candidateCode = self::PREFIX . str_pad((string) $nextNumber, self::DIGITS, '0', STR_PAD_LEFT);
-            $exists = Customer::query()->where('code', $candidateCode)->exists();
+            $exists = Customer::withTrashed()->where('code', $candidateCode)->exists();
             if ($exists) {
                 $nextNumber++;
             }

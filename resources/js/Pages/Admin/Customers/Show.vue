@@ -1,24 +1,92 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     customer: {
         type: Object,
         required: true,
     },
+    available_statuses: {
+        type: Object,
+        default: () => ({
+            active: 'Activo',
+            inactive: 'Inactivo',
+            suspended: 'Suspendido',
+        }),
+    },
+    canEdit: {
+        type: Boolean,
+        default: false,
+    },
 });
+
+const isStatusModalOpen = ref(false);
+
+const statusForm = useForm({
+    status: props.customer.status || 'active',
+    reason: '',
+});
+
+const openStatusModal = (targetStatus = null) => {
+    statusForm.status = targetStatus || props.customer.status || 'active';
+    statusForm.reason = '';
+    statusForm.clearErrors();
+    isStatusModalOpen.value = true;
+};
+
+const closeStatusModal = () => {
+    isStatusModalOpen.value = false;
+    statusForm.reset();
+    statusForm.clearErrors();
+};
+
+const submitStatusChange = () => {
+    if (statusForm.status === props.customer.status) {
+        closeStatusModal();
+        return;
+    }
+
+    statusForm.patch(route('admin.customers.status.update', props.customer.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeStatusModal();
+        },
+    });
+};
+
+const deleteAddress = (address) => {
+    if (confirm('¿Está seguro de eliminar el domicilio de este cliente?')) {
+        router.delete(route('admin.customers.addresses.destroy', [props.customer.id, address.id]), {
+            preserveScroll: true,
+        });
+    }
+};
 
 const getStatusBadgeClass = (customerStatus) => {
     switch (customerStatus) {
         case 'active':
-            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
         case 'suspended':
-            return 'bg-amber-50 text-amber-700 border-amber-200';
+            return 'bg-amber-50 text-amber-800 border-amber-300';
         case 'inactive':
-            return 'bg-rose-50 text-rose-700 border-rose-200';
+            return 'bg-gray-100 text-gray-700 border-gray-300';
         default:
             return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+};
+
+const getStatusDotClass = (customerStatus) => {
+    switch (customerStatus) {
+        case 'active':
+            return 'bg-emerald-500';
+        case 'suspended':
+            return 'bg-amber-500';
+        case 'inactive':
+            return 'bg-gray-500';
+        default:
+            return 'bg-gray-400';
     }
 };
 
@@ -35,18 +103,45 @@ const getStatusLabel = (customerStatus) => {
     }
 };
 
+const getStatusDescription = (customerStatus) => {
+    switch (customerStatus) {
+        case 'active':
+            return 'El cliente está habilitado para recibir atención comercial, solicitar garrafones y recibir entregas a domicilio.';
+        case 'inactive':
+            return 'El cliente permanece registrado con su historial intacto, pero temporalmente no está habilitado para solicitar nuevos pedidos.';
+        case 'suspended':
+            return 'El cliente se encuentra suspendido comercialmente para nuevos pedidos. Requiere una decisión administrativa para levantar la suspensión.';
+        default:
+            return '';
+    }
+};
+
+const confirmationMessage = computed(() => {
+    switch (statusForm.status) {
+        case 'suspended':
+            return '¿Deseas suspender comercialmente a este cliente? No podrá realizar nuevos pedidos hasta que se reactive.';
+        case 'inactive':
+            return '¿Deseas desactivar comercialmente a este cliente? Permanecerá registrado con su historial pero temporalmente no podrá realizar nuevos pedidos.';
+        case 'active':
+            return '¿Deseas activar comercialmente a este cliente? Quedará habilitado para recibir atención comercial y nuevos pedidos.';
+        default:
+            return '¿Confirmas el cambio de estado comercial para este cliente?';
+    }
+});
+
 const getInitials = (name) => {
-    if (!name) return 'C';
-    const parts = name.trim().split(' ');
+    const text = (name && name.trim()) || (props.customer.nickname && props.customer.nickname.trim()) || 'C';
+    const parts = text.split(' ').filter(Boolean);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return parts.substring(0, 2).toUpperCase();
+    return text.substring(0, 2).toUpperCase();
 };
 </script>
 
+
 <template>
-    <Head :title="`Cliente: ${customer.name} (${customer.code}) - Puritronic`" />
+    <Head :title="`Cliente: ${customer.name || customer.nickname || 'Particular'} (${customer.code}) - Puritronic`" />
 
     <AuthenticatedLayout>
         <template #header>
@@ -61,7 +156,7 @@ const getInitials = (name) => {
                     </div>
                     <div class="flex flex-wrap items-center gap-2.5">
                         <h2 class="text-xl font-bold leading-tight text-gray-900">
-                            {{ customer.name }}
+                            {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
                         </h2>
                         <!-- Badge Apodo si existe -->
                         <span
@@ -110,6 +205,17 @@ const getInitials = (name) => {
 
                 <div class="flex items-center gap-2.5 self-start sm:self-auto">
                     <Link
+                        v-if="canEdit"
+                        :href="route('admin.customers.edit', customer.id)"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-white bg-blue-900 border border-transparent rounded-lg hover:bg-blue-800 transition shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2"
+                    >
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Editar cliente</span>
+                    </Link>
+
+                    <Link
                         :href="route('admin.customers.index')"
                         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
                     >
@@ -156,16 +262,21 @@ const getInitials = (name) => {
                         </div>
                         <div class="text-center sm:text-left flex-1">
                             <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
-                                <h3 class="text-2xl font-bold tracking-tight">{{ customer.name }}</h3>
+                                <h3 class="text-2xl font-bold tracking-tight">
+                                    {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
+                                </h3>
                                 <span class="text-xs px-2.5 py-1 rounded-md bg-white/20 text-blue-100 font-mono font-semibold">
                                     {{ customer.code }}
                                 </span>
                             </div>
-                            <div v-if="customer.nickname" class="text-sm text-blue-200 font-medium mb-1">
+                            <div v-if="customer.name && customer.nickname" class="text-sm text-blue-200 font-medium mb-1">
                                 Alias comunitario: <span class="text-white font-bold">"{{ customer.nickname }}"</span>
                             </div>
+                            <div v-else-if="!customer.name && customer.nickname" class="text-sm text-blue-200 font-medium mb-1">
+                                Identificado en la colonia por su apodo
+                            </div>
                             <p class="text-xs text-blue-200/90">
-                                Persona física particular registrada para entrega de agua purificada
+                                Persona física particular registrada para entrega de garrafones de agua
                             </p>
                             <div class="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs text-blue-100">
                                 <span class="inline-flex items-center gap-1 bg-white/10 px-2.5 py-1 rounded">
@@ -193,7 +304,9 @@ const getInitials = (name) => {
                         <dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                             <div class="bg-gray-50/75 p-3.5 rounded-lg border border-gray-100">
                                 <dt class="text-xs font-medium text-gray-500">Nombre Completo</dt>
-                                <dd class="mt-1 font-semibold text-gray-900">{{ customer.name }}</dd>
+                                <dd class="mt-1 font-semibold text-gray-900">
+                                    {{ customer.name || 'Sin nombre registrado (Identificado por apodo)' }}
+                                </dd>
                             </div>
 
                             <div class="bg-gray-50/75 p-3.5 rounded-lg border border-gray-100">
@@ -233,7 +346,174 @@ const getInitials = (name) => {
                     </div>
                 </div>
 
-                <!-- 2. TARJETA: ACCESO AL SISTEMA / CUENTA VINCULADA -->
+                <!-- 2. TARJETA: ESTADO COMERCIAL Y ATENCIÓN AL CLIENTE -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-5 mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center shrink-0 border border-blue-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">
+                                    Estado comercial
+                                </h3>
+                                <p class="text-xs text-gray-500">
+                                    Habilitación comercial para atención de pedidos y entregas (independiente del acceso a la plataforma)
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Botón para cambiar estado comercial -->
+                        <div v-if="canEdit" class="self-start sm:self-auto">
+                            <button
+                                type="button"
+                                @click="openStatusModal()"
+                                class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 cursor-pointer"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>Cambiar estado comercial</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cuadrícula informativa: Estado Comercial vs Estado de Acceso -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <!-- Panel Estado Comercial -->
+                        <div class="p-4 rounded-xl border bg-gray-50/80 border-gray-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Estado Comercial</span>
+                                <span
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+                                    :class="getStatusBadgeClass(customer.status)"
+                                >
+                                    <span class="h-2 w-2 rounded-full" :class="getStatusDotClass(customer.status)"></span>
+                                    {{ getStatusLabel(customer.status) }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-600 leading-relaxed mb-3">
+                                {{ getStatusDescription(customer.status) }}
+                            </p>
+                            <div class="pt-2 border-t border-gray-200/60 flex items-center justify-between text-xs">
+                                <span class="text-gray-500 font-medium">Habilitado para pedidos:</span>
+                                <span
+                                    class="font-semibold"
+                                    :class="customer.status === 'active' ? 'text-emerald-700' : 'text-gray-600'"
+                                >
+                                    {{ customer.status === 'active' ? 'Sí (Habilitado)' : 'No (Pausado / Suspendido)' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Panel Estado de Acceso a Plataforma -->
+                        <div class="p-4 rounded-xl border bg-gray-50/80 border-gray-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Estado de Acceso (Usuario)</span>
+                                <span
+                                    v-if="customer.has_account"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+                                    :class="customer.user?.is_active ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-rose-50 text-rose-800 border-rose-300'"
+                                >
+                                    <span class="h-2 w-2 rounded-full" :class="customer.user?.is_active ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                                    {{ customer.user?.is_active ? 'Habilitado' : 'Deshabilitado' }}
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                >
+                                    <span class="h-2 w-2 rounded-full bg-gray-400"></span>
+                                    Sin cuenta
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-600 leading-relaxed mb-3">
+                                <template v-if="customer.has_account">
+                                    Cuenta asociada al usuario <strong class="text-gray-800">{{ customer.user?.email }}</strong>. Determina si puede autenticarse en el portal de autoservicio.
+                                </template>
+                                <template v-else>
+                                    Este cliente particular no posee cuenta web de acceso. Sus pedidos y atención se gestionan directamente por el personal de la purificadora.
+                                </template>
+                            </p>
+                            <div class="pt-2 border-t border-gray-200/60 flex items-center justify-between text-xs">
+                                <span class="text-gray-500 font-medium">Autenticación en portal:</span>
+                                <span class="font-semibold text-gray-800">
+                                    {{ customer.has_account ? (customer.user?.is_active ? 'Permitida' : 'Bloqueada por módulo de usuarios') : 'No aplica (Sin credenciales)' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sección Historial de Cambios de Estado Comercial -->
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Historial de Cambios Comerciales
+                            </h4>
+                            <span class="text-xs text-gray-400 font-medium">
+                                {{ customer.status_histories?.length || 0 }} registro(s)
+                            </span>
+                        </div>
+
+                        <!-- Tabla de solo lectura del historial -->
+                        <div v-if="customer.status_histories && customer.status_histories.length > 0" class="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
+                                <thead class="bg-gray-50 text-gray-600 font-semibold uppercase tracking-wider">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-2.5">Fecha y hora</th>
+                                        <th scope="col" class="px-4 py-2.5">Estado anterior</th>
+                                        <th scope="col" class="px-4 py-2.5">Estado nuevo</th>
+                                        <th scope="col" class="px-4 py-2.5">Motivo / Justificación</th>
+                                        <th scope="col" class="px-4 py-2.5">Responsable</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 bg-white">
+                                    <tr v-for="item in customer.status_histories" :key="item.id" class="hover:bg-gray-50/50">
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-gray-700 font-medium">
+                                            {{ item.created_at }}
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                            <span
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border"
+                                                :class="getStatusBadgeClass(item.previous_status)"
+                                            >
+                                                {{ item.previous_status_label }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                            <span
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border"
+                                                :class="getStatusBadgeClass(item.new_status)"
+                                            >
+                                                {{ item.new_status_label }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-700 max-w-xs">
+                                            <span v-if="item.reason" class="italic">"{{ item.reason }}"</span>
+                                            <span v-else class="text-gray-400">Sin motivo registrado</span>
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-gray-700 font-medium">
+                                            {{ item.changed_by_name }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Estado vacío si no hay historial aún -->
+                        <div v-else class="text-center py-5 px-4 bg-gray-50/60 rounded-lg border border-dashed border-gray-200">
+                            <p class="text-xs text-gray-500">
+                                No se registran cambios de estado comercial previos. El cliente conserva su estado de registro original.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. TARJETA: ACCESO AL SISTEMA / CUENTA VINCULADA -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
                     <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-5">
                         <div class="flex items-center gap-2.5">
@@ -332,9 +612,9 @@ const getInitials = (name) => {
                     </div>
                 </div>
 
-                <!-- 3. TARJETA: DOMICILIOS DE ENTREGA -->
+                <!-- 3. TARJETA: DOMICILIO DE ENTREGA (CASA) -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
-                    <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 pb-4 mb-5">
                         <div class="flex items-center gap-2.5">
                             <div class="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,164 +624,216 @@ const getInitials = (name) => {
                             </div>
                             <div>
                                 <h3 class="text-base font-semibold text-gray-900">
-                                    Domicilios de Entrega
+                                    Domicilio de Entrega (Casa)
                                 </h3>
                                 <p class="text-xs text-gray-500">
-                                    Ubicaciones registradas para el reparto y recolección de garrafones
+                                    Ubicación de entrega habitual para el reparto de garrafones
                                 </p>
                             </div>
                         </div>
 
-                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            {{ customer.addresses_count }} registrado(s)
-                        </span>
+                        <!-- Si no tiene domicilio, permitir registrarlo -->
+                        <div v-if="!customer.address" class="self-start sm:self-auto">
+                            <Link
+                                :href="route('admin.customers.addresses.create', customer.id)"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>Registrar domicilio</span>
+                            </Link>
+                        </div>
                     </div>
 
-                    <!-- Listado de Domicilios -->
-                    <div v-if="customer.addresses && customer.addresses.length > 0" class="space-y-4">
-                        <div
-                            v-for="address in customer.addresses"
-                            :key="address.id"
-                            class="p-4 sm:p-5 rounded-xl border transition"
-                            :class="address.is_default ? 'bg-emerald-50/30 border-emerald-300 ring-1 ring-emerald-200 shadow-2xs' : 'bg-gray-50/50 border-gray-200'"
-                        >
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3 mb-3">
-                                <div class="flex items-center gap-2">
+                    <!-- Ficha del Domicilio Único -->
+                    <div v-if="customer.address" class="space-y-4">
+                        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50/50">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 mb-4">
+                                <div class="flex flex-wrap items-center gap-2">
                                     <span class="text-sm font-bold text-gray-900">
-                                        {{ address.label }}
+                                        Casa del Cliente
                                     </span>
                                     <span
-                                        v-if="address.is_default"
-                                        class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full"
+                                        class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border"
+                                        :class="customer.address.is_hocaba ? 'bg-blue-50 text-blue-900 border-blue-200' : 'bg-amber-50 text-amber-800 border-amber-200'"
                                     >
-                                        <svg class="w-3 h-3 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                        </svg>
-                                        Domicilio Principal Predeterminado
+                                        {{ customer.address.zone_label }}
                                     </span>
                                 </div>
-                                <span class="text-xs text-gray-400 font-mono">
-                                    ID: #{{ address.id }}
-                                </span>
+
+                                <!-- Acciones del Domicilio Único -->
+                                <div class="flex items-center gap-2 self-start sm:self-auto">
+                                    <Link
+                                        :href="route('admin.customers.addresses.edit', [customer.id, customer.address.id])"
+                                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition shadow-2xs"
+                                        title="Editar domicilio"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        <span>Editar domicilio</span>
+                                    </Link>
+
+                                    <button
+                                        type="button"
+                                        @click="deleteAddress(customer.address)"
+                                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition"
+                                        title="Eliminar este domicilio"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        <span>Eliminar</span>
+                                    </button>
+                                </div>
                             </div>
 
-                            <dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                            <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                                 <div>
-                                    <dt class="text-gray-500 font-medium">Dirección Completa</dt>
-                                    <dd class="text-gray-900 font-semibold mt-0.5">
-                                        {{ address.street }} #{{ address.exterior_number }}
-                                        <span v-if="address.interior_number">Int. {{ address.interior_number }}</span>
+                                    <dt class="text-gray-500 font-medium">Calle y Número</dt>
+                                    <dd class="text-gray-900 font-bold text-sm mt-0.5">
+                                        {{ customer.address.street_and_number }}
                                     </dd>
                                 </div>
 
                                 <div>
-                                    <dt class="text-gray-500 font-medium">Colonia y Código Postal</dt>
-                                    <dd class="text-gray-900 font-medium mt-0.5">
-                                        Col. {{ address.neighborhood || 'N/D' }} - C.P. {{ address.postal_code || 'N/D' }}
+                                    <dt class="text-gray-500 font-medium">Municipio</dt>
+                                    <dd class="text-gray-900 font-semibold text-sm mt-0.5">
+                                        {{ customer.address.municipality }}
                                     </dd>
                                 </div>
 
                                 <div>
-                                    <dt class="text-gray-500 font-medium">Ciudad y Estado</dt>
-                                    <dd class="text-gray-900 font-medium mt-0.5">
-                                        {{ address.city || 'N/D' }}, {{ address.state || 'N/D' }}
+                                    <dt class="text-gray-500 font-medium">Zona de Reparto</dt>
+                                    <dd class="text-gray-900 font-semibold text-sm mt-0.5">
+                                        {{ customer.address.zone_label }}
                                     </dd>
                                 </div>
 
-                                <div v-if="address.between_streets">
-                                    <dt class="text-gray-500 font-medium">Entre Calles</dt>
-                                    <dd class="text-gray-800 mt-0.5">{{ address.between_streets }}</dd>
-                                </div>
-
-                                <div v-if="address.reference" class="sm:col-span-2">
+                                <div class="sm:col-span-3">
                                     <dt class="text-gray-500 font-medium">Referencias para el Repartidor</dt>
-                                    <dd class="text-gray-800 italic mt-0.5 bg-white p-2 rounded border border-gray-100">
-                                        "{{ address.reference }}"
+                                    <dd class="text-gray-800 italic mt-1 bg-white p-3 rounded-lg border border-gray-100">
+                                        {{ customer.address.reference || 'Sin referencias registradas.' }}
                                     </dd>
-                                </div>
-
-                                <div v-if="address.delivery_zone">
-                                    <dt class="text-gray-500 font-medium">Zona / Sector de Reparto</dt>
-                                    <dd class="text-gray-800 font-semibold mt-0.5">{{ address.delivery_zone }}</dd>
-                                </div>
-
-                                <div v-if="address.preferred_time_window">
-                                    <dt class="text-gray-500 font-medium">Horario Preferente de Entrega</dt>
-                                    <dd class="text-gray-800 font-medium mt-0.5">{{ address.preferred_time_window }}</dd>
                                 </div>
                             </dl>
                         </div>
                     </div>
 
-                    <!-- Estado Vacío de Domicilios -->
+                    <!-- Estado Vacío: Si no tiene domicilio -->
                     <div v-else class="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300">
                         <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         </svg>
-                        <h4 class="mt-2 text-sm font-semibold text-gray-900">Sin domicilios registrados</h4>
-                        <p class="mt-1 text-xs text-gray-500">
-                            Este cliente aún no tiene direcciones dadas de alta para el servicio de reparto.
+                        <h4 class="mt-2 text-sm font-semibold text-gray-900">Este cliente todavía no tiene una dirección registrada</h4>
+                        <p class="mt-1 text-xs text-gray-500 max-w-sm mx-auto">
+                            Registre la ubicación de su casa para la entrega de garrafones de agua.
                         </p>
+                        <div class="mt-4">
+                            <Link
+                                :href="route('admin.customers.addresses.create', customer.id)"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-sm"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>Registrar domicilio</span>
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 4. TARJETA: CONDICIONES COMERCIALES BÁSICAS -->
+                <!-- 4. TARJETA: BOTELLONES REGISTRADOS -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
-                    <div class="flex items-center gap-2.5 border-b border-gray-100 pb-4 mb-5">
-                        <div class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-800 flex items-center justify-center">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 pb-4 mb-5">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-8 w-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-semibold text-gray-900">
+                                    Botellones registrados
+                                </h3>
+                                <p class="text-xs text-gray-500">
+                                    Control de envases en posesión del cliente (fijos identificados y de cambio)
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-base font-semibold text-gray-900">
-                                Información Comercial Básica
-                            </h3>
-                            <p class="text-xs text-gray-500">
-                                Tabulador de precio y condiciones de entrega registradas en el sistema
-                            </p>
+
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold self-start sm:self-auto shadow-2xs">
+                            <span class="text-gray-600">Total en posesión:</span>
+                            <span class="text-base font-bold text-blue-950 font-mono">{{ customer.total_bottles }}</span>
+                            <span class="text-gray-600">garrafones</span>
                         </div>
                     </div>
 
                     <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200/80">
-                            <dt class="text-gray-500 font-medium">Lista / Tarifa de Precios</dt>
-                            <dd class="mt-1.5 flex items-center gap-1.5">
-                                <span class="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-900 uppercase">
-                                    {{ customer.price_tier }}
-                                </span>
-                            </dd>
+                        <!-- Botellones Fijos -->
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <dt class="text-xs font-bold text-gray-900">Botellones Fijos</dt>
+                                    <span class="text-[11px] px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-semibold">Rotulados con su nombre</span>
+                                </div>
+                                <dd class="mt-2">
+                                    <span class="text-2xl font-extrabold text-blue-950 font-mono">{{ customer.fixed_bottles_count }}</span>
+                                    <span class="text-xs text-gray-500 ml-1.5 font-medium">envase(s)</span>
+                                </dd>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-3 leading-relaxed">
+                                Pertenecen al cliente. Identificados con su nombre. Se recogen para su lavado y llenado en planta y se devuelve exactamente el mismo envase.
+                            </p>
                         </div>
 
-                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200/80">
-                            <dt class="text-gray-500 font-medium">Condiciones de Crédito</dt>
-                            <dd class="mt-1.5">
-                                <span v-if="customer.has_credit" class="font-semibold text-gray-900">
-                                    Límite: ${{ customer.credit_limit.toFixed(2) }} ({{ customer.credit_days }} días)
-                                </span>
-                                <span v-else class="text-gray-600 font-medium">
-                                    De contado (Sin crédito autorizado)
-                                </span>
-                            </dd>
+                        <!-- Botellones de Cambio -->
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <dt class="text-xs font-bold text-gray-900">Botellones de Cambio</dt>
+                                    <span class="text-[11px] px-2 py-0.5 rounded bg-sky-100 text-sky-900 font-semibold">Intercambiables</span>
+                                </div>
+                                <dd class="mt-2">
+                                    <span class="text-2xl font-extrabold text-sky-950 font-mono">{{ customer.exchange_bottles_count }}</span>
+                                    <span class="text-xs text-gray-500 ml-1.5 font-medium">envase(s)</span>
+                                </dd>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-3 leading-relaxed">
+                                Envases universales sin identificación personal. Se entregan vacíos y se intercambian de inmediato por otro botellón lleno durante la visita del repartidor.
+                            </p>
                         </div>
 
-                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200/80">
-                            <dt class="text-gray-500 font-medium">Comodato / Préstamo de Envases</dt>
-                            <dd class="mt-1.5">
-                                <span v-if="customer.has_deposit_bottles" class="text-emerald-700 font-semibold inline-flex items-center gap-1">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    Autorizado para préstamo
-                                </span>
-                                <span v-else class="text-gray-600 font-medium">
-                                    A cambio de envase vacío
-                                </span>
-                            </dd>
+                        <!-- Modalidad de Envases -->
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <dt class="text-xs font-bold text-gray-900">Modalidad de Envases</dt>
+                                    <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-semibold">Activa</span>
+                                </div>
+                                <dd class="mt-2 text-sm font-semibold text-gray-900">
+                                    <span v-if="customer.fixed_bottles_count > 0 && customer.exchange_bottles_count > 0" class="text-emerald-700">
+                                        Mixto (Fijos y de Cambio)
+                                    </span>
+                                    <span v-else-if="customer.fixed_bottles_count > 0" class="text-blue-900">
+                                        Exclusivo Fijos
+                                    </span>
+                                    <span v-else-if="customer.exchange_bottles_count > 0" class="text-sky-900">
+                                        Exclusivo Cambio
+                                    </span>
+                                    <span v-else class="text-gray-500 font-normal">
+                                        Sin botellones registrados aún
+                                    </span>
+                                </dd>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-3 leading-relaxed">
+                                El cliente puede tener ambos tipos de botellones simultáneamente según sus necesidades de servicio.
+                            </p>
                         </div>
 
-                        <div v-if="customer.notes" class="sm:col-span-3 bg-gray-50 p-4 rounded-lg border border-gray-200/80">
-                            <dt class="text-gray-500 font-medium">Notas Administrativas Internas</dt>
+                        <div v-if="customer.notes" class="sm:col-span-3 bg-gray-50 p-4 rounded-lg border border-gray-200/80 mt-2">
+                            <dt class="text-gray-500 font-medium">Notas y Observaciones de Entrega</dt>
                             <dd class="mt-1 text-gray-800 leading-relaxed italic">
                                 {{ customer.notes }}
                             </dd>
@@ -509,6 +841,190 @@ const getInitials = (name) => {
                     </dl>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- MODAL: CAMBIO DE ESTADO COMERCIAL -->
+        <div
+            v-if="isStatusModalOpen"
+            class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+        >
+            <!-- Fondo oscuro con desenfoque -->
+            <div
+                class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity"
+                @click="closeStatusModal"
+            ></div>
+
+            <!-- Contenedor del Modal -->
+            <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-5">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900">
+                                Cambiar Estado Comercial
+                            </h3>
+                            <p class="text-xs text-gray-500">
+                                Cliente: {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Particular') }} ({{ customer.code }})
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="closeStatusModal"
+                        class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form @submit.prevent="submitStatusChange" class="space-y-4">
+                    <!-- Selector de nuevo estado -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                            Seleccionar Nuevo Estado Comercial
+                        </label>
+                        <div class="grid grid-cols-3 gap-2.5">
+                            <!-- Opción Activo -->
+                            <label
+                                class="flex flex-col items-center justify-center p-3 rounded-xl border text-center cursor-pointer transition select-none"
+                                :class="statusForm.status === 'active'
+                                    ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'"
+                            >
+                                <input
+                                    type="radio"
+                                    name="commercial_status"
+                                    value="active"
+                                    v-model="statusForm.status"
+                                    class="sr-only"
+                                />
+                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 mb-1"></span>
+                                <span class="text-xs">Activo</span>
+                            </label>
+
+                            <!-- Opción Inactivo -->
+                            <label
+                                class="flex flex-col items-center justify-center p-3 rounded-xl border text-center cursor-pointer transition select-none"
+                                :class="statusForm.status === 'inactive'
+                                    ? 'bg-gray-100 border-gray-500 ring-2 ring-gray-400/20 text-gray-900 font-bold'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'"
+                            >
+                                <input
+                                    type="radio"
+                                    name="commercial_status"
+                                    value="inactive"
+                                    v-model="statusForm.status"
+                                    class="sr-only"
+                                />
+                                <span class="h-2.5 w-2.5 rounded-full bg-gray-500 mb-1"></span>
+                                <span class="text-xs">Inactivo</span>
+                            </label>
+
+                            <!-- Opción Suspendido -->
+                            <label
+                                class="flex flex-col items-center justify-center p-3 rounded-xl border text-center cursor-pointer transition select-none"
+                                :class="statusForm.status === 'suspended'
+                                    ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/20 text-amber-950 font-bold'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'"
+                            >
+                                <input
+                                    type="radio"
+                                    name="commercial_status"
+                                    value="suspended"
+                                    v-model="statusForm.status"
+                                    class="sr-only"
+                                />
+                                <span class="h-2.5 w-2.5 rounded-full bg-amber-500 mb-1"></span>
+                                <span class="text-xs">Suspendido</span>
+                            </label>
+                        </div>
+                        <p v-if="statusForm.errors.status" class="mt-1 text-xs text-rose-600">
+                            {{ statusForm.errors.status }}
+                        </p>
+                    </div>
+
+                    <!-- Mensaje de confirmación explícito según el estado -->
+                    <div
+                        class="p-3.5 rounded-xl border text-xs leading-relaxed"
+                        :class="{
+                            'bg-amber-50 border-amber-200 text-amber-900': statusForm.status === 'suspended',
+                            'bg-gray-50 border-gray-300 text-gray-800': statusForm.status === 'inactive',
+                            'bg-emerald-50 border-emerald-200 text-emerald-900': statusForm.status === 'active',
+                        }"
+                    >
+                        <div class="font-semibold mb-0.5 flex items-center gap-1.5">
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Confirmación:
+                        </div>
+                        <p>{{ confirmationMessage }}</p>
+                    </div>
+
+                    <!-- Motivo opcional -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="status_reason" class="block text-xs font-medium text-gray-700">
+                                Motivo o justificación del cambio <span class="text-gray-400 font-normal">(Opcional)</span>
+                            </label>
+                            <span class="text-[11px] text-gray-400 font-mono">
+                                {{ statusForm.reason ? statusForm.reason.length : 0 }}/500
+                            </span>
+                        </div>
+                        <textarea
+                            id="status_reason"
+                            v-model="statusForm.reason"
+                            maxlength="500"
+                            rows="3"
+                            placeholder="Ej. Solicitud voluntaria del cliente, periodo vacacional, acuerdo administrativo..."
+                            class="block w-full text-xs rounded-lg border-gray-300 shadow-2xs focus:border-blue-500 focus:ring-blue-500"
+                        ></textarea>
+                        <p v-if="statusForm.errors.reason" class="mt-1 text-xs text-rose-600">
+                            {{ statusForm.errors.reason }}
+                        </p>
+                    </div>
+
+                    <!-- Nota de seguridad y separación de entidades -->
+                    <div class="p-3 rounded-lg bg-blue-50/70 border border-blue-200/60 text-[11px] text-blue-900 flex items-start gap-2">
+                        <svg class="w-4 h-4 text-blue-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <p class="leading-relaxed">
+                            <strong>Independencia de estados:</strong> Esta acción no elimina al cliente ni modifica el estado de acceso de su cuenta de usuario en el portal si cuenta con una.
+                        </p>
+                    </div>
+
+                    <!-- Botones de Acción -->
+                    <div class="pt-2 flex items-center justify-end gap-3 border-t border-gray-100">
+                        <button
+                            type="button"
+                            @click="closeStatusModal"
+                            class="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition cursor-pointer"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="statusForm.processing || statusForm.status === customer.status"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                            <svg v-if="statusForm.processing" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>{{ statusForm.status === customer.status ? 'Estado actual seleccionado' : 'Confirmar cambio' }}</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </AuthenticatedLayout>

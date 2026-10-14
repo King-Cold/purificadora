@@ -67,13 +67,82 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::get('/customers/{customer}', [\App\Http\Controllers\Admin\CustomerController::class, 'show'])
         ->name('customers.show')
         ->middleware('permission:customers.view');
+    Route::get('/customers/{customer}/edit', [\App\Http\Controllers\Admin\CustomerController::class, 'edit'])
+        ->name('customers.edit')
+        ->middleware('permission:customers.update');
+    Route::put('/customers/{customer}', [\App\Http\Controllers\Admin\CustomerController::class, 'update'])
+        ->name('customers.update')
+        ->middleware('permission:customers.update');
+    Route::patch('/customers/{customer}/status', [\App\Http\Controllers\Admin\CustomerController::class, 'updateStatus'])
+        ->name('customers.status.update')
+        ->middleware('permission:customers.update');
+
+    // Gestión del Domicilio de Entrega del Cliente
+    Route::get('/customers/{customer}/addresses/create', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'create'])
+        ->name('customers.addresses.create')
+        ->middleware('permission:customers.create');
+    Route::post('/customers/{customer}/addresses', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'store'])
+        ->name('customers.addresses.store')
+        ->middleware('permission:customers.create');
+    Route::get('/customers/{customer}/addresses/{address}/edit', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'edit'])
+        ->name('customers.addresses.edit')
+        ->middleware('permission:customers.update');
+    Route::put('/customers/{customer}/addresses/{address}', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'update'])
+        ->name('customers.addresses.update')
+        ->middleware('permission:customers.update');
+    Route::delete('/customers/{customer}/addresses/{address}', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'destroy'])
+        ->name('customers.addresses.destroy')
+        ->middleware('permission:customers.delete');
 });
 
 // Panel 2: Cliente
 Route::middleware(['auth', 'role:Cliente'])->group(function () {
     Route::get('/cliente/dashboard', function () {
-        return Inertia::render('Cliente/Dashboard');
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $customer = $user?->customer;
+        $address = $customer?->address;
+        return Inertia::render('Cliente/Dashboard', [
+            'customer' => $customer ? [
+                'code' => $customer->code,
+                'nickname' => $customer->nickname,
+                'status' => $customer->status,
+                'status_label' => $customer->status_label,
+                'can_place_orders' => $customer->canPlaceOrders(),
+                'fixed_bottles_count' => (int) $customer->fixed_bottles_count,
+                'exchange_bottles_count' => (int) $customer->exchange_bottles_count,
+                'total_bottles' => (int) $customer->total_bottles,
+                'has_address' => !is_null($address),
+                'address_summary' => $address ? ($address->street . ($address->exterior_number ? ' #' . $address->exterior_number : '')) : null,
+                'zone_label' => $address?->zone_label,
+            ] : null,
+        ]);
     })->name('cliente.dashboard');
+
+    // Mi perfil de cliente
+    Route::get('/cliente/perfil', [\App\Http\Controllers\ProfileController::class, 'edit'])
+        ->name('cliente.profile.index');
+
+    // Gestión del domicilio único del cliente autenticado (autoservicio)
+    Route::get('/cliente/domicilio', [\App\Http\Controllers\Cliente\AddressController::class, 'index'])
+        ->name('cliente.addresses.index');
+    Route::get('/cliente/domicilio/crear', [\App\Http\Controllers\Cliente\AddressController::class, 'create'])
+        ->name('cliente.addresses.create');
+    Route::post('/cliente/domicilio', [\App\Http\Controllers\Cliente\AddressController::class, 'store'])
+        ->name('cliente.addresses.store');
+    Route::get('/cliente/domicilio/editar', [\App\Http\Controllers\Cliente\AddressController::class, 'edit'])
+        ->name('cliente.addresses.edit');
+    Route::put('/cliente/domicilio', [\App\Http\Controllers\Cliente\AddressController::class, 'update'])
+        ->name('cliente.addresses.update');
+    Route::delete('/cliente/domicilio', [\App\Http\Controllers\Cliente\AddressController::class, 'destroy'])
+        ->name('cliente.addresses.destroy');
+
+    // Rutas de compatibilidad con parámetros / plural
+    Route::get('/cliente/domicilios', [\App\Http\Controllers\Cliente\AddressController::class, 'index']);
+    Route::get('/cliente/domicilios/crear', [\App\Http\Controllers\Cliente\AddressController::class, 'create']);
+    Route::post('/cliente/domicilios', [\App\Http\Controllers\Cliente\AddressController::class, 'store']);
+    Route::get('/cliente/domicilios/{address}/editar', [\App\Http\Controllers\Cliente\AddressController::class, 'edit']);
+    Route::put('/cliente/domicilios/{address}', [\App\Http\Controllers\Cliente\AddressController::class, 'update']);
+    Route::delete('/cliente/domicilios/{address}', [\App\Http\Controllers\Cliente\AddressController::class, 'destroy']);
 });
 
 // Panel 3: Repartidor

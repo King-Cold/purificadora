@@ -57,6 +57,18 @@ class CustomerAddress extends Model
         ];
     }
 
+    public const ZONE_NORTH = 'north';
+    public const ZONE_SOUTH = 'south';
+    public const ZONE_EAST = 'east';
+    public const ZONE_WEST = 'west';
+
+    public const ZONES = [
+        self::ZONE_NORTH => 'Norte',
+        self::ZONE_SOUTH => 'Sur',
+        self::ZONE_EAST => 'Este',
+        self::ZONE_WEST => 'Oeste',
+    ];
+
     /**
      * Cliente al que pertenece la dirección.
      */
@@ -66,26 +78,53 @@ class CustomerAddress extends Model
     }
 
     /**
+     * Accesor para el nombre legible de la zona de reparto.
+     */
+    protected function zoneLabel(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->delivery_zone) {
+                    $name = self::ZONES[$this->delivery_zone] ?? $this->delivery_zone;
+                    return str_starts_with($name, 'Zona') ? $name : "Zona {$name}";
+                }
+
+                $isHocaba = empty($this->city) || in_array(strtolower(trim($this->city)), ['hocaba', 'hocabá', 'hocabá, yucatán', 'hocaba, yucatan']);
+                if (!$isHocaba) {
+                    return 'Otro municipio';
+                }
+
+                return 'Sin zona asignada';
+            }
+        );
+    }
+
+    /**
+     * Alias para municipio (almacenado en la columna city).
+     */
+    protected function municipality(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->city,
+            set: fn ($value) => ['city' => $value],
+        );
+    }
+
+    /**
      * Accesor para obtener la dirección completa formateada.
      */
     protected function fullAddress(): Attribute
     {
         return Attribute::make(
             get: function (): string {
-                $parts = [
-                    $this->street . ' #' . $this->exterior_number,
-                ];
+                $parts = [];
 
-                if (!empty($this->interior_number)) {
-                    $parts[0] .= ' Int. ' . $this->interior_number;
-                }
-
-                if (!empty($this->neighborhood)) {
-                    $parts[] = 'Col. ' . $this->neighborhood;
-                }
-
-                if (!empty($this->postal_code)) {
-                    $parts[] = 'C.P. ' . $this->postal_code;
+                if (!empty($this->street)) {
+                    $streetPart = $this->street;
+                    if (!empty($this->exterior_number) && $this->exterior_number !== 'S/N' && !str_contains($this->street, (string)$this->exterior_number)) {
+                        $streetPart .= ' #' . $this->exterior_number;
+                    }
+                    $parts[] = $streetPart;
                 }
 
                 if (!empty($this->city)) {

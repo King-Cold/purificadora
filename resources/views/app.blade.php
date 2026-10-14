@@ -6,6 +6,9 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
+        <!-- Favicon -->
+        <link rel="icon" type="image/png" href="/images/logo.png">
+
         <!-- PWA Meta Tags -->
         <meta name="theme-color" content="#0284c7">
         <link rel="manifest" href="/build/manifest.webmanifest">

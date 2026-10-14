@@ -17,14 +17,14 @@ const showingNavigationDropdown = ref(false);
                 class="border-b border-gray-100 bg-white"
             >
                 <!-- Primary Navigation Menu -->
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
                     <div class="flex h-16 justify-between">
                         <div class="flex">
                             <!-- Logo -->
                             <div class="flex shrink-0 items-center">
-                                <Link :href="route('dashboard')">
+                                <Link :href="route('dashboard')" class="flex items-center">
                                     <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
+                                        class="h-10 sm:h-11 w-auto"
                                     />
                                 </Link>
                             </div>
@@ -52,6 +52,24 @@ const showingNavigationDropdown = ref(false);
                                     :active="route().current('admin.customers.*')"
                                 >
                                     Clientes
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user?.roles?.includes('Cliente')"
+                                    :href="route('cliente.addresses.index')"
+                                    :active="route().current('cliente.addresses.*')"
+                                    class="inline-flex items-center gap-2"
+                                >
+                                    <i class="fa-solid fa-house-chimney text-xs"></i>
+                                    <span>Mi domicilio</span>
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user?.roles?.includes('Cliente')"
+                                    :href="route('profile.edit')"
+                                    :active="route().current('profile.edit') || route().current('cliente.profile.*')"
+                                    class="inline-flex items-center gap-2"
+                                >
+                                    <i class="fa-solid fa-user text-xs"></i>
+                                    <span>Mi perfil</span>
                                 </NavLink>
                             </div>
                         </div>
@@ -87,15 +105,19 @@ const showingNavigationDropdown = ref(false);
                                     <template #content>
                                         <DropdownLink
                                             :href="route('profile.edit')"
+                                            class="flex items-center gap-2"
                                         >
-                                            Profile
+                                            <i class="fa-solid fa-user text-xs text-slate-400"></i>
+                                            <span>Mi perfil</span>
                                         </DropdownLink>
                                         <DropdownLink
                                             :href="route('logout')"
                                             method="post"
                                             as="button"
+                                            class="flex items-center gap-2 text-rose-600 hover:text-rose-700"
                                         >
-                                            Log Out
+                                            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                                            <span>Cerrar sesión</span>
                                         </DropdownLink>
                                     </template>
                                 </Dropdown>
@@ -174,6 +196,24 @@ const showingNavigationDropdown = ref(false);
                         >
                             Clientes
                         </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user?.roles?.includes('Cliente')"
+                            :href="route('cliente.addresses.index')"
+                            :active="route().current('cliente.addresses.*')"
+                            class="flex items-center gap-2.5"
+                        >
+                            <i class="fa-solid fa-house-chimney text-xs text-slate-400"></i>
+                            <span>Mi domicilio</span>
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user?.roles?.includes('Cliente')"
+                            :href="route('profile.edit')"
+                            :active="route().current('profile.edit') || route().current('cliente.profile.*')"
+                            class="flex items-center gap-2.5"
+                        >
+                            <i class="fa-solid fa-user text-xs text-slate-400"></i>
+                            <span>Mi perfil</span>
+                        </ResponsiveNavLink>
                     </div>
 
                     <!-- Responsive Settings Options -->
@@ -193,14 +233,14 @@ const showingNavigationDropdown = ref(false);
 
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('profile.edit')">
-                                Profile
+                                Mi perfil
                             </ResponsiveNavLink>
                             <ResponsiveNavLink
                                 :href="route('logout')"
                                 method="post"
                                 as="button"
                             >
-                                Log Out
+                                Cerrar sesión
                             </ResponsiveNavLink>
                         </div>
                     </div>
@@ -212,7 +252,7 @@ const showingNavigationDropdown = ref(false);
                 class="bg-white shadow"
                 v-if="$slots.header"
             >
-                <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>

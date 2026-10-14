@@ -14,7 +14,12 @@ const props = defineProps({
             search: '',
             status: 'all',
             access: 'all',
+            zone: 'all',
         }),
+    },
+    zones: {
+        type: Object,
+        default: () => ({}),
     },
     totalCustomersCount: {
         type: Number,
@@ -25,6 +30,7 @@ const props = defineProps({
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || 'all');
 const access = ref(props.filters.access || 'all');
+const zone = ref(props.filters.zone || 'all');
 const isLoading = ref(false);
 
 let searchTimeout = null;
@@ -37,6 +43,7 @@ const applyFilters = () => {
             search: search.value || undefined,
             status: status.value !== 'all' ? status.value : undefined,
             access: access.value !== 'all' ? access.value : undefined,
+            zone: zone.value !== 'all' ? zone.value : undefined,
         },
         {
             preserveState: true,
@@ -58,7 +65,7 @@ watch(search, () => {
 });
 
 // Filtros inmediatos
-watch([status, access], () => {
+watch([status, access, zone], () => {
     applyFilters();
 });
 
@@ -66,21 +73,27 @@ const resetFilters = () => {
     search.value = '';
     status.value = 'all';
     access.value = 'all';
+    zone.value = 'all';
     applyFilters();
 };
 
 const hasActiveFilters = () => {
-    return Boolean(search.value || (status.value && status.value !== 'all') || (access.value && access.value !== 'all'));
+    return Boolean(
+        search.value ||
+        (status.value && status.value !== 'all') ||
+        (access.value && access.value !== 'all') ||
+        (zone.value && zone.value !== 'all')
+    );
 };
 
 const getStatusBadgeClass = (customerStatus) => {
     switch (customerStatus) {
         case 'active':
-            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
         case 'suspended':
-            return 'bg-amber-50 text-amber-700 border-amber-200';
+            return 'bg-amber-50 text-amber-800 border-amber-300';
         case 'inactive':
-            return 'bg-rose-50 text-rose-700 border-rose-200';
+            return 'bg-gray-100 text-gray-700 border-gray-300';
         default:
             return 'bg-gray-100 text-gray-700 border-gray-200';
     }
@@ -99,13 +112,13 @@ const getStatusLabel = (customerStatus) => {
     }
 };
 
-const getInitials = (name) => {
-    if (!name) return 'C';
-    const parts = name.trim().split(' ');
+const getInitials = (customer) => {
+    const text = (customer?.name && customer.name.trim()) || (customer?.nickname && customer.nickname.trim()) || 'C';
+    const parts = text.split(' ').filter(Boolean);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return parts.substring(0, 2).toUpperCase();
+    return text.substring(0, 2).toUpperCase();
 };
 </script>
 
@@ -145,7 +158,7 @@ const getInitials = (name) => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+            <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- Mensaje de Éxito Flash -->
                 <div
@@ -194,9 +207,9 @@ const getInitials = (name) => {
 
                 <!-- Barra de Búsqueda y Filtros -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         <!-- Buscador -->
-                        <div class="md:col-span-5 relative">
+                        <div class="md:col-span-4 relative">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -205,13 +218,29 @@ const getInitials = (name) => {
                             <input
                                 v-model="search"
                                 type="text"
-                                placeholder="Buscar por nombre, apodo, teléfono o código (CLI-XXXX)..."
+                                placeholder="Buscar por nombre, apodo, teléfono..."
                                 class="block w-full pl-10 pr-4 py-2 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                             />
                         </div>
 
-                        <!-- Filtro por Estado Comercial -->
+                        <!-- Filtro por Zona de Reparto -->
                         <div class="md:col-span-3">
+                            <select
+                                v-model="zone"
+                                class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
+                            >
+                                <option value="all">Todas las zonas</option>
+                                <option value="north">Zona Norte</option>
+                                <option value="south">Zona Sur</option>
+                                <option value="east">Zona Este</option>
+                                <option value="west">Zona Oeste</option>
+                                <option value="no_zone">Sin zona asignada</option>
+                                <option value="other_municipality">Otros municipios</option>
+                            </select>
+                        </div>
+
+                        <!-- Filtro por Estado Comercial -->
+                        <div class="md:col-span-2">
                             <select
                                 v-model="status"
                                 class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
@@ -224,14 +253,14 @@ const getInitials = (name) => {
                         </div>
 
                         <!-- Filtro por Tipo de Acceso al Sistema -->
-                        <div class="md:col-span-3">
+                        <div class="md:col-span-2">
                             <select
                                 v-model="access"
                                 class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
                             >
-                                <option value="all">Cuentas y sin cuenta</option>
-                                <option value="with_account">Con cuenta de usuario</option>
-                                <option value="without_account">Sin cuenta de usuario</option>
+                                <option value="all">Todos los accesos</option>
+                                <option value="with_account">Con cuenta</option>
+                                <option value="without_account">Sin cuenta</option>
                             </select>
                         </div>
 
@@ -270,17 +299,16 @@ const getInitials = (name) => {
                 <!-- Tabla de Clientes -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-left">
+                        <table class="w-full divide-y divide-gray-200 text-left">
                             <thead class="bg-gray-50/75 text-xs uppercase tracking-wider text-gray-500 font-semibold">
                                 <tr>
-                                    <th scope="col" class="py-3.5 pl-6 pr-3">Cliente Particular</th>
-                                    <th scope="col" class="px-3 py-3.5">Apodo</th>
+                                    <th scope="col" class="py-3.5 pl-5 pr-3">Cliente Particular</th>
                                     <th scope="col" class="px-3 py-3.5">Contacto</th>
-                                    <th scope="col" class="px-3 py-3.5">Domicilio Principal</th>
-                                    <th scope="col" class="px-3 py-3.5">Tipo de Acceso</th>
-                                    <th scope="col" class="px-3 py-3.5">Estado</th>
-                                    <th scope="col" class="px-3 py-3.5">Registro</th>
-                                    <th scope="col" class="relative py-3.5 pl-3 pr-6 text-right">Acciones</th>
+                                    <th scope="col" class="px-3 py-3.5">Botellones</th>
+                                    <th scope="col" class="px-3 py-3.5">Domicilio y Zona</th>
+                                    <th scope="col" class="px-3 py-3.5">Acceso</th>
+                                    <th scope="col" class="px-3 py-3.5">Estado / Registro</th>
+                                    <th scope="col" class="relative py-3.5 pl-3 pr-5 text-right">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white text-sm">
@@ -289,81 +317,100 @@ const getInitials = (name) => {
                                     :key="customer.id"
                                     class="hover:bg-gray-50/80 transition duration-150"
                                 >
-                                    <!-- Cliente: Avatar, Nombre y Código -->
-                                    <td class="whitespace-nowrap py-4 pl-6 pr-3">
+                                    <!-- Cliente: Avatar, Nombre, Apodo y Código -->
+                                    <td class="py-3.5 pl-5 pr-3">
                                         <div class="flex items-center gap-3">
                                             <div class="h-9 w-9 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm shrink-0">
-                                                {{ getInitials(customer.name) }}
+                                                {{ getInitials(customer) }}
                                             </div>
-                                            <div>
-                                                <div class="font-semibold text-gray-900 leading-tight">
-                                                    {{ customer.name }}
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="font-semibold text-gray-900 leading-tight">
+                                                        {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
+                                                    </span>
+                                                    <span v-if="customer.name && customer.nickname" class="text-blue-950 bg-blue-50/90 border border-blue-200/80 px-1.5 py-0.5 rounded text-[11px] font-bold">
+                                                        "{{ customer.nickname }}"
+                                                    </span>
                                                 </div>
-                                                <div class="text-xs font-mono font-medium text-sky-800 bg-sky-50 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                                                <div class="text-[11px] font-mono font-medium text-sky-800 bg-sky-50 px-1.5 py-0.5 rounded w-fit mt-0.5">
                                                     {{ customer.code }}
                                                 </div>
                                             </div>
                                         </div>
                                     </td>
 
-                                    <!-- Apodo / Alias -->
-                                    <td class="whitespace-nowrap px-3 py-4 text-xs font-medium">
-                                        <span v-if="customer.nickname" class="text-blue-950 bg-blue-50/90 border border-blue-200 px-2 py-0.5 rounded-md font-semibold">
-                                            "{{ customer.nickname }}"
-                                        </span>
-                                        <span v-else class="text-gray-400 font-normal">
-                                            —
-                                        </span>
-                                    </td>
-
                                     <!-- Contacto: Teléfono y Correo -->
-                                    <td class="whitespace-nowrap px-3 py-4">
+                                    <td class="px-3 py-3.5">
                                         <div class="text-xs text-gray-900 font-medium">
                                             {{ customer.phone }}
                                         </div>
-                                        <div class="text-xs text-gray-500 font-mono mt-0.5 truncate max-w-[180px]">
+                                        <div class="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-[160px]" :title="customer.email">
                                             {{ customer.email }}
                                         </div>
                                     </td>
 
-                                    <!-- Domicilio Principal -->
-                                    <td class="px-3 py-4 text-xs text-gray-600 max-w-xs">
-                                        <div class="flex items-start gap-1.5">
-                                            <svg class="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            <span class="line-clamp-2" :title="customer.main_address">
-                                                {{ customer.main_address }}
+                                    <!-- Botellones (Fijos / Cambio / Total) -->
+                                    <td class="whitespace-nowrap px-3 py-3.5 text-xs">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200" title="Botellones fijos (con nombre rotulado)">
+                                                F: {{ customer.fixed_bottles_count }}
+                                            </span>
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-sky-50 text-sky-900 border border-sky-200" title="Botellones de cambio (intercambiables)">
+                                                C: {{ customer.exchange_bottles_count }}
                                             </span>
                                         </div>
-                                        <span v-if="customer.addresses_count > 1" class="text-[10px] text-gray-400 mt-0.5 inline-block">
-                                            +{{ customer.addresses_count - 1 }} domicilio(s) adicional(es)
-                                        </span>
+                                        <div class="text-[10px] text-gray-500 mt-0.5 font-medium">
+                                            Total: {{ customer.total_bottles }} envase(s)
+                                        </div>
+                                    </td>
+
+                                    <!-- Domicilio y Zona -->
+                                    <td class="px-3 py-3.5 text-xs text-gray-600 max-w-[180px]">
+                                        <div v-if="customer.has_address" class="space-y-1">
+                                            <div class="flex items-start gap-1.5">
+                                                <i class="fa-solid fa-location-dot text-[11px] text-gray-400 mt-0.5 shrink-0"></i>
+                                                <span class="line-clamp-2 text-xs" :title="customer.main_address">
+                                                    {{ customer.main_address }}
+                                                </span>
+                                            </div>
+                                            <div class="pl-4">
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                                    :class="{
+                                                        'bg-blue-100 text-blue-900 font-semibold': customer.zone_label.startsWith('Zona'),
+                                                        'bg-gray-100 text-gray-700': customer.zone_label === 'Otro municipio',
+                                                        'bg-amber-50 text-amber-800 border border-amber-200': customer.zone_label === 'Sin zona asignada'
+                                                    }"
+                                                >
+                                                    {{ customer.zone_label }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div v-else class="text-xs text-gray-400 italic">
+                                            Sin domicilio registrado
+                                        </div>
                                     </td>
 
                                     <!-- Tipo de Acceso (Con cuenta / Sin cuenta) -->
-                                    <td class="whitespace-nowrap px-3 py-4">
+                                    <td class="whitespace-nowrap px-3 py-3.5">
                                         <span
                                             v-if="customer.has_account"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-800 border border-sky-200"
                                         >
-                                            <svg class="w-3 h-3 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                            </svg>
-                                            Con cuenta
+                                            <i class="fa-solid fa-user-check text-[10px] text-sky-600"></i>
+                                            <span>Con cuenta</span>
                                         </span>
                                         <span
                                             v-else
                                             class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200"
                                         >
                                             <span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
-                                            Sin cuenta
+                                            <span>Sin cuenta</span>
                                         </span>
                                     </td>
 
-                                    <!-- Estado Comercial -->
-                                    <td class="whitespace-nowrap px-3 py-4">
+                                    <!-- Estado Comercial y Fecha de Registro -->
+                                    <td class="whitespace-nowrap px-3 py-3.5">
                                         <span
                                             class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border"
                                             :class="getStatusBadgeClass(customer.status)"
@@ -371,36 +418,42 @@ const getInitials = (name) => {
                                             <span class="h-1.5 w-1.5 rounded-full" :class="{
                                                 'bg-emerald-500': customer.status === 'active',
                                                 'bg-amber-500': customer.status === 'suspended',
-                                                'bg-rose-500': customer.status === 'inactive',
+                                                'bg-gray-500': customer.status === 'inactive',
                                             }"></span>
                                             {{ getStatusLabel(customer.status) }}
                                         </span>
-                                    </td>
-
-                                    <!-- Fecha de Registro -->
-                                    <td class="whitespace-nowrap px-3 py-4 text-xs text-gray-500">
-                                        {{ customer.created_at }}
+                                        <span class="block text-[10px] text-gray-400 font-mono mt-1">
+                                            {{ customer.created_at }}
+                                        </span>
                                     </td>
 
                                     <!-- Columna Acciones -->
-                                    <td class="whitespace-nowrap py-4 pl-3 pr-6 text-right text-xs">
-                                        <Link
-                                            :href="route('admin.customers.show', customer.id)"
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                                            title="Ver detalles del cliente"
-                                        >
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                            <span>Ver detalles</span>
-                                        </Link>
+                                    <td class="whitespace-nowrap py-3.5 pl-3 pr-5 text-right text-xs">
+                                        <div class="inline-flex items-center gap-1.5 justify-end">
+                                            <Link
+                                                :href="route('admin.customers.edit', customer.id)"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition shadow-2xs"
+                                                title="Editar datos del cliente"
+                                            >
+                                                <i class="fa-solid fa-pen-to-square text-[10px] text-gray-500"></i>
+                                                <span>Editar</span>
+                                            </Link>
+
+                                            <Link
+                                                :href="route('admin.customers.show', customer.id)"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition shadow-2xs"
+                                                title="Ver detalles del cliente"
+                                            >
+                                                <i class="fa-solid fa-eye text-[10px]"></i>
+                                                <span>Ver</span>
+                                            </Link>
+                                        </div>
                                     </td>
                                 </tr>
 
                                 <!-- Estado Vacío -->
                                 <tr v-if="customers.data.length === 0">
-                                    <td colspan="8" class="px-6 py-12 text-center">
+                                    <td colspan="7" class="px-6 py-12 text-center">
                                         <div class="max-w-xs mx-auto">
                                             <div class="mx-auto h-12 w-12 text-gray-400 flex items-center justify-center rounded-full bg-gray-100 mb-3">
                                                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
