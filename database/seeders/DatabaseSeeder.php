@@ -18,17 +18,41 @@ class DatabaseSeeder extends Seeder
         // 1. Roles y Permisos de Spatie
         $this->call(RolesAndPermissionsSeeder::class);
 
-        // 2. Usuario Administrador Inicial (si no existe)
+        // 2. Cuentas únicas de personal
         $adminUser = User::firstOrCreate(
             ['email' => 'admin@purificadora.com'],
             [
-                'name' => 'Administrador General',
+                'name' => 'Administrador',
                 'password' => bcrypt('password'),
+                'status' => 'active',
             ]
         );
+        if (!$adminUser->hasRole('Administrador') && !$adminUser->hasRole('Super Admin')) {
+            $adminUser->assignRole('Administrador');
+        }
 
-        if (!$adminUser->hasRole('Super Admin')) {
-            $adminUser->assignRole('Super Admin');
+        $repartidorUser = User::firstOrCreate(
+            ['email' => 'repartidor@purificadora.com'],
+            [
+                'name' => 'Repartidor',
+                'password' => bcrypt('password'),
+                'status' => 'active',
+            ]
+        );
+        if (!$repartidorUser->hasRole('Repartidor')) {
+            $repartidorUser->assignRole('Repartidor');
+        }
+
+        $llenadorUser = User::firstOrCreate(
+            ['email' => 'planta@purificadora.com'],
+            [
+                'name' => 'Llenador',
+                'password' => bcrypt('password'),
+                'status' => 'active',
+            ]
+        );
+        if (!$llenadorUser->hasRole('Operador Planta')) {
+            $llenadorUser->assignRole('Operador Planta');
         }
     }
 }

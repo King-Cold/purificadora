@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -23,14 +24,12 @@ const deleteAddress = () => {
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                        <Link :href="route('cliente.dashboard')" class="hover:text-blue-900 transition flex items-center gap-1">
-                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                            <span>Inicio</span>
-                        </Link>
-                        <span>/</span>
-                        <span class="text-slate-900 font-medium">Mi Domicilio</span>
-                    </div>
+                    <Breadcrumbs
+                        :home-href="route('cliente.dashboard')"
+                        :items="[
+                            { label: 'Mi Domicilio', icon: 'fa-solid fa-house-chimney' }
+                        ]"
+                    />
                     <div class="flex items-center gap-3">
                         <div class="h-10 w-10 rounded-2xl bg-blue-900 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
                             <i class="fa-solid fa-house-chimney text-sky-400 text-base"></i>

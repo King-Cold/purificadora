@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\CustomerAddress;
-use App\Models\CustomerStatusHistory;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,391 +56,154 @@ class CustomerCommercialStatusTest extends TestCase
             'nickname' => 'Carlitos',
             'phone' => '9991112233',
             'email' => $this->clientUser->email,
-            'customer_type' => 'particular',
-            'price_tier' => 'general',
-            'status' => Customer::STATUS_ACTIVE,
             'fixed_bottles_count' => 4,
             'exchange_bottles_count' => 2,
         ]);
 
-        // 5. Cliente SIN cuenta (user_id = null)
+        // 5. Cliente SIN cuenta (user_id = null, sin teléfono ni correo requeridos)
         $this->customerWithoutAccount = Customer::create([
             'user_id' => null,
             'name' => 'Don Pepe Morales',
             'nickname' => 'Don Pepe',
-            'phone' => '9994445566',
+            'phone' => null,
             'email' => null,
-            'customer_type' => 'particular',
-            'price_tier' => 'general',
-            'status' => Customer::STATUS_ACTIVE,
+            'notes' => 'Tocar timbre blanco en portón',
             'fixed_bottles_count' => 3,
             'exchange_bottles_count' => 1,
         ]);
     }
 
     /**
-     * 1. Administrador puede activar, desactivar y suspender a un cliente sin cuenta.
+     * 1. La ruta de actualización de estado comercial fue eliminada completamente y retorna 404.
      */
-    public function test_admin_can_change_commercial_status_for_customer_without_account(): void
+    public function test_commercial_status_update_route_is_removed(): void
     {
-        $customer = $this->customerWithoutAccount;
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-
-        // Suspender
         $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-                'reason' => 'Suspensión temporal acordada con el cliente',
+            ->patch("/admin/customers/{$this->customerWithAccount->id}/status", [
+                'status' => 'inactive',
             ]);
 
-        $response->assertRedirect(route('admin.customers.show', $customer->id));
-        $response->assertSessionHas('success');
-
-        $customer->refresh();
-        $this->assertEquals(Customer::STATUS_SUSPENDED, $customer->status);
-        $this->assertNull($customer->user_id);
-
-        // Desactivar
-        $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_INACTIVE,
-                'reason' => 'Cliente inactivo por temporada',
-            ]);
-
-        $response->assertRedirect(route('admin.customers.show', $customer->id));
-        $customer->refresh();
-        $this->assertEquals(Customer::STATUS_INACTIVE, $customer->status);
-
-        // Reactivar
-        $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_ACTIVE,
-                'reason' => 'Reactivación comercial aprobada',
-            ]);
-
-        $response->assertRedirect(route('admin.customers.show', $customer->id));
-        $customer->refresh();
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
+        $response->assertNotFound();
     }
 
     /**
-     * 2. Administrador puede cambiar el estado comercial de un cliente con cuenta sin afectar User.status.
+     * 2. No se permite desactivar cuentas de clientes desde el panel administrativo.
      */
-    public function test_admin_can_change_commercial_status_for_customer_with_account_without_altering_user_status(): void
+    public function test_client_user_account_cannot_be_deactivated_from_admin_panel(): void
     {
-        $customer = $this->customerWithAccount;
-        $user = $this->clientUser;
+        $this->assertEquals('active', $this->clientUser->status);
 
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-        $this->assertEquals('active', $user->status);
-
-        // Suspender cliente comercialmente
         $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-                'reason' => 'Revisión comercial de envases',
-            ]);
+            ->patch(route('admin.users.toggle-status', $this->clientUser->id));
 
-        $response->assertRedirect(route('admin.customers.show', $customer->id));
+        $response->assertSessionHas('error', 'No está permitido desactivar cuentas de clientes desde el panel administrativo. Una cuenta registrada permanece habilitada.');
 
-        $customer->refresh();
-        $user->refresh();
-
-        // El estado comercial cambió a suspendido
-        $this->assertEquals(Customer::STATUS_SUSPENDED, $customer->status);
-        // La cuenta de usuario sigue activa e intacta
-        $this->assertEquals('active', $user->status);
-        $this->assertTrue($user->isActive());
+        $this->clientUser->refresh();
+        $this->assertEquals('active', $this->clientUser->status);
+        $this->assertTrue($this->clientUser->isActive());
     }
 
     /**
-     * 3. Cambiar el estado de acceso de User no altera Customer.status comercial.
-     */
-    public function test_altering_user_access_status_does_not_modify_customer_commercial_status(): void
-    {
-        $customer = $this->customerWithAccount;
-        $user = $this->clientUser;
-
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-        $this->assertEquals('active', $user->status);
-
-        // Deshabilitar la cuenta del usuario
-        $user->status = 'inactive';
-        $user->save();
-
-        $customer->refresh();
-
-        // El usuario está inactivo pero el estado comercial sigue activo
-        $this->assertEquals('inactive', $user->status);
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-        $this->assertTrue($customer->isActive());
-    }
-
-    /**
-     * 4. Cliente comercialmente suspendido o inactivo PUEDE seguir iniciando sesión y consultar su perfil.
-     */
-    public function test_suspended_and_inactive_client_can_still_access_portal_and_view_profile(): void
-    {
-        $customer = $this->customerWithAccount;
-        $user = $this->clientUser;
-
-        // Caso 1: Suspendido
-        $customer->status = Customer::STATUS_SUSPENDED;
-        $customer->save();
-
-        $response = $this->actingAs($user)->get(route('cliente.profile.index'));
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->component('Profile/Edit')
-            ->where('clientData.customer.status', Customer::STATUS_SUSPENDED)
-            ->where('clientData.customer.can_place_orders', false)
-        );
-
-        // Acceso al Dashboard de cliente
-        $dashResponse = $this->actingAs($user)->get(route('cliente.dashboard'));
-        $dashResponse->assertOk();
-        $dashResponse->assertInertia(fn ($page) => $page
-            ->component('Cliente/Dashboard')
-            ->where('customer.status', Customer::STATUS_SUSPENDED)
-        );
-
-        // Caso 2: Inactivo
-        $customer->status = Customer::STATUS_INACTIVE;
-        $customer->save();
-        $user->unsetRelation('customer');
-
-        $response2 = $this->actingAs($user)->get(route('cliente.profile.index'));
-        $response2->assertOk();
-        $response2->assertInertia(fn ($page) => $page
-            ->component('Profile/Edit')
-            ->where('clientData.customer.status', Customer::STATUS_INACTIVE)
-            ->where('clientData.customer.can_place_orders', false)
-        );
-    }
-
-    /**
-     * 5. canPlaceOrders() solo es verdadero cuando el cliente está en estado activo y no eliminado.
+     * 3. canPlaceOrders() es verdadero para clientes no eliminados, sin depender de estados comerciales.
      */
     public function test_can_place_orders_business_logic(): void
     {
         $customer = $this->customerWithAccount;
 
-        $customer->status = Customer::STATUS_ACTIVE;
         $this->assertTrue($customer->canPlaceOrders());
-        $this->assertTrue($customer->isActive());
-        $this->assertFalse($customer->isSuspended());
-        $this->assertFalse($customer->isInactive());
 
-        $customer->status = Customer::STATUS_INACTIVE;
+        // Al eliminar lógicamente (soft delete), no puede ordenar
+        $customer->delete();
         $this->assertFalse($customer->canPlaceOrders());
-        $this->assertFalse($customer->isActive());
-        $this->assertFalse($customer->isSuspended());
-        $this->assertTrue($customer->isInactive());
-
-        $customer->status = Customer::STATUS_SUSPENDED;
-        $this->assertFalse($customer->canPlaceOrders());
-        $this->assertFalse($customer->isActive());
-        $this->assertTrue($customer->isSuspended());
-        $this->assertFalse($customer->isInactive());
     }
 
     /**
-     * 6. Se rechazan estados inválidos o manipulados.
+     * 4. Ficha de cliente muestra únicamente si tiene cuenta o no, y no expone estados comerciales ni de acceso.
      */
-    public function test_invalid_commercial_status_is_rejected(): void
+    public function test_customer_show_view_props_do_not_contain_commercial_or_access_statuses(): void
     {
-        $customer = $this->customerWithAccount;
+        // 1. Cliente CON cuenta
+        $responseWithAccount = $this->actingAs($this->adminUser)
+            ->get(route('admin.customers.show', $this->customerWithAccount->id));
 
+        $responseWithAccount->assertOk();
+        $responseWithAccount->assertInertia(fn ($page) => $page
+            ->component('Admin/Customers/Show')
+            ->where('customer.has_account', true)
+            ->where('customer.name', $this->clientUser->name)
+            ->where('customer.nickname', 'Carlitos')
+            ->where('customer.email', $this->clientUser->email)
+            ->where('customer.phone', '9991112233')
+            ->where('customer.fixed_bottles_count', 4)
+            ->where('customer.exchange_bottles_count', 2)
+            ->where('customer.can_manage_address', false) // Administrador no puede editar domicilio de cliente con cuenta
+            ->missing('customer.status')
+            ->missing('customer.status_label')
+            ->missing('status_histories')
+            ->missing('available_statuses')
+        );
+
+        // 2. Cliente SIN cuenta
+        $responseWithoutAccount = $this->actingAs($this->adminUser)
+            ->get(route('admin.customers.show', $this->customerWithoutAccount->id));
+
+        $responseWithoutAccount->assertOk();
+        $responseWithoutAccount->assertInertia(fn ($page) => $page
+            ->component('Admin/Customers/Show')
+            ->where('customer.has_account', false)
+            ->where('customer.name', 'Don Pepe Morales')
+            ->where('customer.nickname', 'Don Pepe')
+            ->where('customer.notes', 'Tocar timbre blanco en portón')
+            ->where('customer.fixed_bottles_count', 3)
+            ->where('customer.exchange_bottles_count', 1)
+            ->where('customer.can_manage_address', true)
+            ->missing('customer.status')
+            ->missing('customer.status_label')
+            ->missing('status_histories')
+            ->missing('available_statuses')
+        );
+    }
+
+    /**
+     * 5. Cliente sin cuenta se puede crear sin teléfono, correo ni estado comercial.
+     */
+    public function test_customer_without_account_can_be_created_without_phone_email_or_status(): void
+    {
         $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => 'bloqueado_arbitrario',
-                'reason' => 'Prueba de valor no permitido',
+            ->post(route('admin.customers.store'), [
+                'name' => 'Doña Remedios Várguez',
+                'nickname' => 'Doña Reme',
+                'fixed_bottles_count' => 2,
+                'exchange_bottles_count' => 1,
+                'notes' => 'Portón verde con reja',
             ]);
 
-        $response->assertSessionHasErrors('status');
-        $customer->refresh();
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
+        $createdCustomer = Customer::where('nickname', 'Doña Reme')->first();
+        $this->assertNotNull($createdCustomer);
+        $this->assertNull($createdCustomer->user_id);
+        $this->assertNull($createdCustomer->phone);
+        $this->assertNull($createdCustomer->email);
+        $this->assertEquals(2, $createdCustomer->fixed_bottles_count);
+        $this->assertEquals(1, $createdCustomer->exchange_bottles_count);
+        $this->assertEquals('Doña Remedios Várguez', $createdCustomer->name);
+        $this->assertStringStartsWith('CLI-', $createdCustomer->code);
+
+        $response->assertRedirect(route('admin.customers.show', $createdCustomer->id));
     }
 
     /**
-     * 7. Se rechaza intento de modificar estado si el usuario no tiene permisos (Cliente o Repartidor).
+     * 6. Directorio de clientes no filtra ni expone el filtro de estado comercial.
      */
-    public function test_unauthorized_users_cannot_modify_commercial_status(): void
+    public function test_customers_index_does_not_filter_by_commercial_status(): void
     {
-        $customer = $this->customerWithoutAccount;
-
-        // Intento por parte de un Cliente
-        $responseClient = $this->actingAs($this->clientUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-            ]);
-        $responseClient->assertForbidden();
-
-        // Intento por parte de un Repartidor
-        $responseRepartidor = $this->actingAs($this->repartidorUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-            ]);
-        $responseRepartidor->assertForbidden();
-
-        // El cliente conserva su estado intacto
-        $customer->refresh();
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-    }
-
-    /**
-     * 8. Se registra auditoría completa en el historial de cambios de estado comercial.
-     */
-    public function test_status_changes_are_logged_with_previous_and_new_status_reason_and_admin(): void
-    {
-        $customer = $this->customerWithAccount;
-
-        $this->assertEquals(0, CustomerStatusHistory::where('customer_id', $customer->id)->count());
-
-        // Cambio 1: Activo -> Suspendido
-        $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-                'reason' => 'Motivo A: Retención temporal de servicio',
-            ]);
-
-        $this->assertEquals(1, CustomerStatusHistory::where('customer_id', $customer->id)->count());
-
-        $history1 = CustomerStatusHistory::where('customer_id', $customer->id)->first();
-        $this->assertEquals(Customer::STATUS_ACTIVE, $history1->previous_status);
-        $this->assertEquals(Customer::STATUS_SUSPENDED, $history1->new_status);
-        $this->assertEquals('Motivo A: Retención temporal de servicio', $history1->reason);
-        $this->assertEquals($this->adminUser->id, $history1->changed_by);
-
-        // Cambio 2: Suspendido -> Activo
-        $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_ACTIVE,
-                'reason' => 'Motivo B: Reactivación autorizada',
-            ]);
-
-        $this->assertEquals(2, CustomerStatusHistory::where('customer_id', $customer->id)->count());
-
-        $history2 = CustomerStatusHistory::where('customer_id', $customer->id)->latest('id')->first();
-        $this->assertEquals(Customer::STATUS_SUSPENDED, $history2->previous_status);
-        $this->assertEquals(Customer::STATUS_ACTIVE, $history2->new_status);
-        $this->assertEquals('Motivo B: Reactivación autorizada', $history2->reason);
-        $this->assertEquals($this->adminUser->id, $history2->changed_by);
-    }
-
-    /**
-     * 9. Las transiciones redundantes (mismo estado) no generan registros de historial innecesarios.
-     */
-    public function test_redundant_status_transitions_do_not_create_duplicate_history(): void
-    {
-        $customer = $this->customerWithAccount;
-        $this->assertEquals(Customer::STATUS_ACTIVE, $customer->status);
-
         $response = $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_ACTIVE,
-                'reason' => 'Reiterando mismo estado',
-            ]);
+            ->get(route('admin.customers.index'));
 
-        $response->assertRedirect(route('admin.customers.show', $customer->id));
-        $response->assertSessionHas('info');
-
-        $this->assertEquals(0, CustomerStatusHistory::where('customer_id', $customer->id)->count());
-    }
-
-    /**
-     * 10. Filtro en el directorio de clientes por estado comercial combinado con zonas y búsqueda.
-     */
-    public function test_customers_index_filters_by_commercial_status_and_zone(): void
-    {
-        // Asignar domicilios en distintas zonas
-        CustomerAddress::create([
-            'customer_id' => $this->customerWithAccount->id,
-            'street' => 'Calle 20 x 21 y 23',
-            'exterior_number' => '100',
-            'neighborhood' => 'Centro',
-            'city' => 'Hocabá',
-            'postal_code' => '97440',
-            'delivery_zone' => 'north',
-            'is_main' => true,
-        ]);
-
-        CustomerAddress::create([
-            'customer_id' => $this->customerWithoutAccount->id,
-            'street' => 'Calle 15 x 18',
-            'exterior_number' => '102',
-            'neighborhood' => 'Centro',
-            'city' => 'Hocabá',
-            'postal_code' => '97440',
-            'delivery_zone' => 'south',
-            'is_main' => true,
-        ]);
-
-        // Cambiar el cliente con cuenta a 'suspended'
-        $this->customerWithAccount->status = Customer::STATUS_SUSPENDED;
-        $this->customerWithAccount->save();
-
-        // 1. Filtrar solo 'suspended'
-        $responseSuspended = $this->actingAs($this->adminUser)
-            ->get(route('admin.customers.index', ['status' => 'suspended']));
-        $responseSuspended->assertOk();
-        $responseSuspended->assertInertia(fn ($page) => $page
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
             ->component('Admin/Customers/Index')
-            ->has('customers.data', 1)
-            ->where('customers.data.0.id', $this->customerWithAccount->id)
+            ->missing('filters.status')
+            ->has('customers.data', 2)
         );
-
-        // 2. Filtrar solo 'active'
-        $responseActive = $this->actingAs($this->adminUser)
-            ->get(route('admin.customers.index', ['status' => 'active']));
-        $responseActive->assertOk();
-        $responseActive->assertInertia(fn ($page) => $page
-            ->component('Admin/Customers/Index')
-            ->has('customers.data', 1)
-            ->where('customers.data.0.id', $this->customerWithoutAccount->id)
-        );
-
-        // 3. Filtrar combinación Zona Norte + Suspendido (Debe coincidir customerWithAccount)
-        $responseNorthSuspended = $this->actingAs($this->adminUser)
-            ->get(route('admin.customers.index', ['status' => 'suspended', 'zone' => 'north']));
-        $responseNorthSuspended->assertOk();
-        $responseNorthSuspended->assertInertia(fn ($page) => $page
-            ->component('Admin/Customers/Index')
-            ->has('customers.data', 1)
-            ->where('customers.data.0.id', $this->customerWithAccount->id)
-        );
-
-        // 4. Filtrar combinación Zona Sur + Suspendido (No hay ningún suspendido en zona sur)
-        $responseSouthSuspended = $this->actingAs($this->adminUser)
-            ->get(route('admin.customers.index', ['status' => 'suspended', 'zone' => 'south']));
-        $responseSouthSuspended->assertOk();
-        $responseSouthSuspended->assertInertia(fn ($page) => $page
-            ->component('Admin/Customers/Index')
-            ->has('customers.data', 0)
-        );
-    }
-
-    /**
-     * 11. Cambiar estado comercial no altera cantidades de botellones, domicilios ni código CLI-XXXX.
-     */
-    public function test_commercial_status_update_does_not_modify_bottles_addresses_or_code(): void
-    {
-        $customer = $this->customerWithAccount;
-        $initialCode = $customer->code;
-        $initialFixed = $customer->fixed_bottles_count;
-        $initialExchange = $customer->exchange_bottles_count;
-
-        $this->actingAs($this->adminUser)
-            ->patch(route('admin.customers.status.update', $customer->id), [
-                'status' => Customer::STATUS_SUSPENDED,
-                'reason' => 'Verificación de integridad de datos',
-            ]);
-
-        $customer->refresh();
-
-        $this->assertEquals($initialCode, $customer->code);
-        $this->assertEquals($initialFixed, $customer->fixed_bottles_count);
-        $this->assertEquals($initialExchange, $customer->exchange_bottles_count);
-        $this->assertEquals(Customer::STATUS_SUSPENDED, $customer->status);
     }
 }

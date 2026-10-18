@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -12,7 +13,6 @@ const props = defineProps({
         type: Object,
         default: () => ({
             search: '',
-            status: 'all',
             access: 'all',
             zone: 'all',
         }),
@@ -28,7 +28,6 @@ const props = defineProps({
 });
 
 const search = ref(props.filters.search || '');
-const status = ref(props.filters.status || 'all');
 const access = ref(props.filters.access || 'all');
 const zone = ref(props.filters.zone || 'all');
 const isLoading = ref(false);
@@ -41,7 +40,6 @@ const applyFilters = () => {
         route('admin.customers.index'),
         {
             search: search.value || undefined,
-            status: status.value !== 'all' ? status.value : undefined,
             access: access.value !== 'all' ? access.value : undefined,
             zone: zone.value !== 'all' ? zone.value : undefined,
         },
@@ -65,13 +63,12 @@ watch(search, () => {
 });
 
 // Filtros inmediatos
-watch([status, access, zone], () => {
+watch([access, zone], () => {
     applyFilters();
 });
 
 const resetFilters = () => {
     search.value = '';
-    status.value = 'all';
     access.value = 'all';
     zone.value = 'all';
     applyFilters();
@@ -80,36 +77,9 @@ const resetFilters = () => {
 const hasActiveFilters = () => {
     return Boolean(
         search.value ||
-        (status.value && status.value !== 'all') ||
         (access.value && access.value !== 'all') ||
         (zone.value && zone.value !== 'all')
     );
-};
-
-const getStatusBadgeClass = (customerStatus) => {
-    switch (customerStatus) {
-        case 'active':
-            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
-        case 'suspended':
-            return 'bg-amber-50 text-amber-800 border-amber-300';
-        case 'inactive':
-            return 'bg-gray-100 text-gray-700 border-gray-300';
-        default:
-            return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-};
-
-const getStatusLabel = (customerStatus) => {
-    switch (customerStatus) {
-        case 'active':
-            return 'Activo';
-        case 'suspended':
-            return 'Suspendido';
-        case 'inactive':
-            return 'Inactivo';
-        default:
-            return customerStatus;
-    }
 };
 
 const getInitials = (customer) => {
@@ -125,10 +95,15 @@ const getInitials = (customer) => {
 <template>
     <Head title="Directorio de Clientes - Puritronic" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
+                    <Breadcrumbs
+                        :items="[
+                            { label: 'Clientes', icon: 'fa-solid fa-address-book' }
+                        ]"
+                    />
                     <div class="flex items-center gap-3">
                         <h2 class="text-xl font-bold leading-tight text-gray-900">
                             Directorio de Clientes
@@ -158,7 +133,7 @@ const getInitials = (customer) => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
+            <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- Mensaje de Éxito Flash -->
                 <div
@@ -209,7 +184,7 @@ const getInitials = (customer) => {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         <!-- Buscador -->
-                        <div class="md:col-span-4 relative">
+                        <div class="md:col-span-5 relative">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -239,21 +214,8 @@ const getInitials = (customer) => {
                             </select>
                         </div>
 
-                        <!-- Filtro por Estado Comercial -->
-                        <div class="md:col-span-2">
-                            <select
-                                v-model="status"
-                                class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
-                            >
-                                <option value="all">Todos los estados</option>
-                                <option value="active">Activo</option>
-                                <option value="suspended">Suspendido</option>
-                                <option value="inactive">Inactivo</option>
-                            </select>
-                        </div>
-
                         <!-- Filtro por Tipo de Acceso al Sistema -->
-                        <div class="md:col-span-2">
+                        <div class="md:col-span-3">
                             <select
                                 v-model="access"
                                 class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
@@ -302,13 +264,13 @@ const getInitials = (customer) => {
                         <table class="w-full divide-y divide-gray-200 text-left">
                             <thead class="bg-gray-50/75 text-xs uppercase tracking-wider text-gray-500 font-semibold">
                                 <tr>
-                                    <th scope="col" class="py-3.5 pl-5 pr-3">Cliente Particular</th>
-                                    <th scope="col" class="px-3 py-3.5">Contacto</th>
-                                    <th scope="col" class="px-3 py-3.5">Botellones</th>
-                                    <th scope="col" class="px-3 py-3.5">Domicilio y Zona</th>
-                                    <th scope="col" class="px-3 py-3.5">Acceso</th>
-                                    <th scope="col" class="px-3 py-3.5">Estado / Registro</th>
-                                    <th scope="col" class="relative py-3.5 pl-3 pr-5 text-right">Acciones</th>
+                                    <th scope="col" class="py-3.5 pl-6 pr-4">Cliente Particular</th>
+                                    <th scope="col" class="px-4 py-3.5">Contacto</th>
+                                    <th scope="col" class="px-4 py-3.5">Botellones</th>
+                                    <th scope="col" class="px-4 py-3.5">Domicilio y Zona</th>
+                                    <th scope="col" class="px-4 py-3.5">Acceso</th>
+                                    <th scope="col" class="px-4 py-3.5">Fecha de Registro</th>
+                                    <th scope="col" class="relative py-3.5 pl-4 pr-6 text-right">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white text-sm">
@@ -318,7 +280,7 @@ const getInitials = (customer) => {
                                     class="hover:bg-gray-50/80 transition duration-150"
                                 >
                                     <!-- Cliente: Avatar, Nombre, Apodo y Código -->
-                                    <td class="py-3.5 pl-5 pr-3">
+                                    <td class="py-3.5 pl-6 pr-4">
                                         <div class="flex items-center gap-3">
                                             <div class="h-9 w-9 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm shrink-0">
                                                 {{ getInitials(customer) }}
@@ -340,17 +302,17 @@ const getInitials = (customer) => {
                                     </td>
 
                                     <!-- Contacto: Teléfono y Correo -->
-                                    <td class="px-3 py-3.5">
+                                    <td class="px-4 py-3.5">
                                         <div class="text-xs text-gray-900 font-medium">
-                                            {{ customer.phone }}
+                                            {{ customer.phone || '—' }}
                                         </div>
-                                        <div class="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-[160px]" :title="customer.email">
+                                        <div v-if="customer.email" class="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-xs xl:max-w-sm" :title="customer.email">
                                             {{ customer.email }}
                                         </div>
                                     </td>
 
                                     <!-- Botellones (Fijos / Cambio / Total) -->
-                                    <td class="whitespace-nowrap px-3 py-3.5 text-xs">
+                                    <td class="whitespace-nowrap px-4 py-3.5 text-xs">
                                         <div class="flex items-center gap-1.5">
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200" title="Botellones fijos (con nombre rotulado)">
                                                 F: {{ customer.fixed_bottles_count }}
@@ -365,7 +327,7 @@ const getInitials = (customer) => {
                                     </td>
 
                                     <!-- Domicilio y Zona -->
-                                    <td class="px-3 py-3.5 text-xs text-gray-600 max-w-[180px]">
+                                    <td class="px-4 py-3.5 text-xs text-gray-600 max-w-xs md:max-w-sm lg:max-w-md xl:max-w-xl">
                                         <div v-if="customer.has_address" class="space-y-1">
                                             <div class="flex items-start gap-1.5">
                                                 <i class="fa-solid fa-location-dot text-[11px] text-gray-400 mt-0.5 shrink-0"></i>
@@ -409,26 +371,13 @@ const getInitials = (customer) => {
                                         </span>
                                     </td>
 
-                                    <!-- Estado Comercial y Fecha de Registro -->
-                                    <td class="whitespace-nowrap px-3 py-3.5">
-                                        <span
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border"
-                                            :class="getStatusBadgeClass(customer.status)"
-                                        >
-                                            <span class="h-1.5 w-1.5 rounded-full" :class="{
-                                                'bg-emerald-500': customer.status === 'active',
-                                                'bg-amber-500': customer.status === 'suspended',
-                                                'bg-gray-500': customer.status === 'inactive',
-                                            }"></span>
-                                            {{ getStatusLabel(customer.status) }}
-                                        </span>
-                                        <span class="block text-[10px] text-gray-400 font-mono mt-1">
-                                            {{ customer.created_at }}
-                                        </span>
+                                    <!-- Fecha de Registro -->
+                                    <td class="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500 font-mono">
+                                        {{ customer.created_at }}
                                     </td>
 
                                     <!-- Columna Acciones -->
-                                    <td class="whitespace-nowrap py-3.5 pl-3 pr-5 text-right text-xs">
+                                    <td class="whitespace-nowrap py-3.5 pl-4 pr-6 text-right text-xs">
                                         <div class="inline-flex items-center gap-1.5 justify-end">
                                             <Link
                                                 :href="route('admin.customers.edit', customer.id)"

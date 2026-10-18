@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -32,13 +33,13 @@ const submit = () => {
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
-                        <Link :href="route('cliente.addresses.index')" class="hover:text-blue-900 transition">
-                            Mi Domicilio
-                        </Link>
-                        <span>/</span>
-                        <span class="text-gray-900 font-medium">Registrar</span>
-                    </div>
+                    <Breadcrumbs
+                        :home-href="route('cliente.dashboard')"
+                        :items="[
+                            { label: 'Mi Domicilio', href: route('cliente.addresses.index'), icon: 'fa-solid fa-house-chimney' },
+                            { label: 'Registrar', icon: 'fa-solid fa-plus' }
+                        ]"
+                    />
                     <h2 class="text-xl font-bold leading-tight text-gray-900">
                         Registrar Mi Domicilio
                     </h2>

@@ -52,9 +52,7 @@ class ProfileController extends Controller
                     'nickname' => $customer->nickname ?? '',
                     'phone' => ($customer->phone && $customer->phone !== 'No registrado') ? $customer->phone : '',
                     'email' => $user->email,
-                    'status' => $customer->status ?? Customer::STATUS_ACTIVE,
-                    'status_label' => $customer->status_label,
-                    'can_place_orders' => $customer->canPlaceOrders(),
+                    'can_place_orders' => true,
                     'fixed_bottles_count' => (int) ($customer->fixed_bottles_count ?? 0),
                     'exchange_bottles_count' => (int) ($customer->exchange_bottles_count ?? 0),
                     'total_bottles' => (int) $customer->total_bottles,
@@ -73,11 +71,14 @@ class ProfileController extends Controller
             ];
         }
 
+        $isWorker = $user->hasAnyRole(['Administrador', 'Super Admin', 'Repartidor', 'Operador Planta']);
+
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
             'isClient' => $isClient,
             'clientData' => $clientData,
+            'canDeleteAccount' => !$isWorker,
         ]);
     }
 
@@ -105,9 +106,6 @@ class ProfileController extends Controller
                 if (!$customer) {
                     $customer = new Customer();
                     $customer->user_id = $user->id;
-                    $customer->customer_type = 'particular';
-                    $customer->price_tier = 'general';
-                    $customer->status = 'active';
                     $customer->fixed_bottles_count = 0;
                     $customer->exchange_bottles_count = 0;
                 }
@@ -134,11 +132,16 @@ class ProfileController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
+        // No permitir que los trabajadores eliminen sus propias cuentas
+        if ($user->hasAnyRole(['Administrador', 'Super Admin', 'Repartidor', 'Operador Planta'])) {
+            return back()->with('error', 'Las cuentas de personal no pueden ser eliminadas.');
+        }
+
         $request->validate([
             'password' => ['required', 'current_password'],
         ]);
-
-        $user = $request->user();
 
         Auth::logout();
 

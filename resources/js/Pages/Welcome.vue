@@ -21,6 +21,7 @@ const navItems = [
     { id: 'beneficios', label: 'Beneficios' },
     { id: 'como-funciona', label: '¿Cómo funciona?' },
     { id: 'comentarios', label: 'Comentarios' },
+    { id: 'sucursal', label: 'Sucursal' },
     { id: 'preguntas', label: 'Preguntas' },
     { id: 'contacto', label: 'Contacto' },
 ];
@@ -74,7 +75,7 @@ onMounted(() => {
                 }
 
                 const scrollPosition = window.scrollY + 140;
-                const sectionIds = ['inicio', 'beneficios', 'como-funciona', 'comentarios', 'preguntas', 'contacto'];
+                const sectionIds = ['inicio', 'beneficios', 'como-funciona', 'comentarios', 'sucursal', 'preguntas', 'contacto'];
 
                 for (let i = sectionIds.length - 1; i >= 0; i--) {
                     const el = document.getElementById(sectionIds[i]);
@@ -165,28 +166,28 @@ const comments = [
     <div class="min-h-screen bg-white font-['Poppins',sans-serif] text-slate-800 antialiased selection:bg-[#0084ff] selection:text-white">
         
         <!-- ================= NAVBAR ================= -->
-        <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 transition-all duration-200">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-20">
+        <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 transition-all duration-200">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-20 gap-4">
                     
                     <!-- LOGO PURITRONIC -->
-                    <a href="#" class="flex items-center group">
+                    <a href="#" class="flex items-center shrink-0 group mr-2 sm:mr-4">
                         <img
                             src="/images/logo.png"
                             alt="Puritronic Agua Purificada"
-                            class="h-11 sm:h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+                            class="h-10 sm:h-11 md:h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02]"
                         />
                     </a>
 
                     <!-- NAVEGACIÓN DESKTOP (REACTIVA A LA SECCIÓN ACTIVA) -->
-                    <nav class="hidden md:flex items-center space-x-8">
+                    <nav class="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8">
                         <a
                             v-for="item in navItems"
                             :key="item.id"
                             :href="`#${item.id}`"
                             @click="scrollToSection($event, item.id)"
                             :class="[
-                                'text-sm transition-all duration-200 py-1 relative',
+                                'text-xs xl:text-sm whitespace-nowrap transition-all duration-200 py-1.5 px-0.5 relative',
                                 activeSection === item.id
                                     ? 'font-semibold text-[#0084ff] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-[#0084ff] after:rounded-full'
                                     : 'font-medium text-slate-600 hover:text-[#0084ff]'
@@ -197,11 +198,11 @@ const comments = [
                     </nav>
 
                     <!-- BOTONES DE ACCIÓN (AUTH) -->
-                    <div class="hidden sm:flex items-center gap-3">
+                    <div class="hidden lg:flex items-center gap-2.5 xl:gap-3 shrink-0 ml-2 sm:ml-4">
                         <template v-if="$page.props.auth?.user">
                             <Link
                                 :href="route('dashboard')"
-                                class="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                                class="px-5 xl:px-6 py-2.5 text-xs xl:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all flex items-center gap-2 whitespace-nowrap"
                             >
                                 <span>Ir a mi Panel</span>
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,22 +214,22 @@ const comments = [
                             <Link
                                 v-if="canLogin"
                                 :href="route('login')"
-                                class="px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-[#0084ff] transition-all shadow-sm"
+                                class="px-4 xl:px-5 py-2.5 text-xs xl:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-[#0084ff] transition-all shadow-xs whitespace-nowrap"
                             >
                                 Iniciar Sesión
                             </Link>
                             <Link
                                 v-if="canRegister"
                                 :href="route('register')"
-                                class="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
+                                class="px-5 xl:px-6 py-2.5 text-xs xl:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all whitespace-nowrap"
                             >
                                 Crear Cuenta
                             </Link>
                         </template>
                     </div>
 
-                    <!-- BOTÓN MÓVIL HAMBURGUESA -->
-                    <div class="flex sm:hidden">
+                    <!-- BOTÓN MÓVIL HAMBURGUESA (< lg) -->
+                    <div class="flex lg:hidden">
                         <button
                             @click="mobileMenuOpen = !mobileMenuOpen"
                             type="button"
@@ -240,8 +241,8 @@ const comments = [
                     </div>
                 </div>
 
-                <!-- MENU MÓVIL DESPLEGABLE (REACTIVO A LA SECCIÓN ACTIVA) -->
-                <div v-show="mobileMenuOpen" class="sm:hidden border-t border-slate-100 py-4 space-y-2 bg-white">
+                <!-- MENU MÓVIL DESPLEGABLE (< lg) -->
+                <div v-show="mobileMenuOpen" class="lg:hidden border-t border-slate-100 py-4 space-y-2 bg-white">
                     <a
                         v-for="item in navItems"
                         :key="item.id"
@@ -269,7 +270,7 @@ const comments = [
                             <Link
                                 v-if="canLogin"
                                 :href="route('login')"
-                                class="w-full text-center py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-full hover:bg-slate-50"
+                                class="w-full text-center py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:text-[#0084ff]"
                             >
                                 Iniciar Sesión
                             </Link>
@@ -597,8 +598,169 @@ const comments = [
             </div>
         </section>
 
+        <!-- ================= SECCIÓN NUESTRA SUCURSAL ================= -->
+        <section id="sucursal" class="scroll-mt-20 py-16 sm:py-20 lg:py-24 bg-white border-t border-slate-100">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-6 items-stretch">
+                    
+                    <!-- COLUMNA 1: INFORMACIÓN DE SUCURSAL -->
+                    <div class="md:col-span-2 lg:col-span-5 flex flex-col justify-between space-y-6 text-center lg:text-left">
+                        <div class="space-y-4">
+                            <!-- Badge -->
+                            <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 border border-blue-100 px-3.5 py-1.5 rounded-full">
+                                NUESTRA SUCURSAL
+                            </span>
+
+                            <!-- Título principal -->
+                            <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#0e1c2e] leading-tight">
+                                Visítanos en<br class="hidden sm:inline">
+                                <span class="text-[#0084ff]"> Hocabá, Yucatán</span>
+                            </h2>
+
+                            <!-- Descripción -->
+                            <p class="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed max-w-lg mx-auto lg:mx-0">
+                                También puedes visitarnos en nuestra sucursal para atención personalizada, recargas y más servicios de agua purificada.
+                            </p>
+                        </div>
+
+                        <!-- Grid 2x2 de datos -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2 max-w-md mx-auto lg:max-w-none lg:mx-0 text-left">
+                            <!-- Dirección -->
+                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
+                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-[#00d084] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                    <i class="fa-solid fa-location-dot"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                                        Dirección
+                                    </h3>
+                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
+                                        Calle 20 #102, Centro<br>
+                                        Hocabá, Yucatán
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Horario de atención -->
+                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
+                                <div class="w-11 h-11 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                    <i class="fa-regular fa-clock"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                                        Horario de atención
+                                    </h3>
+                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
+                                        Lun - Sáb: 7:00 AM - 7:00 PM<br>
+                                        Dom: 8:00 AM - 3:00 PM
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Teléfono -->
+                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
+                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-[#00d084] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                    <i class="fa-solid fa-phone"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                                        Teléfono
+                                    </h3>
+                                    <a
+                                        href="tel:9991404397"
+                                        class="text-[11px] sm:text-xs text-slate-500 hover:text-[#0084ff] font-medium leading-relaxed mt-0.5 inline-block transition-colors"
+                                    >
+                                        9991 40 43 97
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- También atendemos -->
+                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
+                                <div class="w-11 h-11 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                    <i class="fa-regular fa-star"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                                        También atendemos
+                                    </h3>
+                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
+                                        Pedidos a domicilio
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMNA 2: FOTOGRAFÍA DE LA SUCURSAL -->
+                    <div class="md:col-span-1 lg:col-span-4 min-h-[300px] sm:min-h-[360px] flex">
+                        <div class="relative w-full rounded-3xl overflow-hidden shadow-lg border border-slate-100 group min-h-[300px]">
+                            <img
+                                src="/images/sucursal-real.jpg"
+                                alt="Sucursal Puritronic Hocabá, Yucatán"
+                                class="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                            />
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent pointer-events-none"></div>
+                            
+                            <!-- Badge flotante sobre la foto -->
+                            <div class="absolute bottom-4 left-4 right-4 py-2.5 px-4 rounded-2xl bg-white/95 backdrop-blur-md border border-white/60 shadow-md flex items-center justify-between">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span class="text-xs font-bold text-slate-800">Planta & Sucursal Hocabá</span>
+                                </div>
+                                <span class="text-[11px] text-emerald-600 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full">Abierto</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMNA 3: GOOGLE MAPS IFRAME REAL Y BOTÓN CÓMO LLEGAR -->
+                    <div class="md:col-span-1 lg:col-span-3 min-h-[300px] sm:min-h-[360px] flex">
+                        <div class="relative w-full rounded-3xl overflow-hidden border border-slate-200/90 shadow-md bg-slate-100 flex flex-col justify-end min-h-[300px]">
+                            
+                            <!-- Google Maps Iframe proporcionado por el usuario -->
+                            <iframe
+                                src="https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3729.429274512127!2d-89.249962!3d20.814365!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMjDCsDQ4JzUxLjciTiA4OcKwMTQnNTkuOSJX!5e0!3m2!1ses-419!2smx!4v1792245980366!5m2!1ses-419!2smx"
+                                class="absolute inset-0 w-full h-full border-0"
+                                allowfullscreen=""
+                                loading="lazy"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                            ></iframe>
+
+                            <!-- Botón flotante inferior "Cómo llegar" con link directo de Google Maps -->
+                            <div class="relative z-10 p-3.5 sm:p-4">
+                                <a
+                                    href="https://maps.app.goo.gl/dxB7hkU2R1xbzGr6A"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="w-full bg-white/95 backdrop-blur-md rounded-2xl py-3 px-4 shadow-xl border border-slate-200/80 hover:border-blue-300 hover:shadow-2xl transition-all duration-300 flex items-center justify-between group/btn cursor-pointer"
+                                >
+                                    <div class="flex items-center gap-2.5">
+                                        <!-- Logo icono Google Maps -->
+                                        <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/>
+                                            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.22 1.25 4.9 2.76 7.42L12 9V2z" fill="#EA4335"/>
+                                            <path d="M12 9l4.24 7.42C17.75 13.9 19 11.22 19 9c0-3.87-3.13-7-7-7v7z" fill="#FBBC05"/>
+                                            <path d="M7.76 16.42L12 22l4.24-5.58C14.88 18.2 13.48 20 12 20s-2.88-1.8-4.24-3.58z" fill="#34A853"/>
+                                            <circle cx="12" cy="9" r="2.8" fill="#FFFFFF"/>
+                                        </svg>
+                                        <span class="text-xs sm:text-sm font-bold text-slate-800 group-hover/btn:text-[#0084ff] transition-colors">
+                                            Cómo llegar
+                                        </span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-right text-xs text-[#0084ff] group-hover/btn:translate-x-1 transition-transform"></i>
+                                </a>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
         <!-- ================= PREGUNTAS FRECUENTES (FAQ) ================= -->
-        <section id="preguntas" class="scroll-mt-20 py-20 lg:py-24 bg-white border-t border-slate-100">
+        <section id="preguntas" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
             <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                 
                 <!-- Títulos -->
@@ -767,6 +929,7 @@ const comments = [
                     <p>© {{ new Date().getFullYear() }} Puritronic. Todos los derechos reservados.</p>
                     <div class="flex items-center gap-6">
                         <a href="#inicio" @click="scrollToSection($event, 'inicio')" class="hover:text-slate-300 transition-colors">Volver arriba</a>
+                        <a href="#sucursal" @click="scrollToSection($event, 'sucursal')" class="hover:text-slate-300 transition-colors">Nuestra Sucursal</a>
                         <Link :href="$page.props.auth?.user ? route('dashboard') : route('login')" class="hover:text-slate-300 transition-colors">{{ $page.props.auth?.user ? 'Mi Panel' : 'Acceso Clientes' }}</Link>
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -35,12 +36,14 @@ const getRoleBadgeClass = (roleName) => {
 };
 
 const getInitials = (name) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
+    if (!name || typeof name !== 'string') return 'U';
+    const clean = name.trim();
+    if (!clean) return 'U';
+    const parts = clean.split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return parts.substring(0, 2).toUpperCase();
+    return clean.slice(0, 2).toUpperCase();
 };
 
 const handleToggleStatus = () => {
@@ -60,17 +63,16 @@ const handleToggleStatus = () => {
 <template>
     <Head :title="`Detalles: ${user.name} - Puritronic`" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
-                        <Link :href="route('admin.users.index')" class="hover:text-blue-900 transition">
-                            Usuarios
-                        </Link>
-                        <span>/</span>
-                        <span class="text-gray-900 font-medium">Detalles #{{ user.id }}</span>
-                    </div>
+                    <Breadcrumbs
+                        :items="[
+                            { label: 'Usuarios', href: route('admin.users.index'), icon: 'fa-solid fa-users' },
+                            { label: user.name, icon: 'fa-solid fa-user' }
+                        ]"
+                    />
                     <div class="flex items-center gap-3">
                         <h2 class="text-xl font-bold leading-tight text-gray-900">
                             {{ user.name }}
@@ -118,9 +120,9 @@ const handleToggleStatus = () => {
                         <span>Editar</span>
                     </Link>
 
-                    <!-- Botón Activar / Desactivar -->
+                    <!-- Botón Activar / Desactivar (solo para roles internos) -->
                     <button
-                        v-if="canEdit"
+                        v-if="canEdit && user.primary_role !== 'Cliente'"
                         @click="handleToggleStatus"
                         type="button"
                         :disabled="isSelf"
@@ -141,7 +143,7 @@ const handleToggleStatus = () => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+            <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- Notificaciones Flash -->
                 <div
@@ -167,8 +169,8 @@ const handleToggleStatus = () => {
                 <!-- Tarjeta Principal: Perfil de Usuario -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <!-- Cabecera de Ficha -->
-                    <div class="p-6 sm:p-8 bg-gradient-to-r from-blue-900 to-indigo-950 text-white flex flex-col sm:flex-row items-center gap-5">
-                        <div class="h-20 w-20 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center font-bold text-2xl tracking-wider text-white shadow-inner shrink-0">
+                    <div class="p-6 sm:p-8 bg-slate-900 text-white flex flex-col sm:flex-row items-center gap-5">
+                        <div class="h-20 w-20 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center font-bold text-2xl tracking-wider text-white shadow-xs shrink-0">
                             {{ getInitials(user.name) }}
                         </div>
                         <div class="text-center sm:text-left flex-1">
@@ -197,7 +199,7 @@ const handleToggleStatus = () => {
                             Información General del Sistema
                         </h4>
 
-                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 text-sm">
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 text-sm">
                             <div class="bg-gray-50/75 p-3.5 rounded-lg border border-gray-100">
                                 <dt class="text-xs font-medium text-gray-500">Nombre Completo</dt>
                                 <dd class="mt-1 text-sm font-semibold text-gray-900">{{ user.name }}</dd>
@@ -276,15 +278,15 @@ const handleToggleStatus = () => {
                         </dl>
                     </div>
 
-                    <!-- Perfil Comercial Vinculado (Customer) si existe -->
+                    <!-- Perfil de Cliente Vinculado (Customer) si existe -->
                     <div v-if="user.customer" class="p-6 sm:p-8 border-t border-gray-100 bg-sky-50/30">
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-2">
-                                <div class="h-7 w-7 rounded bg-sky-100 text-sky-800 flex items-center justify-center font-bold text-xs">
+                                <div class="h-7 w-7 rounded bg-blue-900 text-white flex items-center justify-center font-bold text-xs">
                                     CLI
                                 </div>
                                 <h4 class="text-sm font-semibold text-gray-900">
-                                    Perfil Comercial Asociado (Cliente)
+                                    Perfil de Cliente Asociado
                                 </h4>
                             </div>
                             <span class="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-sky-100 text-sky-800 border border-sky-200">
@@ -294,9 +296,9 @@ const handleToggleStatus = () => {
 
                         <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                             <div class="bg-white p-3 rounded-lg border border-sky-100 shadow-2xs">
-                                <dt class="text-gray-500 font-medium">Razón Social / Comercial</dt>
+                                <dt class="text-gray-500 font-medium">Apodo / Alias</dt>
                                 <dd class="mt-1 font-semibold text-gray-900">
-                                    {{ user.customer.business_name || 'Particular' }}
+                                    {{ user.customer.nickname ? `"${user.customer.nickname}"` : 'Sin apodo registrado' }}
                                 </dd>
                             </div>
 
@@ -308,9 +310,9 @@ const handleToggleStatus = () => {
                             </div>
 
                             <div class="bg-white p-3 rounded-lg border border-sky-100 shadow-2xs">
-                                <dt class="text-gray-500 font-medium">Tarifa / Lista de Precios</dt>
-                                <dd class="mt-1 font-semibold text-gray-900 uppercase">
-                                    {{ user.customer.price_tier || 'general' }}
+                                <dt class="text-gray-500 font-medium">Domicilio de Entrega</dt>
+                                <dd class="mt-1 font-semibold text-gray-900">
+                                    {{ user.customer.has_address ? 'Domicilio registrado' : 'Sin domicilio registrado' }}
                                 </dd>
                             </div>
                         </dl>

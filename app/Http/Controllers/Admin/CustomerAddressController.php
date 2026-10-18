@@ -29,6 +29,13 @@ class CustomerAddressController extends Controller
             abort(403, 'No tiene autorización para registrar domicilios de clientes.');
         }
 
+        // Clientes con cuenta gestionan su propio domicilio
+        if (!is_null($customer->user_id)) {
+            return redirect()
+                ->route('admin.customers.show', $customer->id)
+                ->with('error', 'El Administrador no puede registrar el domicilio de un cliente con cuenta. El cliente conservará la gestión de su propio domicilio.');
+        }
+
         // Si ya tiene un domicilio activo, redirigir a la ficha
         if ($customer->address()->exists()) {
             return redirect()
@@ -57,6 +64,11 @@ class CustomerAddressController extends Controller
             abort(403, 'No tiene autorización para registrar domicilios de clientes.');
         }
 
+        // Clientes con cuenta gestionan su propio domicilio
+        if (!is_null($customer->user_id)) {
+            abort(403, 'El Administrador no puede registrar el domicilio de un cliente con cuenta. El cliente conservará la gestión de su propio domicilio.');
+        }
+
         // Protección HTTP manipulada contra segundo domicilio
         if ($customer->address()->exists()) {
             return redirect()
@@ -81,6 +93,11 @@ class CustomerAddressController extends Controller
         $authUser = $request->user() ?: Auth::user();
         if (!$authUser || !$authUser->can('customers.update')) {
             abort(403, 'No tiene autorización para editar domicilios de clientes.');
+        }
+
+        // Clientes con cuenta gestionan su propio domicilio
+        if (!is_null($customer->user_id)) {
+            abort(403, 'El Administrador no puede editar el domicilio de un cliente con cuenta. El cliente conservará la gestión de su propio domicilio.');
         }
 
         if ($address->customer_id !== $customer->id) {
@@ -119,6 +136,11 @@ class CustomerAddressController extends Controller
             abort(403, 'No tiene autorización para editar domicilios de clientes.');
         }
 
+        // Clientes con cuenta gestionan su propio domicilio
+        if (!is_null($customer->user_id)) {
+            abort(403, 'El Administrador no puede editar ni actualizar el domicilio de un cliente con cuenta. El cliente conservará la gestión de su propio domicilio.');
+        }
+
         if ($address->customer_id !== $customer->id) {
             abort(404, 'El domicilio no pertenece al cliente especificado.');
         }
@@ -138,6 +160,11 @@ class CustomerAddressController extends Controller
         $authUser = $request->user() ?: Auth::user();
         if (!$authUser || (!$authUser->can('customers.delete') && !$authUser->can('customers.update'))) {
             abort(403, 'No tiene autorización para eliminar domicilios.');
+        }
+
+        // Clientes con cuenta gestionan su propio domicilio
+        if (!is_null($customer->user_id)) {
+            abort(403, 'El Administrador no puede eliminar el domicilio de un cliente con cuenta. El cliente conservará la gestión de su propio domicilio.');
         }
 
         if ($address->customer_id !== $customer->id) {

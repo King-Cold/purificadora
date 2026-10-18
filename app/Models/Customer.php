@@ -18,22 +18,6 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
-    public const STATUS_ACTIVE = 'active';
-    public const STATUS_INACTIVE = 'inactive';
-    public const STATUS_SUSPENDED = 'suspended';
-
-    public const ALLOWED_STATUSES = [
-        self::STATUS_ACTIVE,
-        self::STATUS_INACTIVE,
-        self::STATUS_SUSPENDED,
-    ];
-
-    public const STATUSES = [
-        self::STATUS_ACTIVE => 'Activo',
-        self::STATUS_INACTIVE => 'Inactivo',
-        self::STATUS_SUSPENDED => 'Suspendido',
-    ];
-
     /**
      * The table associated with the model.
      *
@@ -51,24 +35,12 @@ class Customer extends Model
         'code',
         'name',
         'nickname',
-        'contact_name',
         'phone',
         'secondary_phone',
         'email',
-        'tax_id',
-        'customer_type',
-        'price_tier',
-        'credit_limit',
-        'credit_days',
         // Cantidad de botellones en posesión del cliente
         'fixed_bottles_count',
         'exchange_bottles_count',
-
-        // NOTA DE ARQUITECTURA: 'max_credit_bottles' queda obsoleto.
-        // El límite de garrafones fiados será GENERAL para toda la purificadora desde Configuración General en un sprint futuro.
-        'max_credit_bottles',
-
-        'status',
         'notes',
     ];
 
@@ -80,10 +52,6 @@ class Customer extends Model
     protected function casts(): array
     {
         return [
-            'credit_limit' => 'decimal:2',
-            'credit_days' => 'integer',
-            'has_deposit_bottles' => 'boolean',
-            'max_credit_bottles' => 'integer',
             'fixed_bottles_count' => 'integer',
             'exchange_bottles_count' => 'integer',
         ];
@@ -139,18 +107,11 @@ class Customer extends Model
             ],
             'name' => ['nullable', 'string', 'max:150'],
             'nickname' => ['nullable', 'string', 'max:100'],
-            'contact_name' => ['nullable', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
-            'tax_id' => ['nullable', 'string', 'max:25'],
-            'customer_type' => ['required', Rule::in(['particular', 'comercio', 'empresa'])],
-            'price_tier' => ['required', Rule::in(['general', 'mayoreo', 'especial'])],
-            'credit_limit' => ['numeric', 'min:0'],
-            'credit_days' => ['integer', 'min:0'],
             'fixed_bottles_count' => ['required', 'integer', 'min:0'],
             'exchange_bottles_count' => ['required', 'integer', 'min:0'],
-            'status' => ['required', Rule::in(['active', 'suspended', 'inactive'])],
             'notes' => ['nullable', 'string'],
         ];
     }
@@ -196,43 +157,12 @@ class Customer extends Model
     }
 
     /**
-     * Historial de cambios de estado comercial.
-     */
-    public function statusHistories(): HasMany
-    {
-        return $this->hasMany(CustomerStatusHistory::class)->orderBy('id', 'desc');
-    }
-
-    /**
      * Determina si el cliente está habilitado para realizar nuevos pedidos.
-     * Solo los clientes comerciales en estado 'active' pueden pedir garrafones.
+     * Toda cuenta registrada permanece habilitada mientras no esté eliminada.
      */
     public function canPlaceOrders(): bool
     {
-        return $this->status === self::STATUS_ACTIVE && is_null($this->deleted_at);
-    }
-
-    public function isActive(): bool
-    {
-        return $this->status === self::STATUS_ACTIVE;
-    }
-
-    public function isSuspended(): bool
-    {
-        return $this->status === self::STATUS_SUSPENDED;
-    }
-
-    public function isInactive(): bool
-    {
-        return $this->status === self::STATUS_INACTIVE;
-    }
-
-    /**
-     * Accesor para el nombre legible del estado comercial.
-     */
-    public function getStatusLabelAttribute(): string
-    {
-        return self::STATUSES[$this->status] ?? $this->status;
+        return is_null($this->deleted_at);
     }
 
     /**
@@ -244,14 +174,6 @@ class Customer extends Model
             get: fn (?string $value) => $value ?: $this->user?->email,
             set: fn (?string $value) => $value
         );
-    }
-
-    /**
-     * Scope para filtrar únicamente clientes activos.
-     */
-    public function scopeActive(Builder $query): Builder
-    {
-        return $query->where('status', 'active');
     }
 
     /**
@@ -267,7 +189,6 @@ class Customer extends Model
             $subQuery->where('name', 'like', "%{$term}%")
                 ->orWhere('nickname', 'like', "%{$term}%")
                 ->orWhere('code', 'like', "%{$term}%")
-                ->orWhere('contact_name', 'like', "%{$term}%")
                 ->orWhere('phone', 'like', "%{$term}%")
                 ->orWhere('secondary_phone', 'like', "%{$term}%")
                 ->orWhere('email', 'like', "%{$term}%");

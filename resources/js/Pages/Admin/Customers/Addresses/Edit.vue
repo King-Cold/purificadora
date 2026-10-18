@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -36,21 +37,17 @@ const submit = () => {
 <template>
     <Head :title="`Editar Domicilio - ${customer.name || customer.nickname || customer.code} - Puritronic`" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
-                        <Link :href="route('admin.customers.index')" class="hover:text-blue-900 transition">
-                            Clientes
-                        </Link>
-                        <span>/</span>
-                        <Link :href="route('admin.customers.show', customer.id)" class="hover:text-blue-900 transition">
-                            {{ customer.code }}
-                        </Link>
-                        <span>/</span>
-                        <span class="text-gray-900 font-medium">Editar Domicilio</span>
-                    </div>
+                    <Breadcrumbs
+                        :items="[
+                            { label: 'Clientes', href: route('admin.customers.index'), icon: 'fa-solid fa-address-book' },
+                            { label: customer.code, href: route('admin.customers.show', customer.id), icon: 'fa-solid fa-id-badge' },
+                            { label: 'Editar Domicilio', icon: 'fa-solid fa-location-pen' }
+                        ]"
+                    />
                     <div class="flex items-center gap-3">
                         <h2 class="text-xl font-bold leading-tight text-gray-900">
                             Editar Domicilio (Casa)
@@ -77,7 +74,7 @@ const submit = () => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto w-full max-w-4xl 2xl:max-w-5xl px-4 sm:px-6 lg:px-8">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <form @submit.prevent="submit" class="p-6 sm:p-8 space-y-6">
 

@@ -73,9 +73,6 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::put('/customers/{customer}', [\App\Http\Controllers\Admin\CustomerController::class, 'update'])
         ->name('customers.update')
         ->middleware('permission:customers.update');
-    Route::patch('/customers/{customer}/status', [\App\Http\Controllers\Admin\CustomerController::class, 'updateStatus'])
-        ->name('customers.status.update')
-        ->middleware('permission:customers.update');
 
     // Gestión del Domicilio de Entrega del Cliente
     Route::get('/customers/{customer}/addresses/create', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'create'])
@@ -105,9 +102,7 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
             'customer' => $customer ? [
                 'code' => $customer->code,
                 'nickname' => $customer->nickname,
-                'status' => $customer->status,
-                'status_label' => $customer->status_label,
-                'can_place_orders' => $customer->canPlaceOrders(),
+                'can_place_orders' => true,
                 'fixed_bottles_count' => (int) $customer->fixed_bottles_count,
                 'exchange_bottles_count' => (int) $customer->exchange_bottles_count,
                 'total_bottles' => (int) $customer->total_bottles,

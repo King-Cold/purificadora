@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
-use App\Models\CustomerStatusHistory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,13 +27,11 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'string', 'in:all,active,suspended,inactive'],
             'access' => ['nullable', 'string', 'in:all,with_account,without_account'],
             'zone' => ['nullable', 'string', 'in:all,north,south,east,west,no_zone,other_municipality'],
         ]);
 
         $search = $validated['search'] ?? null;
-        $statusFilter = $validated['status'] ?? null;
         $accessFilter = $validated['access'] ?? null;
         $zoneFilter = $validated['zone'] ?? null;
 
@@ -54,7 +51,6 @@ class CustomerController extends Controller
                 'email',
                 'fixed_bottles_count',
                 'exchange_bottles_count',
-                'status',
                 'created_at',
             ]);
 
@@ -74,12 +70,7 @@ class CustomerController extends Controller
             });
         }
 
-        // 2. Filtro por estado comercial del cliente
-        if (!empty($statusFilter) && $statusFilter !== 'all') {
-            $query->where('status', $statusFilter);
-        }
-
-        // 3. Filtro por tipo de acceso al sistema (Con cuenta / Sin cuenta)
+        // 2. Filtro por tipo de acceso al sistema (Con cuenta / Sin cuenta)
         if (!empty($accessFilter) && $accessFilter !== 'all') {
             if ($accessFilter === 'with_account') {
                 $query->whereNotNull('user_id');
@@ -88,7 +79,7 @@ class CustomerController extends Controller
             }
         }
 
-        // 4. Filtro por zonas de reparto del domicilio único
+        // 3. Filtro por zonas de reparto del domicilio único
         if (!empty($zoneFilter) && $zoneFilter !== 'all') {
             if (in_array($zoneFilter, ['north', 'south', 'east', 'west'])) {
                 $query->whereHas('address', function ($q) use ($zoneFilter) {
@@ -116,7 +107,7 @@ class CustomerController extends Controller
             }
         }
 
-        // 5. Paginación eficiente con query string preservation
+        // 4. Paginación eficiente con query string preservation
         $customers = $query->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString()
@@ -163,7 +154,6 @@ class CustomerController extends Controller
                         'status' => $customer->user->status ?? 'active',
                         'is_active' => $customer->user->isActive(),
                     ] : null,
-                    'status' => $customer->status,
                     'created_at' => $customer->created_at ? $customer->created_at->format('d/m/Y') : 'N/D',
                 ];
             });
@@ -172,7 +162,6 @@ class CustomerController extends Controller
             'customers' => $customers,
             'filters' => [
                 'search' => $search ?? '',
-                'status' => $statusFilter ?? 'all',
                 'access' => $accessFilter ?? 'all',
                 'zone' => $zoneFilter ?? 'all',
             ],
@@ -207,7 +196,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:150'],
             'nickname' => ['nullable', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'max:25'],
+            'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
             'fixed_bottles_count' => ['required', 'integer', 'min:0'],
@@ -224,18 +213,23 @@ class CustomerController extends Controller
         }
 
         // Detección preventiva de posibles duplicados (por teléfono o nombre/apodo idéntico)
-        $potentialDuplicates = Customer::query()
-            ->where(function ($q) use ($validated) {
-                $q->where('phone', $validated['phone']);
-                if (!empty($validated['name'])) {
-                    $q->orWhere('name', $validated['name']);
-                }
-                if (!empty($validated['nickname'])) {
-                    $q->orWhere('nickname', $validated['nickname']);
-                }
-            })
-            ->select(['id', 'code', 'name', 'nickname', 'phone'])
-            ->get();
+        $potentialDuplicates = collect();
+        if (!empty($validated['phone']) || !empty($validated['name']) || !empty($validated['nickname'])) {
+            $potentialDuplicates = Customer::query()
+                ->where(function ($q) use ($validated) {
+                    if (!empty($validated['phone'])) {
+                        $q->where('phone', $validated['phone']);
+                    }
+                    if (!empty($validated['name'])) {
+                        $q->orWhere('name', $validated['name']);
+                    }
+                    if (!empty($validated['nickname'])) {
+                        $q->orWhere('nickname', $validated['nickname']);
+                    }
+                })
+                ->select(['id', 'code', 'name', 'nickname', 'phone'])
+                ->get();
+        }
 
         $customer = DB::transaction(function () use ($validated) {
             // El modelo Customer se encarga automáticamente de generar el código CLI-XXXX en el hook creating.
@@ -244,17 +238,12 @@ class CustomerController extends Controller
                 'user_id' => null,
                 'name' => !empty($validated['name']) ? trim($validated['name']) : null,
                 'nickname' => !empty($validated['nickname']) ? trim($validated['nickname']) : null,
-                'phone' => trim($validated['phone']),
+                'phone' => !empty($validated['phone']) ? trim($validated['phone']) : null,
                 'secondary_phone' => !empty($validated['secondary_phone']) ? trim($validated['secondary_phone']) : null,
                 'email' => !empty($validated['email']) ? trim($validated['email']) : null,
                 'fixed_bottles_count' => (int) $validated['fixed_bottles_count'],
                 'exchange_bottles_count' => (int) $validated['exchange_bottles_count'],
                 'notes' => !empty($validated['notes']) ? trim($validated['notes']) : null,
-                'customer_type' => 'particular',
-                'price_tier' => 'general',
-                'credit_limit' => 0.00,
-                'credit_days' => 0,
-                'status' => 'active',
             ]);
         });
 
@@ -289,7 +278,6 @@ class CustomerController extends Controller
         $customer->load([
             'user:id,name,email,status,email_verified_at,created_at',
             'address',
-            'statusHistories.changer:id,name',
         ]);
 
         $address = $customer->address;
@@ -340,13 +328,12 @@ class CustomerController extends Controller
                 'phone' => $customer->phone ?: 'No registrado',
                 'secondary_phone' => $customer->secondary_phone ?: 'No registrado',
                 'email' => $customer->email ?: 'No registrado',
-                'status' => $customer->status,
-                'status_label' => Customer::STATUSES[$customer->status] ?? $customer->status,
                 'created_at' => $customer->created_at ? $customer->created_at->format('d/m/Y H:i') : 'N/D',
                 'updated_at' => $customer->updated_at ? $customer->updated_at->format('d/m/Y H:i') : 'N/D',
 
                 // Acceso al sistema
                 'has_account' => !is_null($customer->user_id),
+                'can_manage_address' => is_null($customer->user_id),
                 'user' => $userData,
 
                 // Domicilio único (casa del cliente)
@@ -360,22 +347,7 @@ class CustomerController extends Controller
                 'exchange_bottles_count' => $exchangeCount,
                 'total_bottles' => $fixedCount + $exchangeCount,
                 'notes' => $customer->notes,
-
-                // Historial de cambios de estado comercial
-                'status_histories' => $customer->statusHistories->map(function ($history) {
-                    return [
-                        'id' => $history->id,
-                        'previous_status' => $history->previous_status,
-                        'previous_status_label' => Customer::STATUSES[$history->previous_status] ?? $history->previous_status,
-                        'new_status' => $history->new_status,
-                        'new_status_label' => Customer::STATUSES[$history->new_status] ?? $history->new_status,
-                        'reason' => $history->reason,
-                        'changed_by_name' => $history->changer?->name ?? 'Sistema / Administrador',
-                        'created_at' => $history->created_at ? $history->created_at->format('d/m/Y H:i') : 'N/D',
-                    ];
-                }),
             ],
-            'available_statuses' => Customer::STATUSES,
             'canEdit' => $authUser->can('customers.update'),
         ]);
     }
@@ -426,7 +398,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:150'],
             'nickname' => ['nullable', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'max:25'],
+            'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
             'fixed_bottles_count' => ['required', 'integer', 'min:0'],
@@ -446,7 +418,7 @@ class CustomerController extends Controller
         $customer->update([
             'name' => !empty($validated['name']) ? trim($validated['name']) : null,
             'nickname' => !empty($validated['nickname']) ? trim($validated['nickname']) : null,
-            'phone' => trim($validated['phone']),
+            'phone' => !empty($validated['phone']) ? trim($validated['phone']) : null,
             'secondary_phone' => !empty($validated['secondary_phone']) ? trim($validated['secondary_phone']) : null,
             'email' => !empty($validated['email']) ? trim($validated['email']) : null,
             'fixed_bottles_count' => (int) $validated['fixed_bottles_count'],
@@ -459,54 +431,6 @@ class CustomerController extends Controller
         return redirect()
             ->route('admin.customers.show', $customer->id)
             ->with('success', "Datos del cliente '{$displayName}' actualizados correctamente.");
-    }
-
-    /**
-     * Actualiza el estado comercial del cliente registrando el cambio en el historial de auditoría.
-     */
-    public function updateStatus(Request $request, Customer $customer): RedirectResponse
-    {
-        $authUser = $request->user() ?: Auth::user();
-        if (!$authUser || !$authUser->can('customers.update')) {
-            abort(403, 'No tiene autorización para modificar el estado comercial de clientes.');
-        }
-
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(Customer::ALLOWED_STATUSES)],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ], [
-            'status.required' => 'Debe seleccionar un estado comercial válido.',
-            'status.in' => 'El estado comercial seleccionado no es válido.',
-            'reason.max' => 'El motivo del cambio no puede superar los 500 caracteres.',
-        ]);
-
-        $newStatus = $validated['status'];
-        $previousStatus = $customer->status ?? Customer::STATUS_ACTIVE;
-
-        if ($newStatus === $previousStatus) {
-            return redirect()
-                ->route('admin.customers.show', $customer->id)
-                ->with('info', "El cliente ya se encuentra en estado comercial {$customer->status_label}.");
-        }
-
-        DB::transaction(function () use ($customer, $previousStatus, $newStatus, $validated, $authUser) {
-            $customer->status = $newStatus;
-            $customer->save();
-
-            CustomerStatusHistory::logChange(
-                customer: $customer,
-                previousStatus: $previousStatus,
-                newStatus: $newStatus,
-                reason: !empty($validated['reason']) ? trim($validated['reason']) : null,
-                changedBy: $authUser->id
-            );
-        });
-
-        $displayName = $customer->name ?: ($customer->nickname ? "Cliente conocido como '{$customer->nickname}'" : 'Cliente');
-
-        return redirect()
-            ->route('admin.customers.show', $customer->id)
-            ->with('success', "Estado comercial de '{$displayName}' actualizado a {$customer->status_label} correctamente.");
     }
 }
 

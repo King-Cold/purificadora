@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -95,12 +96,14 @@ const getRoleBadgeClass = (roleName) => {
 };
 
 const getInitials = (name) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
+    if (!name || typeof name !== 'string') return 'U';
+    const clean = name.trim();
+    if (!clean) return 'U';
+    const parts = clean.split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return parts.substring(0, 2).toUpperCase();
+    return clean.slice(0, 2).toUpperCase();
 };
 
 const handleToggleStatus = (user) => {
@@ -120,10 +123,15 @@ const handleToggleStatus = (user) => {
 <template>
     <Head title="Gestión de Usuarios - Puritronic" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
+                    <Breadcrumbs
+                        :items="[
+                            { label: 'Usuarios', icon: 'fa-solid fa-users' }
+                        ]"
+                    />
                     <div class="flex items-center gap-3">
                         <h2 class="text-xl font-bold leading-tight text-gray-900">
                             Gestión de Usuarios
@@ -136,24 +144,11 @@ const handleToggleStatus = (user) => {
                         Consulta, edición, permisos y estado de acceso de cuentas en Puritronic
                     </p>
                 </div>
-
-                <!-- Botón Nuevo Usuario Habilitado -->
-                <div class="self-start sm:self-auto">
-                    <Link
-                        :href="route('admin.users.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-medium hover:bg-blue-800 transition shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2"
-                    >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span>Nuevo usuario</span>
-                    </Link>
-                </div>
             </div>
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+            <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- Mensaje de Éxito Flash -->
                 <div
@@ -371,8 +366,9 @@ const handleToggleStatus = (user) => {
                                                 </svg>
                                             </Link>
 
-                                            <!-- Activar / Desactivar -->
+                                            <!-- Activar / Desactivar (solo para roles internos, cuentas de cliente no se pueden desactivar) -->
                                             <button
+                                                v-if="user.primary_role !== 'Cliente'"
                                                 type="button"
                                                 @click="handleToggleStatus(user)"
                                                 :disabled="$page.props.auth?.user?.id === user.id"

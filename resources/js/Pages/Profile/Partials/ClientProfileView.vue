@@ -61,58 +61,6 @@ const submit = () => {
                 <span class="text-xs sm:text-sm font-medium">{{ $page.props.flash.success }}</span>
             </div>
 
-            <!-- AVISO DE ESTADO COMERCIAL DEL CLIENTE -->
-            <!-- Caso Suspendido -->
-            <div
-                v-if="clientData.customer.status === 'suspended'"
-                class="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 flex items-start gap-4 shadow-xs"
-            >
-                <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                </div>
-                <div class="text-xs sm:text-sm">
-                    <h4 class="font-bold text-amber-950">
-                        Atención sobre tu servicio de reparto
-                    </h4>
-                    <p class="mt-0.5 leading-relaxed text-amber-900">
-                        Tu servicio de pedidos se encuentra suspendido temporalmente. Comunícate con la purificadora para recibir información.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Caso Inactivo -->
-            <div
-                v-else-if="clientData.customer.status === 'inactive'"
-                class="p-4 sm:p-5 rounded-2xl bg-slate-100 border border-slate-300 text-slate-800 flex items-start gap-4 shadow-xs"
-            >
-                <div class="h-10 w-10 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-circle-pause text-lg"></i>
-                </div>
-                <div class="text-xs sm:text-sm">
-                    <h4 class="font-bold text-slate-900">
-                        Cuenta inactiva temporalmente
-                    </h4>
-                    <p class="mt-0.5 leading-relaxed text-slate-600">
-                        Actualmente no te encuentras habilitado para realizar nuevos pedidos. Comunícate con la purificadora para reactivar tu servicio cuando lo requieras.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Caso Activo -->
-            <div
-                v-else
-                class="p-3.5 px-4 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 flex items-center justify-between text-xs"
-            >
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-circle text-[7px] text-emerald-500"></i>
-                    <span class="font-bold">Cliente activo:</span>
-                    <span class="text-emerald-800">Servicio habilitado para atención comercial y solicitudes de garrafones.</span>
-                </div>
-                <span class="font-semibold text-emerald-700 font-mono text-[11px] hidden sm:inline">
-                    {{ clientData.customer.code }}
-                </span>
-            </div>
-
             <!-- DISTRIBUCIÓN DESKTOP EN 2 COLUMNAS (12 COLS: 7 Y 5) -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 

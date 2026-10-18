@@ -238,7 +238,7 @@ class ClientProfileTest extends TestCase
         $this->assertEquals($originalCode, $this->customer->code);
         $this->assertEquals(3, $this->customer->fixed_bottles_count);
         $this->assertEquals(2, $this->customer->exchange_bottles_count);
-        $this->assertEquals('active', $this->customer->status);
+        $this->assertEquals('active', $this->clientUser->fresh()->status);
         $this->assertTrue($this->clientUser->fresh()->hasRole('Cliente'));
         $this->assertFalse($this->clientUser->fresh()->hasRole('Administrador'));
     }

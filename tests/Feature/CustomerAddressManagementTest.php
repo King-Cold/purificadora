@@ -642,7 +642,7 @@ class CustomerAddressManagementTest extends TestCase
             ]);
         $responsePlant->assertForbidden();
 
-        // Admin SÍ puede crear domicilios
+        // Admin SÍ puede crear domicilios para clientes sin cuenta
         $responseAdmin = $this->actingAs($this->adminUser)
             ->post(route('admin.customers.addresses.store', $this->customerWithoutAccount->id), [
                 'municipality_type' => 'hocaba',
@@ -651,4 +651,44 @@ class CustomerAddressManagementTest extends TestCase
             ]);
         $responseAdmin->assertRedirect();
     }
+
+    /**
+     * 23. El Administrador NO puede editar ni eliminar el domicilio de un cliente con cuenta.
+     */
+    public function test_admin_cannot_edit_or_delete_address_of_customer_with_account(): void
+    {
+        $service = app(CustomerAddressService::class);
+        $address = $service->createAddress($this->customerWithAccount, [
+            'municipality_type' => 'hocaba',
+            'delivery_zone' => 'north',
+            'street_and_number' => 'Calle 20 #500',
+        ]);
+
+        // 1. Intento de GET form de edición administrativa
+        $responseEdit = $this->actingAs($this->adminUser)
+            ->get(route('admin.customers.addresses.edit', [$this->customerWithAccount->id, $address->id]));
+        $responseEdit->assertForbidden();
+
+        // 2. Intento de PUT actualización administrativa
+        $responseUpdate = $this->actingAs($this->adminUser)
+            ->put(route('admin.customers.addresses.update', [$this->customerWithAccount->id, $address->id]), [
+                'municipality_type' => 'hocaba',
+                'delivery_zone' => 'south',
+                'street_and_number' => 'Calle Alterada #999',
+            ]);
+        $responseUpdate->assertForbidden();
+
+        // 3. Intento de DELETE eliminación administrativa
+        $responseDelete = $this->actingAs($this->adminUser)
+            ->delete(route('admin.customers.addresses.destroy', [$this->customerWithAccount->id, $address->id]));
+        $responseDelete->assertForbidden();
+
+        // El domicilio se conserva intacto
+        $this->assertDatabaseHas('customer_addresses', [
+            'id' => $address->id,
+            'street' => 'Calle 20 #500',
+            'deleted_at' => null,
+        ]);
+    }
 }
+

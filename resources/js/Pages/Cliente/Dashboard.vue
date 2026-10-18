@@ -30,32 +30,14 @@ const props = defineProps({
                     </div>
                 </div>
 
-                <!-- Estado comercial y código del cliente -->
+                <!-- Código del cliente -->
                 <div v-if="customer" class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
-                    <!-- Código de cliente -->
                     <span
                         v-if="customer.code"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"
                     >
                         <i class="fa-solid fa-barcode text-slate-500 text-xs"></i>
                         <span>{{ customer.code }}</span>
-                    </span>
-
-                    <!-- Badge Estado Comercial -->
-                    <span
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border shadow-2xs"
-                        :class="{
-                            'bg-emerald-50 text-emerald-800 border-emerald-300': customer.status === 'active',
-                            'bg-amber-50 text-amber-800 border-amber-300': customer.status === 'suspended',
-                            'bg-slate-100 text-slate-700 border-slate-300': customer.status === 'inactive',
-                        }"
-                    >
-                        <i class="fa-solid fa-circle text-[8px]" :class="{
-                            'text-emerald-500': customer.status === 'active',
-                            'text-amber-500': customer.status === 'suspended',
-                            'text-slate-400': customer.status === 'inactive',
-                        }"></i>
-                        <span>{{ customer.status_label || (customer.status === 'active' ? 'Activo' : customer.status) }}</span>
                     </span>
                 </div>
             </div>
@@ -64,46 +46,11 @@ const props = defineProps({
         <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">
             <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
 
-                <!-- 1. AVISO DE ESTADO COMERCIAL SI SUSPENDIDO O INACTIVO -->
-                <div
-                    v-if="customer?.status === 'suspended'"
-                    class="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 flex items-start gap-4 shadow-xs"
-                >
-                    <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                    </div>
-                    <div class="text-xs sm:text-sm">
-                        <h4 class="font-bold text-amber-950">
-                            Atención sobre tu servicio de reparto
-                        </h4>
-                        <p class="mt-0.5 leading-relaxed text-amber-900">
-                            Tu servicio de pedidos se encuentra suspendido temporalmente. Comunícate con la purificadora para cualquier aclaración o reactivación.
-                        </p>
-                    </div>
-                </div>
-
-                <div
-                    v-else-if="customer?.status === 'inactive'"
-                    class="p-4 sm:p-5 rounded-2xl bg-slate-100 border border-slate-300 text-slate-800 flex items-start gap-4 shadow-xs"
-                >
-                    <div class="h-10 w-10 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-circle-pause text-lg"></i>
-                    </div>
-                    <div class="text-xs sm:text-sm">
-                        <h4 class="font-bold text-slate-900">
-                            Aviso de servicio comercial
-                        </h4>
-                        <p class="mt-0.5 leading-relaxed text-slate-600">
-                            Actualmente no te encuentras habilitado para realizar nuevos pedidos. Comunícate con la purificadora para conocer más información.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- 2. BIENVENIDA SUPERIOR DESKTOP AMIGABLE -->
+                <!-- 1. BIENVENIDA SUPERIOR DESKTOP AMIGABLE -->
                 <div class="bg-white rounded-2xl p-6 sm:p-7 shadow-xs border border-slate-200/80">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div class="flex items-center gap-4">
-                            <div class="h-14 w-14 rounded-2xl bg-gradient-to-tr from-blue-900 to-sky-600 text-white flex items-center justify-center text-xl shadow-sm shrink-0">
+                            <div class="h-14 w-14 rounded-2xl bg-blue-900 text-white flex items-center justify-center text-xl shadow-sm shrink-0">
                                 <i class="fa-solid fa-water"></i>
                             </div>
                             <div>
@@ -119,24 +66,10 @@ const props = defineProps({
                                     </span>
                                 </div>
                                 <p class="text-xs sm:text-sm text-slate-500 mt-1 flex items-center gap-2">
-                                    <template v-if="customer?.status === 'active' || !customer">
-                                        <span class="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
-                                            <i class="fa-solid fa-circle-check text-emerald-500 text-xs"></i>
-                                            Servicio activo para entregas en Hocabá
-                                        </span>
-                                    </template>
-                                    <template v-else-if="customer?.status === 'suspended'">
-                                        <span class="inline-flex items-center gap-1.5 text-amber-700 font-medium">
-                                            <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xs"></i>
-                                            Servicio pausado temporalmente
-                                        </span>
-                                    </template>
-                                    <template v-else>
-                                        <span class="inline-flex items-center gap-1.5 text-slate-600 font-medium">
-                                            <i class="fa-solid fa-circle-pause text-slate-400 text-xs"></i>
-                                            Servicio inactivo
-                                        </span>
-                                    </template>
+                                    <span class="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
+                                        <i class="fa-solid fa-circle-check text-emerald-500 text-xs"></i>
+                                        Servicio de entregas en Hocabá
+                                    </span>
                                 </p>
                             </div>
                         </div>
