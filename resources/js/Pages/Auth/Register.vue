@@ -1,5 +1,6 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
+import Modal from '@/Components/Modal.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -14,6 +15,7 @@ const form = useForm({
 
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+const showBottlesModal = ref(false);
 
 const totalBottles = computed(() => {
     const fixed = Number.isFinite(Number(form.fixed_bottles_count)) ? Math.max(0, parseInt(form.fixed_bottles_count, 10)) : 0;
@@ -199,10 +201,21 @@ const submit = () => {
                         <!-- Botellones de 20L Iniciales (Opcional) -->
                         <div class="p-3 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-bottle-water text-[#0084ff]"></i>
-                                    Tus Botellones de 20L
-                                </span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-bottle-water text-[#0084ff]"></i>
+                                        Tus Botellones de 20L
+                                    </span>
+                                    <button
+                                        type="button"
+                                        @click="showBottlesModal = true"
+                                        class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[#0084ff] hover:text-[#0070dc] hover:bg-blue-100/70 transition cursor-pointer"
+                                        title="¿Qué son botellones fijos y de cambio?"
+                                        aria-label="Ver explicación de botellones fijos y de cambio"
+                                    >
+                                        <i class="fa-solid fa-circle-exclamation text-xs"></i>
+                                    </button>
+                                </div>
                                 <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                                     Total: {{ totalBottles }}
                                 </span>
@@ -280,5 +293,88 @@ const submit = () => {
             Puritronic &copy; {{ new Date().getFullYear() }}
         </footer>
 
+        <!-- Modal Informativo: Botellones Fijos vs Botellones de Cambio -->
+        <Modal :show="showBottlesModal" @close="showBottlesModal = false" max-width="md">
+            <div class="p-5 sm:p-6 space-y-4">
+                <!-- Header del Modal -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-[#0084ff] flex items-center justify-center shrink-0 shadow-xs">
+                            <i class="fa-solid fa-circle-exclamation text-lg"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900 leading-tight">
+                                Tipos de Botellones de 20L
+                            </h3>
+                            <p class="text-xs text-slate-500">
+                                ¿Cómo funcionan los envases fijos y de cambio?
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showBottlesModal = false"
+                        class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+                        aria-label="Cerrar ventana"
+                    >
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Contenido con las 2 modalidades -->
+                <div class="space-y-3">
+                    <!-- 1. Botellones Fijos -->
+                    <div class="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 text-blue-900 font-bold text-xs sm:text-sm">
+                                <i class="fa-solid fa-tag text-xs text-[#0084ff]"></i>
+                                <span>Botellones Fijos</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
+                                Con tu nombre
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Son envases rotulados o marcados con tu nombre. Al pedir a domicilio, el repartidor recoge tus botellones vacíos, los llevamos a planta para su lavado a presión y llenado, y te regresamos <strong>exactamente tus mismos envases</strong>.
+                        </p>
+                    </div>
+
+                    <!-- 2. Botellones de Cambio -->
+                    <div class="p-3.5 rounded-xl bg-sky-50/60 border border-sky-200/80 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 text-sky-950 font-bold text-xs sm:text-sm">
+                                <i class="fa-solid fa-arrow-right-arrow-left text-xs text-sky-600"></i>
+                                <span>Botellones De Cambio</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-sky-700 bg-sky-100/80 px-2 py-0.5 rounded-full">
+                                Comerciales estándar
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Son envases comerciales estándar de 20 litros (limpios y en buen estado). Al momento de la entrega, entregas tus botellones vacíos al repartidor y recibes otros botellones limpios, llenos y sellados <strong>al instante</strong>.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Aclaración útil -->
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-600 flex items-start gap-2 leading-relaxed">
+                    <i class="fa-solid fa-circle-info text-[#0084ff] text-xs mt-0.5 shrink-0"></i>
+                    <span>
+                        <strong>Nota:</strong> Si no estás seguro de cuántos envases tienes en este momento, puedes dejarlo en 0 o indicar una cantidad estimada. Podrás ajustarlo cuando gustes desde tu perfil de cliente.
+                    </span>
+                </div>
+
+                <!-- Botón de Cierre -->
+                <div class="pt-1 flex justify-end">
+                    <button
+                        type="button"
+                        @click="showBottlesModal = false"
+                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0084ff] hover:bg-[#0070dc] text-white font-bold text-xs shadow-xs hover:shadow transition cursor-pointer"
+                    >
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </div>
 </template>

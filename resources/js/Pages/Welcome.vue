@@ -222,81 +222,49 @@ const comments = [
 ];
 
 // Catálogo oficial de presentaciones de garrafones y tarifas reactivas
+const formatPrice = (val, fallback = null) => {
+    if (val === null || val === undefined || val === '') return fallback;
+    const num = Number(val);
+    if (isNaN(num) || num <= 0) return null;
+    return (num % 1 === 0) ? String(num) : num.toFixed(2);
+};
+
 const bottleProducts = computed(() => {
     const db20L = props.presentations?.find(p => p.capacity === 20 || p.name?.includes('20'));
     const db10L = props.presentations?.find(p => p.capacity === 10 || p.name?.includes('10'));
 
+    // Exclusividad de servicio a domicilio para 20 litros
     const is20Available = db20L ? Boolean(db20L.is_available_for_delivery) : true;
-    const is10Available = db10L ? Boolean(db10L.is_available_for_delivery) : false;
 
-    const p20Home = db20L?.refill_price !== null && db20L?.refill_price !== undefined ? String(db20L.refill_price) : '15';
-    const p20Store = db20L?.store_price !== null && db20L?.store_price !== undefined ? String(db20L.store_price) : '10';
-    const p20New = db20L?.new_bottle_price !== null && db20L?.new_bottle_price !== undefined ? String(db20L.new_bottle_price) : '95';
+    const p20Home = db20L ? formatPrice(db20L.refill_price) : '15';
+    const p20Store = db20L ? formatPrice(db20L.store_price) : '10';
+    const p20New = db20L ? formatPrice(db20L.new_bottle_price) : '95';
 
-    const p10Home = db10L?.refill_price !== null && db10L?.refill_price !== undefined ? String(db10L.refill_price) : '8';
-    const p10Store = db10L?.store_price !== null && db10L?.store_price !== undefined ? String(db10L.store_price) : '5';
-    const p10New = db10L?.new_bottle_price !== null && db10L?.new_bottle_price !== undefined ? String(db10L.new_bottle_price) : '65';
+    const p10Store = db10L ? formatPrice(db10L.store_price) : '5';
+    const p10New = db10L ? formatPrice(db10L.new_bottle_price) : '65';
 
     return [
         {
             id: 'garrafon-20l',
-            name: db20L?.name || 'Garrafón 20 Litros',
-            capacityBadge: db20L?.formatted_capacity || '20 Litros',
-            tag: 'Más Solicitado · A Domicilio',
-            tagClass: 'bg-[#AF143C] text-white shadow-md shadow-red-900/20 ring-2 ring-white',
-            featured: true,
+            name: db20L?.name ? (db20L.name.includes('20') ? db20L.name : `${db20L.name} 20L`) : 'Garrafón 20 Litros',
             isAvailableForDelivery: is20Available,
+            availabilityLabel: 'A domicilio y sucursal',
             image: db20L?.image_url || '/images/garrafon-20l.png',
             imageAlt: 'Garrafón Puritronic de 20 Litros',
-            tagline: 'Tamaño familiar de máxima capacidad',
-            description: 'La presentación tradicional y preferida por familias y negocios en Hocabá. Máxima pureza y frescura para tu día a día.',
             homePrice: p20Home,
-            homePriceLabel: 'A Domicilio',
-            homePriceSub: 'Fijo o cambio',
             storePrice: p20Store,
-            storePriceLabel: 'En Sucursal',
-            storePriceSub: 'Relleno en planta',
             newBottlePrice: p20New,
-            features: [
-                `Entrega directa a la puerta de tu hogar por solo $${p20Home}`,
-                `Rellénalo en nuestra sucursal por únicamente $${p20Store}`,
-                'Tarifa fija a domicilio: botellón de cambio o fijo',
-                'Lavado y sanitizado a presión grado alimenticio',
-                'Purificación por ósmosis inversa y luz ultravioleta (UV)',
-                'Tapa hermética nueva y sello de garantía en cada entrega',
-            ],
-            btnOrderText: 'Pedir 20L a Domicilio',
-            btnStoreText: 'Rellenar en Sucursal',
         },
         {
             id: 'garrafon-10l',
-            name: db10L?.name || 'Garrafón 10 Litros',
-            capacityBadge: db10L?.formatted_capacity || '10 Litros',
-            tag: 'Exclusivo en Sucursal',
-            tagClass: 'bg-emerald-700 text-white shadow-md shadow-emerald-900/20 ring-2 ring-white',
-            featured: false,
-            isAvailableForDelivery: is10Available,
+            name: db10L?.name ? (db10L.name.includes('10') ? db10L.name : `${db10L.name} 10L`) : 'Garrafón 10 Litros',
+            isAvailableForDelivery: false,
+            availabilityLabel: 'Solo sucursal',
             image: db10L?.image_url || '/images/garrafon-10l.png',
             imageAlt: 'Garrafón Puritronic de 10 Litros',
-            tagline: 'Ligero, ergonómico y exclusivo de planta',
-            description: 'La opción ideal si buscas comodidad y menor peso para recarga personal. Rellenado y venta directa en nuestra sucursal.',
-            homePrice: p10Home,
-            homePriceLabel: 'A Domicilio',
-            homePriceSub: 'Fijo o cambio',
+            homePrice: null,
             storePrice: p10Store,
-            storePriceLabel: 'En Sucursal',
-            storePriceSub: 'Relleno en planta',
             newBottlePrice: p10New,
-            features: [
-                `Rellénalo en nuestra sucursal por únicamente $${p10Store}`,
-                'Venta de envase nuevo y recargas directo en planta',
-                'Diseño compacto con asa ergonómica de fácil agarre',
-                'Lavado y sanitizado a presión grado alimenticio',
-                'Purificación por ósmosis inversa y luz ultravioleta (UV)',
-                'Tapa hermética y máxima higiene garantizada',
-            ],
-            btnOrderText: 'Pedir 10L a Domicilio',
-            btnStoreText: 'Rellenar en Sucursal',
         },
     ];
 });
@@ -531,187 +499,126 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= CATÁLOGO Y PRECIOS ================= -->
-        <section id="catalogo" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
+        <!-- ================= PRESENTACIONES Y PRECIOS ================= -->
+        <section id="catalogo" class="scroll-mt-20 py-14 sm:py-16 bg-slate-50/60 border-t border-slate-100">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <!-- Títulos -->
-                <div class="text-center max-w-2xl mx-auto mb-16 space-y-3">
-                    <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 px-3 py-1 rounded-full">
-                        Catálogo de Servicios
-                    </span>
-                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0e1c2e] tracking-tight">
-                        Precios claros, <span class="text-[#0084ff]">sin sorpresas.</span>
+                <!-- Encabezado de la sección -->
+                <div class="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
+                    <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#0e1c2e] tracking-tight">
+                        Presentaciones y precios
                     </h2>
-                    <p class="text-sm sm:text-base text-slate-500 font-normal">
-                        Elige la opción que mejor se adapte a tus necesidades. Máxima pureza e higiene en cada servicio.
+                    <p class="mt-1.5 text-xs sm:text-sm font-medium text-slate-500">
+                        Precios en MXN
                     </p>
                 </div>
 
-                <!-- Grid de 2 Presentaciones Oficiales con Uniformidad de Diseño -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 max-w-5xl mx-auto items-stretch">
+                <!-- Grid de Presentaciones: dos columnas en escritorio y una en móvil -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto items-stretch">
                     
                     <div
                         v-for="product in bottleProducts"
                         :key="product.id"
-                        :class="[
-                            'rounded-3xl p-7 sm:p-9 flex flex-col justify-between transition-all duration-300 relative group bg-white',
-                            product.featured
-                                ? 'border-2 border-[#0084ff] shadow-xl shadow-blue-500/10 lg:-translate-y-2'
-                                : 'border border-slate-200/90 shadow-xs hover:shadow-xl hover:border-slate-300'
-                        ]"
+                        class="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 transition-all"
                     >
-                        <!-- Badge destacado para la tarjeta principal -->
-                        <div
-                            v-if="product.tag"
-                            :class="[
-                                'absolute -top-3.5 left-1/2 -translate-x-1/2 text-[11px] font-bold uppercase tracking-wider px-4 py-1 rounded-full',
-                                product.tagClass
-                            ]"
-                        >
-                            {{ product.tag }}
-                        </div>
-
                         <div>
-                            <!-- Showcase Visual del Producto con Pedestal Suave -->
-                            <div class="bg-gradient-to-b from-blue-50/70 via-slate-50/40 to-white rounded-2xl p-6 sm:p-8 mb-6 border border-blue-100/50 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-blue-200 transition-colors">
+                            <!-- Imagen reducida (130-160px de alto, sin recuadros grandes, object-fit contain) -->
+                            <div class="flex items-center justify-center py-2 mb-3">
                                 <img
                                     :src="product.image"
                                     :alt="product.imageAlt"
-                                    class="h-52 sm:h-60 w-auto object-contain mx-auto drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                                    class="h-36 sm:h-40 w-auto object-contain drop-shadow-xs transition-transform duration-200 hover:scale-105"
                                     loading="lazy"
                                 />
                             </div>
 
-                            <!-- Encabezado del Producto: Nombre y Capacidad -->
-                            <div class="flex items-center justify-between gap-3 mb-2">
-                                <h3 class="text-2xl sm:text-3xl font-extrabold text-[#0e1c2e] tracking-tight">
+                            <!-- Nombre con capacidad y disponibilidad -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                <h3 class="text-base sm:text-lg font-bold text-[#0e1c2e] tracking-tight">
                                     {{ product.name }}
                                 </h3>
-                                <span class="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-[#0084ff] border border-blue-200/60 shrink-0">
-                                    {{ product.capacityBadge }}
+                                <span
+                                    v-if="product.isAvailableForDelivery"
+                                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100"
+                                >
+                                    <i class="fa-solid fa-truck-fast text-[10px]"></i>
+                                    {{ product.availabilityLabel }}
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200"
+                                >
+                                    <i class="fa-solid fa-store text-[10px]"></i>
+                                    {{ product.availabilityLabel }}
                                 </span>
                             </div>
 
-                            <!-- Subtítulo / Tagline -->
-                            <p class="text-xs font-semibold text-[#AF143C] uppercase tracking-wider mb-2">
-                                {{ product.tagline }}
-                            </p>
-
-                            <!-- Descripción breve -->
-                            <p class="text-xs sm:text-sm text-slate-500 leading-relaxed mb-6">
-                                {{ product.description }}
-                            </p>
-
-                            <!-- Cuadro Comparativo de Precios Oficiales (A Domicilio únicamente si está disponible) -->
-                            <div v-if="product.isAvailableForDelivery" class="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
-                                <!-- A Domicilio -->
-                                <div class="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 text-center relative">
-                                    <span class="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#0084ff] mb-1">
-                                        <i class="fa-solid fa-truck-fast"></i>
-                                        <span>A Domicilio</span>
-                                    </span>
-                                    <div class="flex items-baseline justify-center gap-1 my-1">
-                                        <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
-                                            ${{ product.homePrice }}
-                                        </span>
-                                        <span class="text-xs font-bold text-slate-500">MXN</span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 font-medium">
-                                        Cambio o fijo
-                                    </p>
+                            <!-- Filas simples de precios (sin tarjetas anidadas) -->
+                            <div class="border-t border-slate-100 pt-3 pb-1 space-y-2 text-sm">
+                                <!-- Rellenado a domicilio (exclusivo para 20L cuando está disponible) -->
+                                <div
+                                    v-if="product.isAvailableForDelivery && product.homePrice"
+                                    class="flex items-center justify-between gap-2 text-slate-700"
+                                >
+                                    <span class="text-slate-600">Rellenado a domicilio</span>
+                                    <span class="font-bold text-slate-900 shrink-0">${{ product.homePrice }}</span>
                                 </div>
 
-                                <!-- En Sucursal -->
-                                <div class="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 text-center relative">
-                                    <span class="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                                        <i class="fa-solid fa-store text-emerald-600"></i>
-                                        <span>En Sucursal</span>
-                                    </span>
-                                    <div class="flex items-baseline justify-center gap-1 my-1">
-                                        <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
-                                            ${{ product.storePrice }}
-                                        </span>
-                                        <span class="text-xs font-bold text-slate-500">MXN</span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 font-medium">
-                                        Relleno en planta
-                                    </p>
+                                <!-- Rellenado en sucursal -->
+                                <div
+                                    v-if="product.storePrice"
+                                    class="flex items-center justify-between gap-2 text-slate-700"
+                                >
+                                    <span class="text-slate-600">Rellenado en sucursal</span>
+                                    <span class="font-bold text-slate-900 shrink-0">${{ product.storePrice }}</span>
                                 </div>
-                            </div>
 
-                            <!-- Para presentaciones exclusivas de sucursal (sin servicio a domicilio) -->
-                            <div v-else class="mb-4">
-                                <div class="p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/90 flex items-center justify-between gap-4">
-                                    <div>
-                                        <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 mb-1">
-                                            <i class="fa-solid fa-store"></i>
-                                            <span>Relleno en Sucursal</span>
-                                        </span>
-                                        <p class="text-xs text-slate-500 font-medium">
-                                            Recarga y venta directa en planta
-                                        </p>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="flex items-baseline justify-end gap-1">
-                                            <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
-                                                ${{ product.storePrice }}
-                                            </span>
-                                            <span class="text-xs font-bold text-slate-500">MXN</span>
-                                        </div>
-                                        <span class="inline-block text-[10px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-100/70 px-2.5 py-0.5 rounded-full mt-0.5">
-                                            Exclusivo Sucursal
-                                        </span>
-                                    </div>
+                                <!-- Envase nuevo (fila secundaria claramente diferenciada) -->
+                                <div
+                                    v-if="product.newBottlePrice"
+                                    class="flex items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100"
+                                >
+                                    <span class="text-slate-500">Envase nuevo</span>
+                                    <span class="font-semibold text-slate-700 shrink-0">${{ product.newBottlePrice }}</span>
                                 </div>
-                            </div>
-
-                            <!-- Nota informativa destacada: Sin importar fijo o cambio o exclusivo en planta -->
-                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100/70 border border-slate-200/60 text-slate-600 text-[11px] sm:text-xs mb-6">
-                                <i class="fa-solid fa-circle-check text-[#0084ff] text-sm shrink-0"></i>
-                                <span v-if="product.isAvailableForDelivery"><strong>Tarifa transparente:</strong> cuesta exactamente ${{ product.homePrice }} llevarlo a tu casa, sin importar si es de cambio o fijo.</span>
-                                <span v-else><strong>Servicio en planta:</strong> presentación exclusiva para rellenado o compra en nuestra sucursal (no disponible para entrega a domicilio).</span>
-                            </div>
-
-                            <!-- Línea divisoria y Lista de características -->
-                            <div class="border-t border-slate-100 pt-5 mb-6">
-                                <p class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3.5">
-                                    ¿Qué incluye este producto?
-                                </p>
-                                <ul class="space-y-2.5">
-                                    <li
-                                        v-for="(feature, fIndex) in product.features"
-                                        :key="fIndex"
-                                        class="flex items-start gap-2.5 text-xs sm:text-sm text-slate-600"
-                                    >
-                                        <i class="fa-solid fa-circle-check text-[#0084ff] text-sm mt-0.5 shrink-0"></i>
-                                        <span>{{ feature }}</span>
-                                    </li>
-                                </ul>
                             </div>
                         </div>
 
-                        <!-- Botones de Acción: Pedir a Domicilio y Ver Sucursal -->
-                        <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
-                            <Link
-                                v-if="product.isAvailableForDelivery"
-                                :href="route('auth.portal')"
-                                class="flex-1 inline-flex items-center justify-center gap-2 py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white bg-[#0084ff] hover:bg-[#0070dc] shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 hover:-translate-y-0.5 transition-all text-center"
-                            >
-                                <i class="fa-solid fa-cart-shopping"></i>
-                                <span>{{ product.btnOrderText }}</span>
-                            </Link>
+                        <!-- Acciones correspondientes -->
+                        <div class="pt-4 mt-auto border-t border-slate-100">
+                            <!-- Para 20 litros: botón principal "Pedir a domicilio" y enlace secundario "Ver sucursal" -->
+                            <div v-if="product.isAvailableForDelivery" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                                <Link
+                                    :href="route('auth.portal')"
+                                    class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#0084ff] hover:bg-[#0070dc] shadow-sm hover:shadow transition-all text-center"
+                                >
+                                    <i class="fa-solid fa-cart-shopping text-xs"></i>
+                                    <span>Pedir a domicilio</span>
+                                </Link>
 
-                            <a
-                                href="#sucursal"
-                                @click="scrollToSection($event, 'sucursal')"
-                                class="inline-flex items-center justify-center gap-2 py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm transition-all text-center"
-                                :class="product.isAvailableForDelivery ? 'text-slate-700 bg-slate-100 hover:bg-slate-200' : 'flex-1 text-white bg-slate-900 hover:bg-slate-800 shadow-md'"
-                            >
-                                <i class="fa-solid fa-location-dot"></i>
-                                <span>{{ product.btnStoreText }}</span>
-                            </a>
+                                <a
+                                    href="#sucursal"
+                                    @click="scrollToSection($event, 'sucursal')"
+                                    class="inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#0084ff] transition-colors text-center"
+                                >
+                                    <i class="fa-solid fa-location-dot text-xs text-slate-400"></i>
+                                    <span>Ver sucursal</span>
+                                </a>
+                            </div>
+
+                            <!-- Para presentaciones exclusivas de sucursal: botón "Ver sucursal" -->
+                            <div v-else>
+                                <a
+                                    href="#sucursal"
+                                    @click="scrollToSection($event, 'sucursal')"
+                                    class="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all text-center"
+                                >
+                                    <i class="fa-solid fa-location-dot text-xs text-slate-500"></i>
+                                    <span>Ver sucursal</span>
+                                </a>
+                            </div>
                         </div>
+
                     </div>
 
                 </div>
