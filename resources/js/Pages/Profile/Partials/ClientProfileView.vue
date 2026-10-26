@@ -164,7 +164,26 @@ const addressDisplay = computed(() => {
 
 <template>
     <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-5">
+
+            <!-- Navegación de regreso y código de cliente único -->
+            <div class="flex items-center justify-between">
+                <Link
+                    :href="route('cliente.dashboard')"
+                    class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
+                >
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                    <span>Volver al inicio</span>
+                </Link>
+
+                <span
+                    v-if="clientData?.customer?.code"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200/80"
+                >
+                    <i class="fa-solid fa-barcode text-slate-500 text-[11px]"></i>
+                    <span>{{ clientData.customer.code }}</span>
+                </span>
+            </div>
 
             <!-- Mensaje de Éxito Flash -->
             <div

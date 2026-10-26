@@ -68,21 +68,41 @@ const getStatusIconClass = (status) => {
     <Head :title="`Pedido ${order.folio} - Puritronic`" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div class="flex items-center gap-3.5">
-                    <Link
-                        :href="route('cliente.orders.index')"
-                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0"
-                        title="Volver a mis pedidos"
-                    >
-                        <i class="fa-solid fa-arrow-left text-sm"></i>
-                    </Link>
-                    <div>
+        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
+            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+
+                <!-- Barra superior de navegación y estado del pedido -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <Link
+                            :href="route('cliente.orders.index')"
+                            class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
+                        >
+                            <i class="fa-solid fa-arrow-left text-xs"></i>
+                            <span>Volver a mis pedidos</span>
+                        </Link>
+                    </div>
+
+                    <!-- Botón Cancelar (Exclusivo para pedidos Pendientes) -->
+                    <div v-if="order.can_cancel && order.is_pending" class="flex items-center gap-2 self-start sm:self-auto">
+                        <button
+                            type="button"
+                            @click="openCancelModal"
+                            class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
+                        >
+                            <i class="fa-solid fa-ban"></i>
+                            <span>Cancelar Pedido</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tarjeta de identificación del pedido -->
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="space-y-1">
                         <div class="flex flex-wrap items-center gap-2.5">
-                            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
+                            <span class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
                                 Pedido {{ order.folio }}
-                            </h2>
+                            </span>
                             <span
                                 :class="[
                                     'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
@@ -93,28 +113,11 @@ const getStatusIconClass = (status) => {
                                 <span>{{ order.status_label }}</span>
                             </span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-0.5">
+                        <p class="text-xs text-slate-500">
                             Registrado el {{ order.created_at }} &bull; Botellones de 20 Litros
                         </p>
                     </div>
                 </div>
-
-                <!-- Botón Cancelar (Exclusivo para pedidos Pendientes) -->
-                <div v-if="order.can_cancel && order.is_pending" class="flex items-center gap-2 self-start sm:self-auto">
-                    <button
-                        type="button"
-                        @click="openCancelModal"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
-                    >
-                        <i class="fa-solid fa-ban"></i>
-                        <span>Cancelar Pedido</span>
-                    </button>
-                </div>
-            </div>
-        </template>
-
-        <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">
-            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- 1. ALERTAS FLASH (ÉXITO O ERROR) -->
                 <div

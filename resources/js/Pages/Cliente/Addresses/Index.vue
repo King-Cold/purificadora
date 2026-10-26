@@ -118,31 +118,21 @@ const deleteAddress = () => {
     <Head title="Mi domicilio - Puritronic" />
 
     <AuthenticatedLayout>
-        <!-- Encabezado: "Mi domicilio" y "Aquí entregaremos tus pedidos" con navegación de regreso sencilla -->
-        <template #header>
-            <div class="flex items-center gap-3.5">
-                <Link
-                    :href="route('cliente.dashboard')"
-                    class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    title="Volver"
-                    aria-label="Volver"
-                >
-                    <i class="fa-solid fa-arrow-left text-sm"></i>
-                </Link>
-                <div>
-                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                        Mi domicilio
-                    </h1>
-                    <p class="text-xs text-slate-500">
-                        Aquí entregaremos tus pedidos
-                    </p>
-                </div>
-            </div>
-        </template>
-
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
             <!-- Columna central con ancho máximo aproximado de 800 px -->
             <div class="mx-auto max-w-[800px] px-4 sm:px-6 space-y-5">
+
+                <!-- Navegación de regreso y subtítulo breve -->
+                <div class="flex items-center justify-between">
+                    <Link
+                        :href="route('cliente.dashboard')"
+                        class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
+                    >
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Volver al inicio</span>
+                    </Link>
+                    <span class="text-xs text-slate-400">Aquí entregaremos tus pedidos</span>
+                </div>
 
                 <!-- Mensaje de Éxito Flash -->
                 <div

@@ -68,35 +68,7 @@ const getStatusIconClass = (status) => {
     <Head title="Mis Pedidos - Puritronic" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div class="flex items-center gap-3.5">
-                    <div class="h-11 w-11 rounded-2xl bg-blue-900 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
-                        <i class="fa-regular fa-file-lines text-sky-400 text-lg"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                            Mis Pedidos
-                        </h2>
-                        <p class="text-xs text-slate-500">
-                            Historial y seguimiento de tus pedidos a domicilio de botellones de 20 litros
-                        </p>
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-2.5 self-start sm:self-auto">
-                    <Link
-                        :href="route('cliente.orders.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer"
-                    >
-                        <i class="fa-solid fa-plus-circle text-sky-400"></i>
-                        <span>Nuevo Pedido</span>
-                    </Link>
-                </div>
-            </div>
-        </template>
-
-        <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">
+        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
             <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
 
                 <!-- 1. ALERTA DESTACADA: PEDIDO ACTIVO EN CURSO (SI EXISTE) -->
@@ -201,8 +173,17 @@ const getStatusIconClass = (status) => {
                         </button>
                     </div>
 
-                    <div class="text-xs text-slate-500">
-                        Total encontrados: <span class="font-bold text-slate-900">{{ orders.total }}</span> pedido(s)
+                    <div class="flex items-center gap-3">
+                        <div class="text-xs text-slate-500 hidden sm:block">
+                            Total: <span class="font-bold text-slate-900">{{ orders.total }}</span> pedido(s)
+                        </div>
+                        <Link
+                            :href="route('cliente.orders.create')"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer min-h-[40px] shrink-0"
+                        >
+                            <i class="fa-solid fa-plus text-xs"></i>
+                            <span>Nuevo pedido</span>
+                        </Link>
                     </div>
                 </div>
 

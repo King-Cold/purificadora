@@ -1,6 +1,5 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -34,36 +33,18 @@ const submit = () => {
     <Head title="Editar Mi Domicilio - Puritronic" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
+            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-4">
                 <div>
-                    <Breadcrumbs
-                        :home-href="route('cliente.dashboard')"
-                        :items="[
-                            { label: 'Mi Domicilio', href: route('cliente.addresses.index'), icon: 'fa-solid fa-house-chimney' },
-                            { label: 'Editar', icon: 'fa-solid fa-location-pen' }
-                        ]"
-                    />
-                    <h2 class="text-xl font-bold leading-tight text-gray-900">
-                        Editar Mi Domicilio de Entrega
-                    </h2>
-                    <p class="text-sm text-gray-500">
-                        Actualiza la dirección o referencias de entrega de tu casa
-                    </p>
+                    <Link
+                        :href="route('cliente.addresses.index')"
+                        class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
+                    >
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Volver a mi domicilio</span>
+                    </Link>
                 </div>
 
-                <Link
-                    :href="route('cliente.addresses.index')"
-                    class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition self-start sm:self-auto shadow-xs"
-                >
-                    <i class="fa-solid fa-arrow-left text-slate-400"></i>
-                    <span>Volver</span>
-                </Link>
-            </div>
-        </template>
-
-        <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">
-            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
                 <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
                     <form @submit.prevent="submit" class="p-6 sm:p-8 space-y-6">
 
