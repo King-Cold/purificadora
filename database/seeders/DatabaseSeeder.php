@@ -54,5 +54,42 @@ class DatabaseSeeder extends Seeder
         if (!$llenadorUser->hasRole('Operador Planta')) {
             $llenadorUser->assignRole('Operador Planta');
         }
+
+        // 3. Catálogo oficial de presentaciones de garrafones (preserva precios editados sin sobrescribir)
+        $pres20 = \App\Models\BottlePresentation::firstOrCreate(
+            ['name' => 'Garrafón 20 Litros'],
+            [
+                'capacity' => 20.00,
+                'unit' => 'Litros',
+                'refill_price' => 15.00,
+                'store_price' => 10.00,
+                'new_bottle_price' => 95.00,
+                'image_path' => '/images/garrafon-20l.png',
+                'is_available_for_delivery' => true,
+                'is_active' => true,
+            ]
+        );
+        if (!$pres20->wasRecentlyCreated && !$pres20->is_available_for_delivery) {
+            $pres20->is_available_for_delivery = true;
+            $pres20->save();
+        }
+
+        $pres10 = \App\Models\BottlePresentation::firstOrCreate(
+            ['name' => 'Garrafón 10 Litros'],
+            [
+                'capacity' => 10.00,
+                'unit' => 'Litros',
+                'refill_price' => null, // Exclusivo de sucursal
+                'store_price' => 5.00,
+                'new_bottle_price' => 65.00,
+                'image_path' => '/images/garrafon-10l.png',
+                'is_available_for_delivery' => false,
+                'is_active' => true,
+            ]
+        );
+        if (!$pres10->wasRecentlyCreated && $pres10->is_available_for_delivery) {
+            $pres10->is_available_for_delivery = false;
+            $pres10->save();
+        }
     }
 }

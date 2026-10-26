@@ -19,6 +19,7 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user || {});
 const userRoles = computed(() => user.value.roles || []);
 const isAdmin = computed(() => userRoles.value.includes('Administrador') || userRoles.value.includes('Super Admin'));
+const isAdministrador = computed(() => userRoles.value.includes('Administrador'));
 const isCliente = computed(() => userRoles.value.includes('Cliente'));
 const isRepartidor = computed(() => userRoles.value.includes('Repartidor'));
 const isPlanta = computed(() => userRoles.value.includes('Operador Planta'));
@@ -224,6 +225,33 @@ const getRouteUrl = (name) => {
                         ></i>
                         <span v-if="!collapsed" class="truncate">Clientes</span>
                     </Link>
+
+                    <!-- Configuración General (Visible únicamente para el Administrador) -->
+                    <Link
+                        v-if="isAdministrador"
+                        :href="route('admin.settings.index')"
+                        :class="[
+                            'group flex items-center rounded-xl text-sm transition-all duration-150 relative',
+                            collapsed ? 'justify-center w-12 h-12 mx-auto' : 'gap-3.5 px-3.5 py-2.5',
+                            isRouteActive('admin.settings.*')
+                                ? 'bg-[#eaf4ff] text-[#0084ff] font-semibold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+                        ]"
+                        :title="collapsed ? 'Configuración General' : ''"
+                    >
+                        <span
+                            v-if="isRouteActive('admin.settings.*')"
+                            class="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#0084ff] rounded-r-full"
+                        ></span>
+                        <i
+                            class="fa-solid fa-gear text-[15px] shrink-0 transition-colors"
+                            :class="[
+                                collapsed ? 'text-[17px]' : 'w-5 text-center',
+                                isRouteActive('admin.settings.*') ? 'text-[#0084ff]' : 'text-slate-500 group-hover:text-slate-800'
+                            ]"
+                        ></i>
+                        <span v-if="!collapsed" class="truncate">Configuración General</span>
+                    </Link>
                 </nav>
             </div>
 
@@ -386,6 +414,68 @@ const getRouteUrl = (name) => {
                             ]"
                         ></i>
                         <span v-if="!collapsed" class="truncate">Reportes</span>
+                    </Link>
+                </nav>
+            </div>
+
+            <!-- ================= GRUPO: PEDIDOS (Para Clientes) ================= -->
+            <div v-if="isCliente">
+                <div v-if="!collapsed" class="px-3 mb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                    Pedidos
+                </div>
+                <div v-else class="w-6 mx-auto my-2 border-t border-slate-200/80" title="Pedidos"></div>
+
+                <nav class="space-y-1">
+                    <!-- Mis Pedidos -->
+                    <Link
+                        :href="route('cliente.orders.index')"
+                        :class="[
+                            'group flex items-center rounded-xl text-sm transition-all duration-150 relative',
+                            collapsed ? 'justify-center w-12 h-12 mx-auto' : 'gap-3.5 px-3.5 py-2.5',
+                            isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show')
+                                ? 'bg-[#eaf4ff] text-[#0084ff] font-semibold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+                        ]"
+                        :title="collapsed ? 'Mis pedidos' : ''"
+                    >
+                        <span
+                            v-if="isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show')"
+                            class="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#0084ff] rounded-r-full"
+                        ></span>
+                        <i
+                            class="fa-regular fa-file-lines text-[15px] shrink-0 transition-colors"
+                            :class="[
+                                collapsed ? 'text-[17px]' : 'w-5 text-center',
+                                isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show') ? 'text-[#0084ff]' : 'text-slate-500 group-hover:text-slate-800'
+                            ]"
+                        ></i>
+                        <span v-if="!collapsed" class="truncate">Mis pedidos</span>
+                    </Link>
+
+                    <!-- Nuevo Pedido -->
+                    <Link
+                        :href="route('cliente.orders.create')"
+                        :class="[
+                            'group flex items-center rounded-xl text-sm transition-all duration-150 relative',
+                            collapsed ? 'justify-center w-12 h-12 mx-auto' : 'gap-3.5 px-3.5 py-2.5',
+                            isRouteActive('cliente.orders.create')
+                                ? 'bg-[#eaf4ff] text-[#0084ff] font-semibold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+                        ]"
+                        :title="collapsed ? 'Nuevo pedido' : ''"
+                    >
+                        <span
+                            v-if="isRouteActive('cliente.orders.create')"
+                            class="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#0084ff] rounded-r-full"
+                        ></span>
+                        <i
+                            class="fa-solid fa-cart-plus text-[15px] shrink-0 transition-colors"
+                            :class="[
+                                collapsed ? 'text-[17px]' : 'w-5 text-center',
+                                isRouteActive('cliente.orders.create') ? 'text-[#0084ff]' : 'text-slate-500 group-hover:text-slate-800'
+                            ]"
+                        ></i>
+                        <span v-if="!collapsed" class="truncate">Nuevo pedido</span>
                     </Link>
                 </nav>
             </div>

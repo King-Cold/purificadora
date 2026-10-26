@@ -157,6 +157,14 @@ class Customer extends Model
     }
 
     /**
+     * Pedidos realizados por el cliente.
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
      * Determina si el cliente está habilitado para realizar nuevos pedidos.
      * Toda cuenta registrada permanece habilitada mientras no esté eliminada.
      */

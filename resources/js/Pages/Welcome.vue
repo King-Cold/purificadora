@@ -1,8 +1,8 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
-defineProps({
+const props = defineProps({
     canLogin: {
         type: Boolean,
         default: true,
@@ -11,6 +11,68 @@ defineProps({
         type: Boolean,
         default: true,
     },
+    schedule: {
+        type: Object,
+        default: () => ({
+            opening_time: '08:00',
+            break_start_time: '13:00',
+            break_end_time: '15:00',
+            closing_time: '19:00',
+            order_cutoff_time: '18:00',
+            days_applied: 'Lunes a Domingo',
+        }),
+    },
+    scheduleStatus: {
+        type: Object,
+        default: () => ({
+            can_receive: true,
+            reason: 'allowed',
+            message: 'Recepción de pedidos disponible.',
+        }),
+    },
+    presentations: {
+        type: Array,
+        default: () => [],
+    },
+});
+
+const format12h = (timeStr) => {
+    if (!timeStr) return '';
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${h}:${m} ${ampm}`;
+};
+
+const formattedScheduleDisplay = computed(() => {
+    const s = props.schedule || {};
+    const open = format12h(s.opening_time || '08:00');
+    const close = format12h(s.closing_time || '19:00');
+    let days = s.days_applied || 'Lunes a Domingo';
+    days = days.replace(/\s*\(todos los días\)/i, '').trim();
+
+    return {
+        opening: open,
+        closing: close,
+        hours: `De ${open} a ${close}`,
+        days: days,
+        fullText: `${days} de ${open} a ${close}`,
+    };
+});
+
+const isStoreOpen = computed(() => {
+    if (props.scheduleStatus?.is_store_open !== undefined) {
+        return Boolean(props.scheduleStatus.is_store_open);
+    }
+    const reason = props.scheduleStatus?.reason;
+    if (reason === 'orders_closed_for_today') {
+        return true;
+    }
+    return Boolean(props.scheduleStatus?.can_receive);
 });
 
 const mobileMenuOpen = ref(false);
@@ -18,7 +80,7 @@ const activeSection = ref('inicio');
 
 const navItems = [
     { id: 'inicio', label: 'Inicio' },
-    { id: 'beneficios', label: 'Beneficios' },
+    { id: 'catalogo', label: 'Catálogo' },
     { id: 'como-funciona', label: '¿Cómo funciona?' },
     { id: 'comentarios', label: 'Comentarios' },
     { id: 'sucursal', label: 'Sucursal' },
@@ -75,7 +137,7 @@ onMounted(() => {
                 }
 
                 const scrollPosition = window.scrollY + 140;
-                const sectionIds = ['inicio', 'beneficios', 'como-funciona', 'comentarios', 'sucursal', 'preguntas', 'contacto'];
+                const sectionIds = ['inicio', 'catalogo', 'como-funciona', 'comentarios', 'sucursal', 'preguntas', 'contacto'];
 
                 for (let i = sectionIds.length - 1; i >= 0; i--) {
                     const el = document.getElementById(sectionIds[i]);
@@ -106,14 +168,14 @@ const toggleFaq = (index) => {
     openFaq.value = openFaq.value === index ? null : index;
 };
 
-const faqs = [
+const faqs = computed(() => [
     {
         q: '¿Cómo realizo un pedido por primera vez?',
         a: 'Es muy sencillo: solo debes hacer clic en "Pedir agua ahora" o "Crear cuenta", indicar tu dirección de entrega en Hocabá y la cantidad de garrafones que necesitas. Te confirmaremos de inmediato vía WhatsApp y en la app.',
     },
     {
-        q: '¿Cuáles son los horarios de entrega a domicilio?',
-        a: 'Entregamos de Lunes a Sábado de 7:00 AM a 7:00 PM, y Domingos de 8:00 AM a 3:00 PM.',
+        q: '¿Cuáles son los horarios de atención y entrega a domicilio?',
+        a: `Atendemos de ${formattedScheduleDisplay.value.days} de ${formattedScheduleDisplay.value.opening} a ${formattedScheduleDisplay.value.closing}.`,
     },
     {
         q: '¿Aceptan garrafones de otras marcas al momento del cambio?',
@@ -123,7 +185,7 @@ const faqs = [
         q: '¿Qué formas de pago puedo utilizar?',
         a: 'Aceptamos pago en efectivo contra entrega (nuestros repartidores cuentan con cambio), transferencias electrónicas y pagos directos desde la plataforma.',
     },
-];
+]);
 
 // Comentarios de clientes en Hocabá
 const comments = [
@@ -158,6 +220,86 @@ const comments = [
         verified: true,
     },
 ];
+
+// Catálogo oficial de presentaciones de garrafones y tarifas reactivas
+const bottleProducts = computed(() => {
+    const db20L = props.presentations?.find(p => p.capacity === 20 || p.name?.includes('20'));
+    const db10L = props.presentations?.find(p => p.capacity === 10 || p.name?.includes('10'));
+
+    const is20Available = db20L ? Boolean(db20L.is_available_for_delivery) : true;
+    const is10Available = db10L ? Boolean(db10L.is_available_for_delivery) : false;
+
+    const p20Home = db20L?.refill_price !== null && db20L?.refill_price !== undefined ? String(db20L.refill_price) : '15';
+    const p20Store = db20L?.store_price !== null && db20L?.store_price !== undefined ? String(db20L.store_price) : '10';
+    const p20New = db20L?.new_bottle_price !== null && db20L?.new_bottle_price !== undefined ? String(db20L.new_bottle_price) : '95';
+
+    const p10Home = db10L?.refill_price !== null && db10L?.refill_price !== undefined ? String(db10L.refill_price) : '8';
+    const p10Store = db10L?.store_price !== null && db10L?.store_price !== undefined ? String(db10L.store_price) : '5';
+    const p10New = db10L?.new_bottle_price !== null && db10L?.new_bottle_price !== undefined ? String(db10L.new_bottle_price) : '65';
+
+    return [
+        {
+            id: 'garrafon-20l',
+            name: db20L?.name || 'Garrafón 20 Litros',
+            capacityBadge: db20L?.formatted_capacity || '20 Litros',
+            tag: 'Más Solicitado · A Domicilio',
+            tagClass: 'bg-[#AF143C] text-white shadow-md shadow-red-900/20 ring-2 ring-white',
+            featured: true,
+            isAvailableForDelivery: is20Available,
+            image: db20L?.image_url || '/images/garrafon-20l.png',
+            imageAlt: 'Garrafón Puritronic de 20 Litros',
+            tagline: 'Tamaño familiar de máxima capacidad',
+            description: 'La presentación tradicional y preferida por familias y negocios en Hocabá. Máxima pureza y frescura para tu día a día.',
+            homePrice: p20Home,
+            homePriceLabel: 'A Domicilio',
+            homePriceSub: 'Fijo o cambio',
+            storePrice: p20Store,
+            storePriceLabel: 'En Sucursal',
+            storePriceSub: 'Relleno en planta',
+            newBottlePrice: p20New,
+            features: [
+                `Entrega directa a la puerta de tu hogar por solo $${p20Home}`,
+                `Rellénalo en nuestra sucursal por únicamente $${p20Store}`,
+                'Tarifa fija a domicilio: botellón de cambio o fijo',
+                'Lavado y sanitizado a presión grado alimenticio',
+                'Purificación por ósmosis inversa y luz ultravioleta (UV)',
+                'Tapa hermética nueva y sello de garantía en cada entrega',
+            ],
+            btnOrderText: 'Pedir 20L a Domicilio',
+            btnStoreText: 'Rellenar en Sucursal',
+        },
+        {
+            id: 'garrafon-10l',
+            name: db10L?.name || 'Garrafón 10 Litros',
+            capacityBadge: db10L?.formatted_capacity || '10 Litros',
+            tag: 'Exclusivo en Sucursal',
+            tagClass: 'bg-emerald-700 text-white shadow-md shadow-emerald-900/20 ring-2 ring-white',
+            featured: false,
+            isAvailableForDelivery: is10Available,
+            image: db10L?.image_url || '/images/garrafon-10l.png',
+            imageAlt: 'Garrafón Puritronic de 10 Litros',
+            tagline: 'Ligero, ergonómico y exclusivo de planta',
+            description: 'La opción ideal si buscas comodidad y menor peso para recarga personal. Rellenado y venta directa en nuestra sucursal.',
+            homePrice: p10Home,
+            homePriceLabel: 'A Domicilio',
+            homePriceSub: 'Fijo o cambio',
+            storePrice: p10Store,
+            storePriceLabel: 'En Sucursal',
+            storePriceSub: 'Relleno en planta',
+            newBottlePrice: p10New,
+            features: [
+                `Rellénalo en nuestra sucursal por únicamente $${p10Store}`,
+                'Venta de envase nuevo y recargas directo en planta',
+                'Diseño compacto con asa ergonómica de fácil agarre',
+                'Lavado y sanitizado a presión grado alimenticio',
+                'Purificación por ósmosis inversa y luz ultravioleta (UV)',
+                'Tapa hermética y máxima higiene garantizada',
+            ],
+            btnOrderText: 'Pedir 10L a Domicilio',
+            btnStoreText: 'Rellenar en Sucursal',
+        },
+    ];
+});
 </script>
 
 <template>
@@ -179,7 +321,7 @@ const comments = [
                         />
                     </a>
 
-                    <!-- NAVEGACIÓN DESKTOP (REACTIVA A LA SECCIÓN ACTIVA) -->
+                    <!-- NAVEGACIÓN DESKTOP (REACTIVA A LA SECCIÓN ACTIVA CON LÍNEA ROJA DE LA MARCA) -->
                     <nav class="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8">
                         <a
                             v-for="item in navItems"
@@ -189,8 +331,8 @@ const comments = [
                             :class="[
                                 'text-xs xl:text-sm whitespace-nowrap transition-all duration-200 py-1.5 px-0.5 relative',
                                 activeSection === item.id
-                                    ? 'font-semibold text-[#0084ff] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-[#0084ff] after:rounded-full'
-                                    : 'font-medium text-slate-600 hover:text-[#0084ff]'
+                                    ? 'font-bold text-[#0E1E42] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2.5px] after:bg-[#AF143C] after:rounded-full'
+                                    : 'font-medium text-slate-600 hover:text-[#0E1E42]'
                             ]"
                         >
                             {{ item.label }}
@@ -251,8 +393,8 @@ const comments = [
                         :class="[
                             'block px-3 py-2 text-sm rounded-lg transition-colors',
                             activeSection === item.id
-                                ? 'font-semibold text-[#0084ff] bg-blue-50/70'
-                                : 'font-medium text-slate-600 hover:text-[#0084ff] hover:bg-slate-50'
+                                ? 'font-bold text-[#AF143C] bg-red-50/70 border-l-2 border-[#AF143C]'
+                                : 'font-medium text-slate-600 hover:text-[#0E1E42] hover:bg-slate-50'
                         ]"
                     >
                         {{ item.label }}
@@ -319,18 +461,18 @@ const comments = [
                         <div class="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
                             <Link
                                 :href="route('auth.portal')"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold uppercase tracking-wider text-white text-sm bg-[#00d084] hover:bg-[#00b875] shadow-lg shadow-[#00d084]/25 hover:shadow-xl hover:shadow-[#00d084]/35 hover:-translate-y-0.5 transition-all group"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold uppercase tracking-wider text-white text-sm bg-[#0084ff] hover:bg-[#0070dc] shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/35 hover:-translate-y-0.5 transition-all group"
                             >
                                 <span>PEDIR AGUA AHORA</span>
                                 <i class="fa-solid fa-chevron-right text-xs group-hover:translate-x-1 transition-transform"></i>
                             </Link>
 
                             <a
-                                href="https://wa.me/529991234567?text=Hola,%20quisiera%20pedir%20un%20garrafón%20de%20agua%20a%20domicilio"
+                                href="https://wa.me/529991404397?text=Hola,%20quisiera%20pedir%20un%20garrafón%20de%20agua%20a%20domicilio"
                                 target="_blank"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold text-slate-700 hover:text-emerald-700 bg-white hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 shadow-xs transition-all text-sm"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl font-semibold text-slate-700 hover:text-emerald-700 bg-white hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all text-sm group"
                             >
-                                <i class="fa-brands fa-whatsapp text-lg text-emerald-600"></i>
+                                <i class="fa-brands fa-whatsapp text-lg text-emerald-600 group-hover:scale-110 transition-transform"></i>
                                 <span>Pedir por WhatsApp</span>
                             </a>
                         </div>
@@ -389,71 +531,191 @@ const comments = [
             </div>
         </section>
 
-        <!-- ================= BENEFICIOS / CARDS SECTION ================= -->
-        <section id="beneficios" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
+        <!-- ================= CATÁLOGO Y PRECIOS ================= -->
+        <section id="catalogo" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 
                 <!-- Títulos -->
                 <div class="text-center max-w-2xl mx-auto mb-16 space-y-3">
                     <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 px-3 py-1 rounded-full">
-                        Beneficios Exclusivos
+                        Catálogo de Servicios
                     </span>
                     <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0e1c2e] tracking-tight">
-                        Todo lo que necesitas, <span class="text-[#0084ff]">en un solo lugar.</span>
+                        Precios claros, <span class="text-[#0084ff]">sin sorpresas.</span>
                     </h2>
                     <p class="text-sm sm:text-base text-slate-500 font-normal">
-                        Disfruta de una forma más sencilla de solicitar y administrar tus pedidos de agua.
+                        Elige la opción que mejor se adapte a tus necesidades. Máxima pureza e higiene en cada servicio.
                     </p>
                 </div>
 
-                <!-- Grid de 4 Tarjetas con Hover Interactivo en Iconos -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Grid de 2 Presentaciones Oficiales con Uniformidad de Diseño -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 max-w-5xl mx-auto items-stretch">
                     
-                    <!-- Card 1: Haz tu pedido -->
-                    <div class="bg-white rounded-3xl p-8 text-center shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 flex flex-col items-center group">
-                        <div class="w-16 h-16 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-2xl mb-6 group-hover:scale-110 group-hover:bg-[#0084ff] group-hover:text-white transition-all duration-300 shadow-xs">
-                            <i class="fa-solid fa-cart-shopping"></i>
+                    <div
+                        v-for="product in bottleProducts"
+                        :key="product.id"
+                        :class="[
+                            'rounded-3xl p-7 sm:p-9 flex flex-col justify-between transition-all duration-300 relative group bg-white',
+                            product.featured
+                                ? 'border-2 border-[#0084ff] shadow-xl shadow-blue-500/10 lg:-translate-y-2'
+                                : 'border border-slate-200/90 shadow-xs hover:shadow-xl hover:border-slate-300'
+                        ]"
+                    >
+                        <!-- Badge destacado para la tarjeta principal -->
+                        <div
+                            v-if="product.tag"
+                            :class="[
+                                'absolute -top-3.5 left-1/2 -translate-x-1/2 text-[11px] font-bold uppercase tracking-wider px-4 py-1 rounded-full',
+                                product.tagClass
+                            ]"
+                        >
+                            {{ product.tag }}
                         </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Haz tu pedido</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                            Solicita la cantidad de garrafones que necesitas fácilmente en pocos clics.
-                        </p>
-                    </div>
 
-                    <!-- Card 2: Sigue tu pedido -->
-                    <div class="bg-white rounded-3xl p-8 text-center shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 flex flex-col items-center group">
-                        <div class="w-16 h-16 rounded-2xl bg-cyan-50 text-cyan-500 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 group-hover:bg-cyan-500 group-hover:text-white transition-all duration-300 shadow-xs">
-                            <i class="fa-solid fa-magnifying-glass-location"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Sigue tu pedido</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                            Consulta el estado de tu pedido en tiempo real y conoce cuándo llegará a tu puerta.
-                        </p>
-                    </div>
+                        <div>
+                            <!-- Showcase Visual del Producto con Pedestal Suave -->
+                            <div class="bg-gradient-to-b from-blue-50/70 via-slate-50/40 to-white rounded-2xl p-6 sm:p-8 mb-6 border border-blue-100/50 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-blue-200 transition-colors">
+                                <img
+                                    :src="product.image"
+                                    :alt="product.imageAlt"
+                                    class="h-52 sm:h-60 w-auto object-contain mx-auto drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                                    loading="lazy"
+                                />
+                            </div>
 
-                    <!-- Card 3: Consulta tu historial -->
-                    <div class="bg-white rounded-3xl p-8 text-center shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 flex flex-col items-center group">
-                        <div class="w-16 h-16 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 group-hover:bg-purple-600 group-hover:text-white transition-all duration-300 shadow-xs">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Consulta tu historial</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                            Revisa todos tus pedidos realizados anteriormente y vuelve a pedir con un solo toque.
-                        </p>
-                    </div>
+                            <!-- Encabezado del Producto: Nombre y Capacidad -->
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <h3 class="text-2xl sm:text-3xl font-extrabold text-[#0e1c2e] tracking-tight">
+                                    {{ product.name }}
+                                </h3>
+                                <span class="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-[#0084ff] border border-blue-200/60 shrink-0">
+                                    {{ product.capacityBadge }}
+                                </span>
+                            </div>
 
-                    <!-- Card 4: Controla tus pagos -->
-                    <div class="bg-white rounded-3xl p-8 text-center shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 flex flex-col items-center group">
-                        <div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-xs">
-                            <i class="fa-solid fa-money-bill-wave"></i>
+                            <!-- Subtítulo / Tagline -->
+                            <p class="text-xs font-semibold text-[#AF143C] uppercase tracking-wider mb-2">
+                                {{ product.tagline }}
+                            </p>
+
+                            <!-- Descripción breve -->
+                            <p class="text-xs sm:text-sm text-slate-500 leading-relaxed mb-6">
+                                {{ product.description }}
+                            </p>
+
+                            <!-- Cuadro Comparativo de Precios Oficiales (A Domicilio únicamente si está disponible) -->
+                            <div v-if="product.isAvailableForDelivery" class="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
+                                <!-- A Domicilio -->
+                                <div class="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 text-center relative">
+                                    <span class="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#0084ff] mb-1">
+                                        <i class="fa-solid fa-truck-fast"></i>
+                                        <span>A Domicilio</span>
+                                    </span>
+                                    <div class="flex items-baseline justify-center gap-1 my-1">
+                                        <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
+                                            ${{ product.homePrice }}
+                                        </span>
+                                        <span class="text-xs font-bold text-slate-500">MXN</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 font-medium">
+                                        Cambio o fijo
+                                    </p>
+                                </div>
+
+                                <!-- En Sucursal -->
+                                <div class="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 text-center relative">
+                                    <span class="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                                        <i class="fa-solid fa-store text-emerald-600"></i>
+                                        <span>En Sucursal</span>
+                                    </span>
+                                    <div class="flex items-baseline justify-center gap-1 my-1">
+                                        <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
+                                            ${{ product.storePrice }}
+                                        </span>
+                                        <span class="text-xs font-bold text-slate-500">MXN</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 font-medium">
+                                        Relleno en planta
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Para presentaciones exclusivas de sucursal (sin servicio a domicilio) -->
+                            <div v-else class="mb-4">
+                                <div class="p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/90 flex items-center justify-between gap-4">
+                                    <div>
+                                        <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 mb-1">
+                                            <i class="fa-solid fa-store"></i>
+                                            <span>Relleno en Sucursal</span>
+                                        </span>
+                                        <p class="text-xs text-slate-500 font-medium">
+                                            Recarga y venta directa en planta
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="flex items-baseline justify-end gap-1">
+                                            <span class="text-3xl sm:text-4xl font-black text-[#0e1c2e] tracking-tight">
+                                                ${{ product.storePrice }}
+                                            </span>
+                                            <span class="text-xs font-bold text-slate-500">MXN</span>
+                                        </div>
+                                        <span class="inline-block text-[10px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-100/70 px-2.5 py-0.5 rounded-full mt-0.5">
+                                            Exclusivo Sucursal
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Nota informativa destacada: Sin importar fijo o cambio o exclusivo en planta -->
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100/70 border border-slate-200/60 text-slate-600 text-[11px] sm:text-xs mb-6">
+                                <i class="fa-solid fa-circle-check text-[#0084ff] text-sm shrink-0"></i>
+                                <span v-if="product.isAvailableForDelivery"><strong>Tarifa transparente:</strong> cuesta exactamente ${{ product.homePrice }} llevarlo a tu casa, sin importar si es de cambio o fijo.</span>
+                                <span v-else><strong>Servicio en planta:</strong> presentación exclusiva para rellenado o compra en nuestra sucursal (no disponible para entrega a domicilio).</span>
+                            </div>
+
+                            <!-- Línea divisoria y Lista de características -->
+                            <div class="border-t border-slate-100 pt-5 mb-6">
+                                <p class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3.5">
+                                    ¿Qué incluye este producto?
+                                </p>
+                                <ul class="space-y-2.5">
+                                    <li
+                                        v-for="(feature, fIndex) in product.features"
+                                        :key="fIndex"
+                                        class="flex items-start gap-2.5 text-xs sm:text-sm text-slate-600"
+                                    >
+                                        <i class="fa-solid fa-circle-check text-[#0084ff] text-sm mt-0.5 shrink-0"></i>
+                                        <span>{{ feature }}</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Controla tus pagos</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                            Consulta tus pagos y notas de entrega de manera transparente y sencilla.
-                        </p>
+
+                        <!-- Botones de Acción: Pedir a Domicilio y Ver Sucursal -->
+                        <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+                            <Link
+                                v-if="product.isAvailableForDelivery"
+                                :href="route('auth.portal')"
+                                class="flex-1 inline-flex items-center justify-center gap-2 py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white bg-[#0084ff] hover:bg-[#0070dc] shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 hover:-translate-y-0.5 transition-all text-center"
+                            >
+                                <i class="fa-solid fa-cart-shopping"></i>
+                                <span>{{ product.btnOrderText }}</span>
+                            </Link>
+
+                            <a
+                                href="#sucursal"
+                                @click="scrollToSection($event, 'sucursal')"
+                                class="inline-flex items-center justify-center gap-2 py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm transition-all text-center"
+                                :class="product.isAvailableForDelivery ? 'text-slate-700 bg-slate-100 hover:bg-slate-200' : 'flex-1 text-white bg-slate-900 hover:bg-slate-800 shadow-md'"
+                            >
+                                <i class="fa-solid fa-location-dot"></i>
+                                <span>{{ product.btnStoreText }}</span>
+                            </a>
+                        </div>
                     </div>
 
                 </div>
+
             </div>
         </section>
 
@@ -512,7 +774,7 @@ const comments = [
 
                     <!-- PASO 3 -->
                     <div class="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl hover:bg-slate-50/60 transition-colors">
-                        <div class="w-11 h-11 rounded-full bg-[#00d084] text-white font-extrabold text-sm flex items-center justify-center mb-6 shadow-md shadow-emerald-500/25">
+                        <div class="w-11 h-11 rounded-full bg-emerald-500 text-white font-extrabold text-sm flex items-center justify-center mb-6 shadow-md shadow-emerald-500/25">
                             03
                         </div>
                         <div class="w-20 h-20 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl mb-6 shadow-xs">
@@ -628,7 +890,7 @@ const comments = [
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2 max-w-md mx-auto lg:max-w-none lg:mx-0 text-left">
                             <!-- Dirección -->
                             <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-[#00d084] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 text-base shadow-xs">
                                     <i class="fa-solid fa-location-dot"></i>
                                 </div>
                                 <div class="min-w-0">
@@ -642,7 +904,7 @@ const comments = [
                                 </div>
                             </div>
 
-                            <!-- Horario de atención -->
+                            <!-- Horario de atención Dinámico -->
                             <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
                                 <div class="w-11 h-11 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
                                     <i class="fa-regular fa-clock"></i>
@@ -652,15 +914,15 @@ const comments = [
                                         Horario de atención
                                     </h3>
                                     <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
-                                        Lun - Sáb: 7:00 AM - 7:00 PM<br>
-                                        Dom: 8:00 AM - 3:00 PM
+                                        {{ formattedScheduleDisplay.days }}<br>
+                                        {{ formattedScheduleDisplay.hours }}
                                     </p>
                                 </div>
                             </div>
 
                             <!-- Teléfono -->
                             <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-[#00d084] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 text-base shadow-xs">
                                     <i class="fa-solid fa-phone"></i>
                                 </div>
                                 <div class="min-w-0">
@@ -703,13 +965,21 @@ const comments = [
                             />
                             <div class="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent pointer-events-none"></div>
                             
-                            <!-- Badge flotante sobre la foto -->
+                            <!-- Badge dinámico sobre la foto -->
                             <div class="absolute bottom-4 left-4 right-4 py-2.5 px-4 rounded-2xl bg-white/95 backdrop-blur-md border border-white/60 shadow-md flex items-center justify-between">
                                 <div class="flex items-center gap-2.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span
+                                        class="w-2.5 h-2.5 rounded-full"
+                                        :class="isStoreOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
+                                    ></span>
                                     <span class="text-xs font-bold text-slate-800">Planta & Sucursal Hocabá</span>
                                 </div>
-                                <span class="text-[11px] text-emerald-600 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full">Abierto</span>
+                                <span
+                                    class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                                    :class="isStoreOpen ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60' : 'text-slate-600 bg-slate-100 border border-slate-200/60'"
+                                >
+                                    {{ isStoreOpen ? 'Abierto' : 'Cerrado' }}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -903,21 +1173,21 @@ const comments = [
                                 <div class="w-6 flex justify-center text-slate-400">
                                     <i class="fa-solid fa-location-dot"></i>
                                 </div>
-                                <span>Hocabá, Yucatán</span>
+                                <span>Calle 20 #102, Centro · Hocabá, Yucatán</span>
                             </li>
                             <!-- Horarios -->
                             <li class="flex items-center gap-3">
                                 <div class="w-6 flex justify-center text-slate-400">
                                     <i class="fa-regular fa-clock"></i>
                                 </div>
-                                <span>Lun – Sáb: 7:00 AM – 7:00 PM | Dom: 8:00 AM – 3:00 PM</span>
+                                <span class="text-slate-200 font-medium">{{ formattedScheduleDisplay.fullText }}</span>
                             </li>
                             <!-- Servicio a domicilio -->
                             <li class="flex items-center gap-3">
                                 <div class="w-6 flex justify-center text-slate-400">
                                     <i class="fa-solid fa-phone"></i>
                                 </div>
-                                <span>Servicio a domicilio disponible</span>
+                                <span>Tel. 9991 40 43 97 · Pedidos a domicilio</span>
                             </li>
                         </ul>
                     </div>

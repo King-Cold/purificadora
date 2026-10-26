@@ -12,12 +12,31 @@ use Inertia\Inertia;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/', function () {
+Route::get('/', function (\App\Services\StoreScheduleService $scheduleService) {
+    $schedule = null;
+    $scheduleStatus = null;
+    $presentations = [];
+
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasTable('branch_schedules')) {
+            $schedule = $scheduleService->getScheduleSummary();
+            $scheduleStatus = $scheduleService->checkOrderReception();
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('bottle_presentations')) {
+            $presentations = $scheduleService->getActivePresentations();
+        }
+    } catch (\Throwable $e) {
+        // Fallback defensivo si la tabla no existe en entornos de prueba en memoria
+    }
+
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
+        'schedule' => $schedule,
+        'scheduleStatus' => $scheduleStatus,
+        'presentations' => $presentations,
     ]);
 });
 
@@ -90,6 +109,46 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::delete('/customers/{customer}/addresses/{address}', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'destroy'])
         ->name('customers.addresses.destroy')
         ->middleware('permission:customers.delete');
+
+    // Configuración General (Envases y Precios, Horario de Sucursal)
+    Route::get('/settings', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'index'])
+        ->name('settings.index')
+        ->middleware('permission:settings.view');
+    Route::put('/settings/schedule', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'updateSchedule'])
+        ->name('settings.schedule.update')
+        ->middleware('permission:settings.manage');
+    Route::post('/settings/bottle-presentations', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'storeBottlePresentation'])
+        ->name('settings.bottle-presentations.store')
+        ->middleware('permission:settings.manage');
+    Route::put('/settings/bottle-presentations/{bottlePresentation}', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'updateBottlePresentation'])
+        ->name('settings.bottle-presentations.update')
+        ->middleware('permission:settings.manage');
+    Route::patch('/settings/bottle-presentations/{bottlePresentation}/toggle-status', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'toggleBottlePresentationStatus'])
+        ->name('settings.bottle-presentations.toggle-status')
+        ->middleware('permission:settings.manage');
+
+    // Módulo de Gestión de Pedidos (Administrador)
+    Route::get('/orders', [\App\Http\Controllers\Admin\OrderController::class, 'index'])
+        ->name('orders.index')
+        ->middleware('permission:orders.view');
+    Route::get('/orders/search-customers', [\App\Http\Controllers\Admin\OrderController::class, 'searchCustomers'])
+        ->name('orders.search-customers')
+        ->middleware('permission:orders.create');
+    Route::get('/orders/create', [\App\Http\Controllers\Admin\OrderController::class, 'create'])
+        ->name('orders.create')
+        ->middleware('permission:orders.create');
+    Route::post('/orders', [\App\Http\Controllers\Admin\OrderController::class, 'store'])
+        ->name('orders.store')
+        ->middleware('permission:orders.create');
+    Route::get('/orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'show'])
+        ->name('orders.show')
+        ->middleware('permission:orders.view');
+    Route::post('/orders/{order}/confirm', [\App\Http\Controllers\Admin\OrderController::class, 'confirm'])
+        ->name('orders.confirm')
+        ->middleware('permission:orders.confirm');
+    Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Admin\OrderController::class, 'cancel'])
+        ->name('orders.cancel')
+        ->middleware('permission:orders.cancel');
 });
 
 // Panel 2: Cliente
@@ -112,6 +171,19 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
             ] : null,
         ]);
     })->name('cliente.dashboard');
+
+    // Pedidos a domicilio del cliente
+    Route::get('/cliente/pedidos', [\App\Http\Controllers\Cliente\OrderController::class, 'index'])
+        ->name('cliente.orders.index');
+    Route::get('/cliente/pedidos/crear', [\App\Http\Controllers\Cliente\OrderController::class, 'create'])
+        ->name('cliente.orders.create');
+    Route::post('/cliente/pedidos', [\App\Http\Controllers\Cliente\OrderController::class, 'store'])
+        ->name('cliente.orders.store');
+    Route::get('/cliente/pedidos/{order}', [\App\Http\Controllers\Cliente\OrderController::class, 'show'])
+        ->name('cliente.orders.show');
+    Route::post('/cliente/pedidos/{order}/cancelar', [\App\Http\Controllers\Cliente\OrderController::class, 'cancel'])
+        ->name('cliente.orders.cancel');
+    Route::patch('/cliente/pedidos/{order}/cancelar', [\App\Http\Controllers\Cliente\OrderController::class, 'cancel']);
 
     // Mi perfil de cliente
     Route::get('/cliente/perfil', [\App\Http\Controllers\ProfileController::class, 'edit'])

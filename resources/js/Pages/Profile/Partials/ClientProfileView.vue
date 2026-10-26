@@ -275,9 +275,9 @@ const submit = () => {
                             <!-- Fijos -->
                             <div class="p-4 rounded-xl bg-blue-50/60 border border-blue-200/80 flex items-center justify-between">
                                 <div>
-                                    <span class="text-xs font-semibold text-blue-900 uppercase tracking-wider block">Fijos (Con nombre)</span>
+                                    <span class="text-xs font-semibold text-blue-900 uppercase tracking-wider block">Fijos (20 Litros)</span>
                                     <p class="text-xs text-blue-800 mt-1 max-w-[210px]">
-                                        Identificados con tu nombre y apellido.
+                                        Identificados con tu nombre y apellido (20L).
                                     </p>
                                 </div>
                                 <div class="text-3xl font-extrabold text-blue-950 font-mono">
@@ -288,9 +288,9 @@ const submit = () => {
                             <!-- De Cambio -->
                             <div class="p-4 rounded-xl bg-sky-50/60 border border-sky-200/80 flex items-center justify-between">
                                 <div>
-                                    <span class="text-xs font-semibold text-sky-900 uppercase tracking-wider block">De Cambio</span>
+                                    <span class="text-xs font-semibold text-sky-900 uppercase tracking-wider block">De Cambio (20 Litros)</span>
                                     <p class="text-xs text-sky-800 mt-1 max-w-[210px]">
-                                        Intercambiables comerciales.
+                                        Intercambiables comerciales estándar (20L).
                                     </p>
                                 </div>
                                 <div class="text-3xl font-extrabold text-sky-950 font-mono">
@@ -301,9 +301,9 @@ const submit = () => {
                             <!-- Total -->
                             <div class="p-4 rounded-xl bg-slate-900 text-white flex items-center justify-between">
                                 <div>
-                                    <span class="text-xs font-semibold text-sky-200 uppercase tracking-wider block">Total en posesión</span>
+                                    <span class="text-xs font-semibold text-sky-200 uppercase tracking-wider block">Total en posesión (20L)</span>
                                     <p class="text-xs text-slate-300 mt-1">
-                                        Suma de todos tus envases.
+                                        Suma de todos tus envases de 20 litros.
                                     </p>
                                 </div>
                                 <div class="text-3xl font-extrabold text-white font-mono">

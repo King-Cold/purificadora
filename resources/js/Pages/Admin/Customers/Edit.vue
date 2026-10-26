@@ -201,15 +201,20 @@ const submit = () => {
                                     <div class="w-7 h-7 rounded-lg bg-blue-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
                                         <i class="fa-solid fa-bottle-water"></i>
                                     </div>
-                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">
-                                        Cantidad de Botellones
-                                    </h4>
+                                    <div>
+                                        <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">
+                                            Cantidad de Botellones (20 Litros)
+                                        </h4>
+                                        <p class="text-[11px] text-slate-500 font-normal">
+                                            Los pedidos a domicilio son exclusivamente para botellones de 20 litros.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-900 text-white text-xs font-bold self-start sm:self-auto">
                                     <span>Total:</span>
                                     <span class="text-sm font-mono font-bold">{{ totalBottles }}</span>
-                                    <span>garrafones</span>
+                                    <span>garrafones de 20L</span>
                                 </div>
                             </div>
 
@@ -218,7 +223,7 @@ const submit = () => {
                                 <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200">
                                     <div class="flex items-center justify-between mb-2">
                                         <InputLabel for="fixed_bottles_count" class="font-bold text-slate-900 text-xs">
-                                            Cantidad de botellones fijos
+                                            Botellones fijos (20 Litros)
                                         </InputLabel>
                                         <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">
                                             Rotulados
@@ -240,7 +245,7 @@ const submit = () => {
                                 <div class="bg-sky-50/70 p-4 rounded-xl border border-sky-200">
                                     <div class="flex items-center justify-between mb-2">
                                         <InputLabel for="exchange_bottles_count" class="font-bold text-slate-900 text-xs">
-                                            Cantidad de botellones de cambio
+                                            Botellones de cambio (20 Litros)
                                         </InputLabel>
                                         <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">
                                             Intercambiables

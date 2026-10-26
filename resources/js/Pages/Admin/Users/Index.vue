@@ -140,9 +140,6 @@ const handleToggleStatus = (user) => {
                             {{ totalUsersCount }} registrados
                         </span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-0.5">
-                        Consulta, edición, permisos y estado de acceso de cuentas en Puritronic
-                    </p>
                 </div>
             </div>
         </template>

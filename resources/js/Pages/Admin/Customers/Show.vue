@@ -291,23 +291,23 @@ const getInitials = (name) => {
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                             <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200">
                                 <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Botellones Fijos</span>
+                                    <span class="font-bold text-slate-900 text-xs">Botellones Fijos (20L)</span>
                                     <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">Rotulados</span>
                                 </div>
                                 <div class="text-2xl font-bold font-mono text-blue-950 mt-1">
                                     {{ customer.fixed_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s)</span>
+                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
                                 </div>
                             </div>
 
                             <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
                                 <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Botellones de Cambio</span>
+                                    <span class="font-bold text-slate-900 text-xs">Botellones de Cambio (20L)</span>
                                     <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">Intercambiables</span>
                                 </div>
                                 <div class="text-2xl font-bold font-mono text-sky-950 mt-1">
                                     {{ customer.exchange_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s)</span>
+                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
                                 </div>
                             </div>
                         </div>
@@ -397,23 +397,23 @@ const getInitials = (name) => {
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-4">
                             <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200">
                                 <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones fijos</span>
+                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones fijos (20L)</span>
                                     <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">Rotulados</span>
                                 </div>
                                 <div class="text-2xl font-bold font-mono text-blue-950 mt-1">
                                     {{ customer.fixed_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s)</span>
+                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
                                 </div>
                             </div>
 
                             <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
                                 <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones de cambio</span>
+                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones de cambio (20L)</span>
                                     <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">Intercambiables</span>
                                 </div>
                                 <div class="text-2xl font-bold font-mono text-sky-950 mt-1">
                                     {{ customer.exchange_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s)</span>
+                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
                                 </div>
                             </div>
                         </div>

@@ -29,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'orders.view',
             'orders.create',
             'orders.update',
+            'orders.confirm',
             'orders.cancel',
             'orders.dispatch',
 
@@ -61,6 +62,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.view',
             'users.manage',
             'roles.manage',
+
+            // Módulo de Configuración General
+            'settings.view',
+            'settings.manage',
         ];
 
         foreach ($permissions as $permissionName) {
@@ -80,13 +85,14 @@ class RolesAndPermissionsSeeder extends Seeder
         $admin = Role::firstOrCreate(['name' => 'Administrador', 'guard_name' => 'web']);
         $admin->syncPermissions([
             'customers.view', 'customers.create', 'customers.update', 'customers.delete',
-            'orders.view', 'orders.create', 'orders.update', 'orders.cancel', 'orders.dispatch',
+            'orders.view', 'orders.create', 'orders.update', 'orders.confirm', 'orders.cancel', 'orders.dispatch',
             'bottles.view', 'bottles.manage', 'bottles.adjust',
             'inventory.view', 'inventory.manage', 'inventory.adjust',
             'routes.view', 'routes.assign', 'routes.deliver',
             'finance.view', 'finance.manage_credits', 'finance.payments',
             'reports.sales', 'reports.inventory', 'reports.routes',
             'users.view', 'users.manage',
+            'settings.view', 'settings.manage',
         ]);
 
         // Perfil 2: Repartidor (Operaciones de reparto y recolección de envases en ruta)

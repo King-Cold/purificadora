@@ -30,7 +30,7 @@ const props = defineProps({
                     </div>
                 </div>
 
-                <!-- Código del cliente -->
+                <!-- Código del cliente y acceso a Nuevo Pedido -->
                 <div v-if="customer" class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
                     <span
                         v-if="customer.code"
@@ -39,12 +39,60 @@ const props = defineProps({
                         <i class="fa-solid fa-barcode text-slate-500 text-xs"></i>
                         <span>{{ customer.code }}</span>
                     </span>
+
+                    <Link
+                        :href="route('cliente.orders.index')"
+                        class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition shadow-2xs cursor-pointer"
+                    >
+                        <i class="fa-regular fa-file-lines text-slate-500 text-xs"></i>
+                        <span>Mis Pedidos</span>
+                    </Link>
+
+                    <Link
+                        :href="route('cliente.orders.create')"
+                        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer"
+                    >
+                        <i class="fa-solid fa-plus-circle text-sky-400"></i>
+                        <span>Nuevo Pedido</span>
+                    </Link>
                 </div>
             </div>
         </template>
 
         <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">
             <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
+
+                <!-- ALERTA DE CONFIRMACIÓN CON FOLIO FLASH -->
+                <div
+                    v-if="$page.props.flash?.success"
+                    class="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 shadow-xs flex items-start gap-3.5 animate-fadeIn"
+                >
+                    <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <i class="fa-solid fa-circle-check text-lg"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-bold text-emerald-950">¡Pedido Registrado con Éxito!</h4>
+                        <p class="text-xs sm:text-sm text-emerald-800 mt-0.5 leading-relaxed font-medium">
+                            {{ $page.props.flash.success }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- ALERTA DE ERROR FLASH -->
+                <div
+                    v-if="$page.props.flash?.error"
+                    class="p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-200/80 text-rose-900 shadow-xs flex items-start gap-3.5"
+                >
+                    <div class="h-10 w-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-bold text-rose-950">Atención</h4>
+                        <p class="text-xs sm:text-sm text-rose-800 mt-0.5 leading-relaxed">
+                            {{ $page.props.flash.error }}
+                        </p>
+                    </div>
+                </div>
 
                 <!-- 1. BIENVENIDA SUPERIOR DESKTOP AMIGABLE -->
                 <div class="bg-white rounded-2xl p-6 sm:p-7 shadow-xs border border-slate-200/80">
@@ -103,7 +151,7 @@ const props = defineProps({
                         <div class="bg-white rounded-2xl p-5 lg:p-6 shadow-xs border border-slate-200/80 hover:border-blue-200 transition-all duration-150">
                             <div class="flex items-center justify-between">
                                 <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    Botellones Fijos
+                                    Botellones Fijos (20L)
                                 </span>
                                 <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
                                     <i class="fa-solid fa-water text-base"></i>
@@ -113,10 +161,10 @@ const props = defineProps({
                                 <span class="text-3xl lg:text-4xl font-extrabold tracking-tight text-blue-950 font-mono">
                                     {{ customer?.fixed_bottles_count ?? 0 }}
                                 </span>
-                                <span class="text-xs text-slate-500 font-medium">garrafones</span>
+                                <span class="text-xs text-slate-500 font-medium">envase(s) de 20L</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-2 leading-relaxed">
-                                Envases rotulados con tu nombre; se lavan, rellenan y se te devuelven exactamente los mismos.
+                                Envases de 20L rotulados con tu nombre para pedidos a domicilio; se lavan, rellenan y devuelven los mismos.
                             </p>
                         </div>
 
@@ -124,7 +172,7 @@ const props = defineProps({
                         <div class="bg-white rounded-2xl p-5 lg:p-6 shadow-xs border border-slate-200/80 hover:border-sky-200 transition-all duration-150">
                             <div class="flex items-center justify-between">
                                 <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    Botellones de Cambio
+                                    Botellones de Cambio (20L)
                                 </span>
                                 <div class="h-10 w-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
                                     <i class="fa-solid fa-bottle-water text-base"></i>
@@ -134,10 +182,10 @@ const props = defineProps({
                                 <span class="text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 font-mono">
                                     {{ customer?.exchange_bottles_count ?? 0 }}
                                 </span>
-                                <span class="text-xs text-slate-500 font-medium">garrafones</span>
+                                <span class="text-xs text-slate-500 font-medium">envase(s) de 20L</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-2 leading-relaxed">
-                                Envases intercambiables comerciales que cambias llenos por vacíos al momento de la entrega.
+                                Envases estándar de 20L que intercambias llenos por vacíos al momento de la entrega a domicilio.
                             </p>
                         </div>
 
@@ -247,6 +295,61 @@ const props = defineProps({
 
                     <!-- Columna Derecha: Tarjetas de Acción Rápida (5 cols) -->
                     <div class="lg:col-span-5 space-y-4 flex flex-col justify-between">
+
+                        <!-- Tarjeta Nuevo Pedido Directo -->
+                        <Link
+                            :href="route('cliente.orders.create')"
+                            class="group block bg-gradient-to-br from-blue-900 to-slate-900 text-white rounded-2xl p-5 shadow-xs hover:shadow-md hover:from-blue-800 hover:to-slate-800 transition-all duration-200 cursor-pointer"
+                        >
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center gap-3.5">
+                                    <div class="h-11 w-11 rounded-xl bg-white/10 text-sky-400 flex items-center justify-center border border-white/10 group-hover:scale-105 transition-transform shrink-0">
+                                        <i class="fa-solid fa-truck-ramp-box text-base"></i>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h4 class="text-base font-bold text-white">
+                                                Nuevo Pedido
+                                            </h4>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-400/20 text-sky-200 border border-sky-400/30">
+                                                20 Litros
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-slate-300 mt-0.5">
+                                            Solicita botellones fijos o de cambio a tu domicilio
+                                        </p>
+                                    </div>
+                                </div>
+                                <span class="h-7 w-7 rounded-full bg-white/10 text-white flex items-center justify-center group-hover:bg-white group-hover:text-blue-900 transition-colors shrink-0">
+                                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                                </span>
+                            </div>
+                        </Link>
+
+                        <!-- Tarjeta Mis Pedidos -->
+                        <Link
+                            :href="route('cliente.orders.index')"
+                            class="group block bg-white rounded-2xl p-5 shadow-xs border border-slate-200/80 hover:border-blue-900 hover:shadow-md transition-all duration-200 cursor-pointer"
+                        >
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center gap-3.5">
+                                    <div class="h-11 w-11 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center group-hover:bg-blue-900 group-hover:text-white transition-colors duration-200 shrink-0">
+                                        <i class="fa-regular fa-file-lines text-base"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-base font-bold text-slate-900 group-hover:text-blue-900 transition-colors">
+                                            Mis Pedidos
+                                        </h4>
+                                        <p class="text-xs text-slate-500 mt-0.5">
+                                            Consulta tu historial de entregas y pedidos activos
+                                        </p>
+                                    </div>
+                                </div>
+                                <span class="h-7 w-7 rounded-full bg-slate-50 text-slate-400 group-hover:text-blue-900 group-hover:bg-blue-50 flex items-center justify-center transition-colors shrink-0">
+                                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                                </span>
+                            </div>
+                        </Link>
 
                         <!-- Tarjeta Mi Perfil -->
                         <Link

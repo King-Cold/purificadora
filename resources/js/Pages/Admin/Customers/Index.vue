@@ -112,9 +112,6 @@ const getInitials = (customer) => {
                             {{ totalCustomersCount }} registrados
                         </span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-0.5">
-                        Directorio y consulta de personas particulares suscritas a entrega de garrafones
-                    </p>
                 </div>
 
                 <!-- Botón Nuevo Cliente Habilitado -->
@@ -266,7 +263,7 @@ const getInitials = (customer) => {
                                 <tr>
                                     <th scope="col" class="py-3.5 pl-6 pr-4">Cliente Particular</th>
                                     <th scope="col" class="px-4 py-3.5">Contacto</th>
-                                    <th scope="col" class="px-4 py-3.5">Botellones</th>
+                                    <th scope="col" class="px-4 py-3.5">Botellones (20L)</th>
                                     <th scope="col" class="px-4 py-3.5">Domicilio y Zona</th>
                                     <th scope="col" class="px-4 py-3.5">Acceso</th>
                                     <th scope="col" class="px-4 py-3.5">Fecha de Registro</th>
@@ -311,18 +308,18 @@ const getInitials = (customer) => {
                                         </div>
                                     </td>
 
-                                    <!-- Botellones (Fijos / Cambio / Total) -->
+                                    <!-- Botellones (Fijos / Cambio / Total de 20L) -->
                                     <td class="whitespace-nowrap px-4 py-3.5 text-xs">
                                         <div class="flex items-center gap-1.5">
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200" title="Botellones fijos (con nombre rotulado)">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200" title="Botellones fijos de 20L (con nombre rotulado)">
                                                 F: {{ customer.fixed_bottles_count }}
                                             </span>
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-sky-50 text-sky-900 border border-sky-200" title="Botellones de cambio (intercambiables)">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-sky-50 text-sky-900 border border-sky-200" title="Botellones de cambio de 20L (intercambiables)">
                                                 C: {{ customer.exchange_bottles_count }}
                                             </span>
                                         </div>
                                         <div class="text-[10px] text-gray-500 mt-0.5 font-medium">
-                                            Total: {{ customer.total_bottles }} envase(s)
+                                            Total: {{ customer.total_bottles }} envase(s) de 20L
                                         </div>
                                     </td>
 
