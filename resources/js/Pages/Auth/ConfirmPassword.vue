@@ -19,35 +19,50 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Confirm Password" />
+        <Head title="Confirmar Contraseña - Puritronic" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            This is a secure area of the application. Please confirm your
-            password before continuing.
+        <div class="text-center mb-6">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-xs">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">
+                Área Protegida
+            </h1>
+            <p class="mt-2 text-xs sm:text-sm text-slate-500 leading-relaxed">
+                Esta es una sección segura del sistema. Por favor confirma tu contraseña actual para continuar.
+            </p>
         </div>
 
-        <form @submit.prevent="submit">
+        <form @submit.prevent="submit" class="space-y-4">
             <div>
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" value="Contraseña Actual" />
                 <TextInput
                     id="password"
                     type="password"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full"
                     v-model="form.password"
+                    placeholder="Ingresa tu contraseña"
                     required
                     autocomplete="current-password"
                     autofocus
                 />
-                <InputError class="mt-2" :message="form.errors.password" />
+                <InputError class="mt-1.5" :message="form.errors.password" />
             </div>
 
-            <div class="mt-4 flex justify-end">
+            <div class="pt-2">
                 <PrimaryButton
-                    class="ms-4"
-                    :class="{ 'opacity-25': form.processing }"
+                    class="w-full justify-center py-3 text-sm font-bold shadow-md shadow-blue-900/10"
+                    :class="{ 'opacity-50 cursor-not-allowed': form.processing }"
                     :disabled="form.processing"
                 >
-                    Confirm
+                    <span v-if="form.processing" class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Verificando...</span>
+                    </span>
+                    <span v-else class="flex items-center gap-2">
+                        <i class="fa-solid fa-lock text-xs"></i>
+                        <span>Confirmar Contraseña</span>
+                    </span>
                 </PrimaryButton>
             </div>
         </form>

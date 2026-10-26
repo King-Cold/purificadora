@@ -213,4 +213,37 @@ class StaffAccountsAndUserManagementTest extends TestCase
         $this->assertNotNull($registeredUser);
         $this->assertTrue($registeredUser->hasRole('Cliente'));
     }
+
+    /**
+     * 8. El administrador puede actualizar los botellones de 20L de un usuario con perfil de cliente.
+     */
+    public function test_admin_can_update_bottles_for_client_user(): void
+    {
+        $customer = Customer::create([
+            'user_id' => $this->clientUser->id,
+            'name' => $this->clientUser->name,
+            'phone' => '9991234567',
+            'email' => $this->clientUser->email,
+            'customer_type' => 'particular',
+            'price_tier' => 'general',
+            'fixed_bottles_count' => 1,
+            'exchange_bottles_count' => 1,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->put(route('admin.users.update', $this->clientUser->id), [
+                'name' => 'María Pech Actualizada',
+                'email' => 'maria.actualizada@example.com',
+                'fixed_bottles_count' => 7,
+                'exchange_bottles_count' => 3,
+            ]);
+
+        $response->assertRedirect(route('admin.users.show', $this->clientUser->id));
+        $customer->refresh();
+        $this->assertEquals(7, $customer->fixed_bottles_count);
+        $this->assertEquals(3, $customer->exchange_bottles_count);
+        $this->assertEquals(10, $customer->total_bottles);
+    }
 }
+

@@ -37,6 +37,8 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'fixed_bottles_count' => 'nullable|integer|min:0|max:500',
+            'exchange_bottles_count' => 'nullable|integer|min:0|max:500',
         ]);
 
         // Transacción atómica: Creación de usuario, asignación de rol Cliente y creación de Customer
@@ -57,8 +59,8 @@ class RegisteredUserController extends Controller
                 'email' => $createdUser->email,
                 'customer_type' => 'particular',
                 'price_tier' => 'general',
-                'fixed_bottles_count' => 0,
-                'exchange_bottles_count' => 0,
+                'fixed_bottles_count' => (int) ($request->input('fixed_bottles_count') ?? 0),
+                'exchange_bottles_count' => (int) ($request->input('exchange_bottles_count') ?? 0),
                 'status' => 'active',
             ]);
 

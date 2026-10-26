@@ -116,6 +116,7 @@ class OrderController extends Controller
                 'city' => $address->city ?: 'Hocabá',
                 'delivery_zone' => $address->delivery_zone,
                 'zone_label' => $address->zone_label ?: 'Sin zona asignada',
+                'between_streets' => $address->between_streets,
                 'reference' => $address->reference,
                 'full_address' => $address->full_address,
             ];

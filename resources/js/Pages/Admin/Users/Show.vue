@@ -316,6 +316,28 @@ const handleToggleStatus = () => {
                                 </dd>
                             </div>
                         </dl>
+
+                        <!-- Desglose de Botellones de 20L -->
+                        <div class="mt-4 pt-4 border-t border-sky-100">
+                            <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <i class="fa-solid fa-bottle-water text-blue-900"></i>
+                                <span>Botellones Registrados (20 Litros)</span>
+                            </h5>
+                            <div class="grid grid-cols-3 gap-3 text-center">
+                                <div class="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200">
+                                    <span class="text-[10px] uppercase font-bold text-blue-900 block">Fijos (20L)</span>
+                                    <span class="text-lg font-mono font-bold text-blue-950">{{ user.customer.fixed_bottles_count }}</span>
+                                </div>
+                                <div class="bg-sky-50/80 p-2.5 rounded-xl border border-sky-200">
+                                    <span class="text-[10px] uppercase font-bold text-sky-900 block">Cambio (20L)</span>
+                                    <span class="text-lg font-mono font-bold text-sky-950">{{ user.customer.exchange_bottles_count }}</span>
+                                </div>
+                                <div class="bg-slate-900 text-white p-2.5 rounded-xl shadow-xs">
+                                    <span class="text-[10px] uppercase font-bold text-sky-200 block">Total (20L)</span>
+                                    <span class="text-lg font-mono font-bold text-white">{{ user.customer.total_bottles }}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>

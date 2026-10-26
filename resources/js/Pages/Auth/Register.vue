@@ -1,17 +1,25 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
+    fixed_bottles_count: 0,
+    exchange_bottles_count: 0,
 });
 
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+
+const totalBottles = computed(() => {
+    const fixed = Number.isFinite(Number(form.fixed_bottles_count)) ? Math.max(0, parseInt(form.fixed_bottles_count, 10)) : 0;
+    const exchange = Number.isFinite(Number(form.exchange_bottles_count)) ? Math.max(0, parseInt(form.exchange_bottles_count, 10)) : 0;
+    return fixed + exchange;
+});
 
 const submit = () => {
     form.post(route('register'), {
@@ -186,6 +194,53 @@ const submit = () => {
                                 </button>
                             </div>
                             <InputError class="mt-0.5" :message="form.errors.password_confirmation" />
+                        </div>
+
+                        <!-- Botellones de 20L Iniciales (Opcional) -->
+                        <div class="p-3 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bottle-water text-[#0084ff]"></i>
+                                    Tus Botellones de 20L
+                                </span>
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                    Total: {{ totalBottles }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 leading-tight">
+                                Indica cuántos envases tienes para tus pedidos a domicilio (puedes ajustarlo después).
+                            </p>
+
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <div>
+                                    <label for="reg_fixed_bottles" class="block text-[11px] font-medium text-slate-700">
+                                        Fijos (Puritronic)
+                                    </label>
+                                    <input
+                                        id="reg_fixed_bottles"
+                                        type="number"
+                                        min="0"
+                                        max="500"
+                                        v-model.number="form.fixed_bottles_count"
+                                        class="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:border-[#0084ff] focus:ring-2 focus:ring-blue-500/10 text-slate-800 bg-white"
+                                    />
+                                    <InputError class="mt-0.5" :message="form.errors.fixed_bottles_count" />
+                                </div>
+                                <div>
+                                    <label for="reg_exchange_bottles" class="block text-[11px] font-medium text-slate-700">
+                                        De Cambio
+                                    </label>
+                                    <input
+                                        id="reg_exchange_bottles"
+                                        type="number"
+                                        min="0"
+                                        max="500"
+                                        v-model.number="form.exchange_bottles_count"
+                                        class="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:border-[#0084ff] focus:ring-2 focus:ring-blue-500/10 text-slate-800 bg-white"
+                                    />
+                                    <InputError class="mt-0.5" :message="form.errors.exchange_bottles_count" />
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Botón de Envío -->

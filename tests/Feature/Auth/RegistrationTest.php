@@ -28,4 +28,27 @@ class RegistrationTest extends TestCase
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
     }
+
+    public function test_new_users_can_register_with_initial_bottles(): void
+    {
+        $response = $this->post('/register', [
+            'name' => 'Cliente Con Garrafones',
+            'email' => 'garrafones@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'fixed_bottles_count' => 3,
+            'exchange_bottles_count' => 5,
+        ]);
+
+        $this->assertAuthenticated();
+        $response->assertRedirect(route('dashboard', absolute: false));
+
+        $user = \App\Models\User::where('email', 'garrafones@example.com')->first();
+        $this->assertNotNull($user);
+        $this->assertNotNull($user->customer);
+        $this->assertEquals(3, $user->customer->fixed_bottles_count);
+        $this->assertEquals(5, $user->customer->exchange_bottles_count);
+        $this->assertEquals(8, $user->customer->total_bottles);
+    }
 }
+

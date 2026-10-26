@@ -255,11 +255,114 @@ const getInitials = (customer) => {
                     </div>
                 </div>
 
-                <!-- Tabla de Clientes -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full divide-y divide-gray-200 text-left">
-                            <thead class="bg-gray-50/75 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                <!-- Contenedor de Clientes: Tarjetas en móvil y Tabla en escritorio -->
+                <div class="bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden">
+                    
+                    <!-- VISTA MÓVIL (PANTALLAS < MD): TARJETAS COMPACTAS -->
+                    <div class="md:hidden divide-y divide-slate-100">
+                        <div
+                            v-for="customer in customers.data"
+                            :key="customer.id"
+                            class="p-4 space-y-3"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-start gap-3 min-w-0">
+                                    <div class="h-10 w-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                        {{ getInitials(customer) }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-bold text-sm text-slate-900 leading-tight">
+                                                {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
+                                            </span>
+                                            <span v-if="customer.name && customer.nickname" class="text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                                                "{{ customer.nickname }}"
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                {{ customer.code }}
+                                            </span>
+                                            <span
+                                                class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                                :class="customer.has_account ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-800'"
+                                            >
+                                                {{ customer.has_account ? 'Con cuenta' : 'Sin cuenta' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div v-if="customer.phone" class="text-right shrink-0">
+                                    <a :href="`tel:${customer.phone}`" class="text-xs font-semibold text-blue-900 hover:underline">
+                                        <i class="fa-solid fa-phone text-[10px] mr-1"></i>{{ customer.phone }}
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Botellones 20L y Domicilio -->
+                            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
+                                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                                    <span class="text-[10px] text-slate-500 font-bold uppercase block">Botellones 20L</span>
+                                    <span class="font-mono font-bold text-slate-800">F: {{ customer.fixed_bottles_count }} | C: {{ customer.exchange_bottles_count }}</span>
+                                    <span class="text-[10px] text-slate-400 block">Total: {{ customer.total_bottles }} envases</span>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                                    <span class="text-[10px] text-slate-500 font-bold uppercase block">Zona / Ubicación</span>
+                                    <span class="font-semibold text-slate-800 truncate block">{{ customer.zone_label }}</span>
+                                    <span class="text-[10px] text-slate-500 truncate block">{{ customer.main_address || 'Sin domicilio' }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Acciones en móvil -->
+                            <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                                <Link
+                                    v-if="!customer.has_account"
+                                    :href="route('admin.orders.create', { customer_id: customer.id })"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-2xs"
+                                >
+                                    <i class="fa-solid fa-plus-circle text-sky-400 text-[10px]"></i>
+                                    <span>Pedir</span>
+                                </Link>
+                                <div v-else></div>
+
+                                <div class="flex items-center gap-2">
+                                    <Link
+                                        :href="route('admin.customers.edit', customer.id)"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+                                    >
+                                        Editar
+                                    </Link>
+                                    <Link
+                                        :href="route('admin.customers.show', customer.id)"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 transition"
+                                    >
+                                        Detalles
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estado vacío en móvil -->
+                        <div v-if="customers.data.length === 0" class="p-8 text-center">
+                            <i class="fa-solid fa-users-slash text-slate-300 text-3xl mb-2 block"></i>
+                            <h4 class="text-sm font-bold text-slate-800">No se encontraron clientes</h4>
+                            <p class="text-xs text-slate-500 mt-1">No hay registros con los filtros seleccionados.</p>
+                            <button
+                                v-if="hasActiveFilters()"
+                                @click="resetFilters"
+                                type="button"
+                                class="mt-3 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100"
+                            >
+                                Restablecer filtros
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- VISTA ESCRITORIO (PANTALLAS >= MD): TABLA -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full divide-y divide-slate-200 text-left">
+                            <thead class="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-semibold">
                                 <tr>
                                     <th scope="col" class="py-3.5 pl-6 pr-4">Cliente Particular</th>
                                     <th scope="col" class="px-4 py-3.5">Contacto</th>
@@ -270,11 +373,11 @@ const getInitials = (customer) => {
                                     <th scope="col" class="relative py-3.5 pl-4 pr-6 text-right">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white text-sm">
+                            <tbody class="divide-y divide-slate-100 bg-white text-sm">
                                 <tr
                                     v-for="customer in customers.data"
                                     :key="customer.id"
-                                    class="hover:bg-gray-50/80 transition duration-150"
+                                    class="hover:bg-slate-50/80 transition duration-150"
                                 >
                                     <!-- Cliente: Avatar, Nombre, Apodo y Código -->
                                     <td class="py-3.5 pl-6 pr-4">
@@ -284,7 +387,7 @@ const getInitials = (customer) => {
                                             </div>
                                             <div class="min-w-0">
                                                 <div class="flex items-center gap-1.5 flex-wrap">
-                                                    <span class="font-semibold text-gray-900 leading-tight">
+                                                    <span class="font-semibold text-slate-900 leading-tight">
                                                         {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
                                                     </span>
                                                     <span v-if="customer.name && customer.nickname" class="text-blue-950 bg-blue-50/90 border border-blue-200/80 px-1.5 py-0.5 rounded text-[11px] font-bold">
@@ -300,10 +403,10 @@ const getInitials = (customer) => {
 
                                     <!-- Contacto: Teléfono y Correo -->
                                     <td class="px-4 py-3.5">
-                                        <div class="text-xs text-gray-900 font-medium">
+                                        <div class="text-xs text-slate-900 font-medium">
                                             {{ customer.phone || '—' }}
                                         </div>
-                                        <div v-if="customer.email" class="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-xs xl:max-w-sm" :title="customer.email">
+                                        <div v-if="customer.email" class="text-[11px] text-slate-500 font-mono mt-0.5 truncate max-w-xs xl:max-w-sm" :title="customer.email">
                                             {{ customer.email }}
                                         </div>
                                     </td>
@@ -318,16 +421,16 @@ const getInitials = (customer) => {
                                                 C: {{ customer.exchange_bottles_count }}
                                             </span>
                                         </div>
-                                        <div class="text-[10px] text-gray-500 mt-0.5 font-medium">
+                                        <div class="text-[10px] text-slate-500 mt-0.5 font-medium">
                                             Total: {{ customer.total_bottles }} envase(s) de 20L
                                         </div>
                                     </td>
 
                                     <!-- Domicilio y Zona -->
-                                    <td class="px-4 py-3.5 text-xs text-gray-600 max-w-xs md:max-w-sm lg:max-w-md xl:max-w-xl">
+                                    <td class="px-4 py-3.5 text-xs text-slate-600 max-w-xs md:max-w-sm lg:max-w-md xl:max-w-xl">
                                         <div v-if="customer.has_address" class="space-y-1">
                                             <div class="flex items-start gap-1.5">
-                                                <i class="fa-solid fa-location-dot text-[11px] text-gray-400 mt-0.5 shrink-0"></i>
+                                                <i class="fa-solid fa-location-dot text-[11px] text-slate-400 mt-0.5 shrink-0"></i>
                                                 <span class="line-clamp-2 text-xs" :title="customer.main_address">
                                                     {{ customer.main_address }}
                                                 </span>
@@ -337,7 +440,7 @@ const getInitials = (customer) => {
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                                     :class="{
                                                         'bg-blue-100 text-blue-900 font-semibold': customer.zone_label.startsWith('Zona'),
-                                                        'bg-gray-100 text-gray-700': customer.zone_label === 'Otro municipio',
+                                                        'bg-slate-100 text-slate-700': customer.zone_label === 'Otro municipio',
                                                         'bg-amber-50 text-amber-800 border border-amber-200': customer.zone_label === 'Sin zona asignada'
                                                     }"
                                                 >
@@ -345,7 +448,7 @@ const getInitials = (customer) => {
                                                 </span>
                                             </div>
                                         </div>
-                                        <div v-else class="text-xs text-gray-400 italic">
+                                        <div v-else class="text-xs text-slate-400 italic">
                                             Sin domicilio registrado
                                         </div>
                                     </td>
@@ -361,15 +464,15 @@ const getInitials = (customer) => {
                                         </span>
                                         <span
                                             v-else
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
                                         >
-                                            <span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
+                                            <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
                                             <span>Sin cuenta</span>
                                         </span>
                                     </td>
 
                                     <!-- Fecha de Registro -->
-                                    <td class="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500 font-mono">
+                                    <td class="whitespace-nowrap px-4 py-3.5 text-xs text-slate-500 font-mono">
                                         {{ customer.created_at }}
                                     </td>
 
@@ -377,11 +480,21 @@ const getInitials = (customer) => {
                                     <td class="whitespace-nowrap py-3.5 pl-4 pr-6 text-right text-xs">
                                         <div class="inline-flex items-center gap-1.5 justify-end">
                                             <Link
+                                                v-if="!customer.has_account"
+                                                :href="route('admin.orders.create', { customer_id: customer.id })"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-2xs cursor-pointer"
+                                                title="Registrar pedido para este cliente"
+                                            >
+                                                <i class="fa-solid fa-plus-circle text-sky-400 text-[10px]"></i>
+                                                <span>Pedir</span>
+                                            </Link>
+
+                                            <Link
                                                 :href="route('admin.customers.edit', customer.id)"
-                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition shadow-2xs"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition shadow-2xs"
                                                 title="Editar datos del cliente"
                                             >
-                                                <i class="fa-solid fa-pen-to-square text-[10px] text-gray-500"></i>
+                                                <i class="fa-solid fa-pen-to-square text-[10px] text-slate-500"></i>
                                                 <span>Editar</span>
                                             </Link>
 
@@ -397,24 +510,22 @@ const getInitials = (customer) => {
                                     </td>
                                 </tr>
 
-                                <!-- Estado Vacío -->
+                                <!-- Estado Vacío en tabla -->
                                 <tr v-if="customers.data.length === 0">
                                     <td colspan="7" class="px-6 py-12 text-center">
                                         <div class="max-w-xs mx-auto">
-                                            <div class="mx-auto h-12 w-12 text-gray-400 flex items-center justify-center rounded-full bg-gray-100 mb-3">
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                                </svg>
+                                            <div class="mx-auto h-12 w-12 text-slate-400 flex items-center justify-center rounded-full bg-slate-100 mb-3">
+                                                <i class="fa-solid fa-users-slash text-xl text-slate-400"></i>
                                             </div>
-                                            <h4 class="text-sm font-semibold text-gray-900">No se encontraron clientes</h4>
-                                            <p class="text-xs text-gray-500 mt-1">
+                                            <h4 class="text-sm font-semibold text-slate-900">No se encontraron clientes</h4>
+                                            <p class="text-xs text-slate-500 mt-1">
                                                 No existen clientes particulares que coincidan con los filtros aplicados.
                                             </p>
                                             <button
                                                 v-if="hasActiveFilters()"
                                                 @click="resetFilters"
                                                 type="button"
-                                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-blue-700 bg-blue-100 hover:bg-blue-200 transition"
+                                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-blue-900 bg-blue-100 hover:bg-blue-200 transition cursor-pointer"
                                             >
                                                 Restablecer filtros
                                             </button>

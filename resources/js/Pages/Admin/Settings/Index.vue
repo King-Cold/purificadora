@@ -304,7 +304,7 @@ const formatCurrency = (val) => {
                         <button
                             type="button"
                             @click="openCreatePresentationModal"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-xs transition cursor-pointer"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl shadow-xs transition cursor-pointer active:scale-[0.98]"
                         >
                             <i class="fa-solid fa-plus text-xs"></i>
                             <span>Agregar envase</span>
@@ -421,8 +421,117 @@ const formatCurrency = (val) => {
                         </button>
                     </div>
 
-                    <!-- Tabla de Datos -->
-                    <div v-else class="overflow-x-auto">
+                    <!-- Tabla o Tarjetas de Datos -->
+                    <div v-else>
+                        <!-- VISTA MÓVIL (PANTALLAS < MD): TARJETAS DE ENVASES -->
+                        <div class="md:hidden divide-y divide-slate-100">
+                            <div
+                                v-for="item in bottlePresentations"
+                                :key="item.id"
+                                class="p-4 space-y-3"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                            <img
+                                                v-if="item.image_url"
+                                                :src="item.image_url"
+                                                :alt="item.name"
+                                                class="max-h-full max-w-full object-contain"
+                                            />
+                                            <i v-else class="fa-solid fa-bottle-water text-slate-400 text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <span class="font-bold text-sm text-slate-900 block leading-tight">{{ item.name }}</span>
+                                            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold">
+                                                    {{ item.formatted_capacity }}
+                                                </span>
+                                                <span
+                                                    v-if="item.is_available_for_delivery"
+                                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
+                                                >
+                                                    <i class="fa-solid fa-truck-fast text-[9px]"></i>
+                                                    A domicilio
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200"
+                                                >
+                                                    <i class="fa-solid fa-store text-[9px]"></i>
+                                                    Solo sucursal
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <span
+                                        v-if="item.is_active"
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 shrink-0"
+                                    >
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                        Activo
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 shrink-0"
+                                    >
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        Inactivo
+                                    </span>
+                                </div>
+
+                                <!-- Precios en Grid Móvil -->
+                                <div class="grid grid-cols-3 gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-100 text-xs text-center">
+                                    <div>
+                                        <span class="block text-[10px] uppercase font-bold text-slate-400">A Domicilio</span>
+                                        <span v-if="item.is_available_for_delivery && item.has_refill_price" class="text-blue-900 font-bold font-mono">
+                                            {{ formatCurrency(item.refill_price) }}
+                                        </span>
+                                        <span v-else class="text-slate-400 text-[10px]">N/A</span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-[10px] uppercase font-bold text-slate-400">Sucursal</span>
+                                        <span v-if="item.has_store_price" class="text-emerald-700 font-bold font-mono">
+                                            {{ formatCurrency(item.store_price) }}
+                                        </span>
+                                        <span v-else class="text-slate-400 text-[10px]">--</span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-[10px] uppercase font-bold text-slate-400">Envase Nuevo</span>
+                                        <span v-if="item.has_new_bottle_price" class="text-slate-800 font-bold font-mono">
+                                            {{ formatCurrency(item.new_bottle_price) }}
+                                        </span>
+                                        <span v-else class="text-slate-400 text-[10px]">--</span>
+                                    </div>
+                                </div>
+
+                                <!-- Acciones Móvil -->
+                                <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                                    <button
+                                        type="button"
+                                        @click="openEditPresentationModal(item)"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
+                                    >
+                                        <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                                        <span>Editar</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        @click="openToggleStatusModal(item)"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition"
+                                        :class="item.is_active ? 'text-rose-700 bg-rose-50 hover:bg-rose-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
+                                    >
+                                        <i :class="item.is_active ? 'fa-solid fa-toggle-on text-rose-600' : 'fa-solid fa-toggle-off text-emerald-600'" class="text-xs"></i>
+                                        <span>{{ item.is_active ? 'Desactivar' : 'Activar' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- VISTA ESCRITORIO (PANTALLAS >= MD): TABLA -->
+                        <div class="hidden md:block overflow-x-auto">
                         <table class="w-full text-left border-collapse text-sm">
                             <thead>
                                 <tr class="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -589,6 +698,7 @@ const formatCurrency = (val) => {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
                     </div>
                 </div>
             </div>

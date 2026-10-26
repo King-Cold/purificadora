@@ -410,4 +410,52 @@ class ClientProfileTest extends TestCase
         $this->assertNotNull($orphanUser->fresh()->customer);
         $this->assertEquals('CLI-', substr($orphanUser->fresh()->customer->code, 0, 4));
     }
+
+    /**
+     * 16. El cliente autenticado puede actualizar la cantidad de botellones que tiene.
+     */
+    public function test_client_can_update_their_own_bottle_counts(): void
+    {
+        $response = $this->actingAs($this->clientUser)
+            ->put(route('cliente.bottles.update'), [
+                'fixed_bottles_count' => 6,
+                'exchange_bottles_count' => 4,
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->customer->refresh();
+        $this->assertEquals(6, $this->customer->fixed_bottles_count);
+        $this->assertEquals(4, $this->customer->exchange_bottles_count);
+        $this->assertEquals(10, $this->customer->total_bottles);
+    }
+
+    /**
+     * 17. La actualización de botellones valida que sean enteros no negativos.
+     */
+    public function test_client_bottle_update_validates_non_negative_integers(): void
+    {
+        $response = $this->actingAs($this->clientUser)
+            ->put(route('cliente.bottles.update'), [
+                'fixed_bottles_count' => -2,
+                'exchange_bottles_count' => 'invalido',
+            ]);
+
+        $response->assertSessionHasErrors(['fixed_bottles_count', 'exchange_bottles_count']);
+    }
+
+    /**
+     * 18. Usuario no autenticado no puede actualizar botellones.
+     */
+    public function test_unauthenticated_user_cannot_update_bottles(): void
+    {
+        $response = $this->put(route('cliente.bottles.update'), [
+            'fixed_bottles_count' => 3,
+            'exchange_bottles_count' => 2,
+        ]);
+
+        $response->assertRedirect(route('login'));
+    }
 }
+

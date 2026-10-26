@@ -26,11 +26,9 @@ watch(
         if (props.show) {
             document.body.style.overflow = 'hidden';
             showSlot.value = true;
-
             dialog.value?.showModal();
         } else {
             document.body.style.overflow = '';
-
             setTimeout(() => {
                 dialog.value?.close();
                 showSlot.value = false;
@@ -48,7 +46,6 @@ const close = () => {
 const closeOnEscape = (e) => {
     if (e.key === 'Escape') {
         e.preventDefault();
-
         if (props.show) {
             close();
         }
@@ -59,7 +56,6 @@ onMounted(() => document.addEventListener('keydown', closeOnEscape));
 
 onUnmounted(() => {
     document.removeEventListener('keydown', closeOnEscape);
-
     document.body.style.overflow = '';
 });
 
@@ -80,7 +76,7 @@ const maxWidthClass = computed(() => {
         ref="dialog"
     >
         <div
-            class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0"
+            class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex items-center justify-center"
             scroll-region
         >
             <Transition
@@ -97,7 +93,7 @@ const maxWidthClass = computed(() => {
                     @click="close"
                 >
                     <div
-                        class="absolute inset-0 bg-gray-500 opacity-75"
+                        class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
                     />
                 </div>
             </Transition>
@@ -112,7 +108,7 @@ const maxWidthClass = computed(() => {
             >
                 <div
                     v-show="show"
-                    class="mb-6 transform overflow-hidden rounded-lg bg-white shadow-xl transition-all sm:mx-auto sm:w-full"
+                    class="relative transform overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 transition-all w-full my-auto"
                     :class="maxWidthClass"
                 >
                     <slot v-if="showSlot" />

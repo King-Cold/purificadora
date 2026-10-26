@@ -5,6 +5,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 const props = defineProps({
     user: {
@@ -22,6 +23,12 @@ const form = useForm({
     email: props.user.email,
     password: '',
     password_confirmation: '',
+    fixed_bottles_count: props.user.customer?.fixed_bottles_count ?? 0,
+    exchange_bottles_count: props.user.customer?.exchange_bottles_count ?? 0,
+});
+
+const totalBottles = computed(() => {
+    return Number(form.fixed_bottles_count || 0) + Number(form.exchange_bottles_count || 0);
 });
 
 const getRoleBadge = (role) => {
@@ -210,6 +217,77 @@ const submit = () => {
                                     <p class="text-[11px] text-slate-500 mt-1">
                                         Utilizado para el inicio de sesión en Puritronic.
                                     </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECCIÓN: BOTELLONES DEL CLIENTE (SI ES CUENTA DE CLIENTE) -->
+                        <div v-if="user.has_customer" class="space-y-4 pt-4 border-t border-slate-200">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-slate-200 gap-2">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-7 h-7 rounded-lg bg-blue-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                                        <i class="fa-solid fa-bottle-water"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">
+                                            Cantidad de Botellones (20 Litros)
+                                        </h4>
+                                        <p class="text-[11px] text-slate-500 font-normal">
+                                            Configura los botellones que esta persona tiene registrados para pedidos a domicilio.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-900 text-white text-xs font-bold self-start sm:self-auto">
+                                    <span>Total:</span>
+                                    <span class="text-sm font-mono font-bold">{{ totalBottles }}</span>
+                                    <span>garrafones de 20L</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <!-- Botellones Fijos -->
+                                <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <InputLabel for="fixed_bottles_count" class="font-bold text-slate-900 text-xs">
+                                            Botellones fijos (20 Litros)
+                                        </InputLabel>
+                                        <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">
+                                            Rotulados
+                                        </span>
+                                    </div>
+                                    <TextInput
+                                        id="fixed_bottles_count"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        class="block w-full text-sm rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-semibold"
+                                        v-model.number="form.fixed_bottles_count"
+                                        required
+                                    />
+                                    <InputError class="mt-1.5" :message="form.errors.fixed_bottles_count" />
+                                </div>
+
+                                <!-- Botellones de Cambio -->
+                                <div class="bg-sky-50/70 p-4 rounded-xl border border-sky-200">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <InputLabel for="exchange_bottles_count" class="font-bold text-slate-900 text-xs">
+                                            Botellones de cambio (20 Litros)
+                                        </InputLabel>
+                                        <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">
+                                            Intercambiables
+                                        </span>
+                                    </div>
+                                    <TextInput
+                                        id="exchange_bottles_count"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        class="block w-full text-sm rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-semibold"
+                                        v-model.number="form.exchange_bottles_count"
+                                        required
+                                    />
+                                    <InputError class="mt-1.5" :message="form.errors.exchange_bottles_count" />
                                 </div>
                             </div>
                         </div>

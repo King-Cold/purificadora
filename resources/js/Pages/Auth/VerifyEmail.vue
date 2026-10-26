@@ -23,38 +23,57 @@ const verificationLinkSent = computed(
 
 <template>
     <GuestLayout>
-        <Head title="Email Verification" />
+        <Head title="Verificar Correo Electrónico - Puritronic" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            Thanks for signing up! Before getting started, could you verify your
-            email address by clicking on the link we just emailed to you? If you
-            didn't receive the email, we will gladly send you another.
+        <div class="text-center mb-6">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-xl shadow-xs">
+                <i class="fa-solid fa-envelope-circle-check"></i>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">
+                Verifica tu Correo
+            </h1>
+            <p class="mt-2 text-xs sm:text-sm text-slate-500 leading-relaxed">
+                ¡Gracias por registrarte en Puritronic! Antes de comenzar, por favor verifica tu correo electrónico haciendo clic en el enlace que te acabamos de enviar.
+            </p>
         </div>
 
         <div
-            class="mb-4 text-sm font-medium text-green-600"
+            class="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs sm:text-sm font-medium text-emerald-800 flex items-center gap-2.5"
             v-if="verificationLinkSent"
+            role="status"
         >
-            A new verification link has been sent to the email address you
-            provided during registration.
+            <i class="fa-solid fa-circle-check text-emerald-600 text-base shrink-0"></i>
+            <span>Se ha enviado un nuevo enlace de verificación a tu correo electrónico.</span>
         </div>
 
-        <form @submit.prevent="submit">
-            <div class="mt-4 flex items-center justify-between">
+        <form @submit.prevent="submit" class="space-y-4">
+            <div>
                 <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
+                    class="w-full justify-center py-3 text-sm font-bold shadow-md shadow-blue-900/10"
+                    :class="{ 'opacity-50 cursor-not-allowed': form.processing }"
                     :disabled="form.processing"
                 >
-                    Resend Verification Email
+                    <span v-if="form.processing" class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Reenviando correo...</span>
+                    </span>
+                    <span v-else class="flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                        <span>Reenviar correo de verificación</span>
+                    </span>
                 </PrimaryButton>
+            </div>
 
+            <div class="text-center pt-2">
                 <Link
                     :href="route('logout')"
                     method="post"
                     as="button"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >Log Out</Link
+                    class="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
                 >
+                    <i class="fa-solid fa-arrow-right-from-bracket text-[10px] mr-1"></i>
+                    Cerrar sesión
+                </Link>
             </div>
         </form>
     </GuestLayout>

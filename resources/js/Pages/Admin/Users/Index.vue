@@ -141,6 +141,16 @@ const handleToggleStatus = (user) => {
                         </span>
                     </div>
                 </div>
+
+                <div class="flex items-center gap-2">
+                    <Link
+                        :href="route('admin.users.create')"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all active:scale-[0.98]"
+                    >
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                        <span>Nuevo Usuario</span>
+                    </Link>
+                </div>
             </div>
         </template>
 
@@ -254,9 +264,114 @@ const handleToggleStatus = (user) => {
                     </div>
                 </div>
 
-                <!-- Tabla de Usuarios -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="overflow-x-auto">
+                <!-- Contenedor de Usuarios: Tarjetas en móvil y Tabla en escritorio -->
+                <div class="bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden">
+                    
+                    <!-- VISTA MÓVIL (PANTALLAS < MD): TARJETAS COMPACTAS -->
+                    <div class="md:hidden divide-y divide-slate-100">
+                        <div
+                            v-for="user in users.data"
+                            :key="user.id"
+                            class="p-4 space-y-3"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-start gap-3 min-w-0">
+                                    <div class="h-10 w-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                        {{ getInitials(user.name) }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-sm text-slate-900 leading-tight">
+                                            {{ user.name }}
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                                            <span class="font-mono text-slate-400">#{{ user.id }}</span>
+                                            <span v-if="user.has_customer" class="text-sky-700 bg-sky-50 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                                                {{ user.customer_code }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <span
+                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border shrink-0"
+                                    :class="getRoleBadgeClass(user.primary_role)"
+                                >
+                                    {{ user.primary_role }}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs text-slate-600 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                                <span class="font-mono text-[11px] truncate max-w-[190px]">{{ user.email }}</span>
+                                <span
+                                    v-if="user.is_active"
+                                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200"
+                                >
+                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                    Activo
+                                </span>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200"
+                                >
+                                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                    Inactivo
+                                </span>
+                            </div>
+
+                            <!-- Acciones táctiles para móvil -->
+                            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                                <Link
+                                    :href="route('admin.users.show', user.id)"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
+                                >
+                                    <i class="fa-solid fa-eye text-[11px]"></i>
+                                    <span>Ver</span>
+                                </Link>
+
+                                <Link
+                                    :href="route('admin.users.edit', user.id)"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
+                                >
+                                    <i class="fa-solid fa-pen text-[11px]"></i>
+                                    <span>Editar</span>
+                                </Link>
+
+                                <button
+                                    v-if="user.primary_role !== 'Cliente'"
+                                    type="button"
+                                    @click="handleToggleStatus(user)"
+                                    :disabled="$page.props.auth?.user?.id === user.id"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition disabled:opacity-30"
+                                    :class="user.is_active ? 'text-rose-700 bg-rose-50 hover:bg-rose-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
+                                >
+                                    <i :class="user.is_active ? 'fa-solid fa-ban' : 'fa-solid fa-check'" class="text-[11px]"></i>
+                                    <span>{{ user.is_active ? 'Desactivar' : 'Activar' }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Estado vacío móvil -->
+                        <div v-if="users.data.length === 0" class="p-8 text-center">
+                            <div class="mx-auto h-12 w-12 text-slate-400 flex items-center justify-center rounded-2xl bg-slate-100 mb-3">
+                                <i class="fa-solid fa-user-slash text-xl"></i>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-900">No se encontraron usuarios</h4>
+                            <p class="text-xs text-slate-500 mt-1">
+                                No existen registros que coincidan con los filtros aplicados.
+                            </p>
+                            <button
+                                v-if="hasActiveFilters()"
+                                @click="resetFilters"
+                                type="button"
+                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-xl text-blue-900 bg-blue-100 hover:bg-blue-200 transition cursor-pointer"
+                            >
+                                Restablecer filtros
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- VISTA ESCRITORIO (PANTALLAS >= MD): TABLA -->
+                    <div class="hidden md:block overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 text-left">
                             <thead class="bg-gray-50/75 text-xs uppercase tracking-wider text-gray-500 font-semibold">
                                 <tr>
@@ -384,14 +499,12 @@ const handleToggleStatus = (user) => {
                                     </td>
                                 </tr>
 
-                                <!-- Estado Vacío (Empty State) -->
+                                <!-- Estado Vacío Escritorio -->
                                 <tr v-if="users.data.length === 0">
                                     <td colspan="6" class="px-6 py-12 text-center">
                                         <div class="max-w-xs mx-auto">
-                                            <div class="mx-auto h-12 w-12 text-gray-400 flex items-center justify-center rounded-full bg-gray-100 mb-3">
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                                </svg>
+                                            <div class="mx-auto h-12 w-12 text-gray-400 flex items-center justify-center rounded-2xl bg-gray-100 mb-3">
+                                                <i class="fa-solid fa-user-slash text-xl"></i>
                                             </div>
                                             <h4 class="text-sm font-semibold text-gray-900">No se encontraron usuarios</h4>
                                             <p class="text-xs text-gray-500 mt-1">
@@ -401,7 +514,7 @@ const handleToggleStatus = (user) => {
                                                 v-if="hasActiveFilters()"
                                                 @click="resetFilters"
                                                 type="button"
-                                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-blue-700 bg-blue-100 hover:bg-blue-200 transition"
+                                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-xl text-blue-900 bg-blue-100 hover:bg-blue-200 transition cursor-pointer"
                                             >
                                                 Restablecer filtros
                                             </button>

@@ -33,67 +33,90 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Reset Password" />
+        <Head title="Restablecer Contraseña - Puritronic" />
 
-        <form @submit.prevent="submit">
+        <div class="text-center mb-6">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-xl shadow-xs">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">
+                Nueva Contraseña
+            </h1>
+            <p class="mt-1 text-xs sm:text-sm text-slate-500">
+                Define una nueva contraseña segura para tu cuenta.
+            </p>
+        </div>
+
+        <form @submit.prevent="submit" class="space-y-4">
             <div>
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" value="Correo Electrónico" />
 
                 <TextInput
                     id="email"
                     type="email"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full bg-slate-50 text-slate-500 cursor-not-allowed"
                     v-model="form.email"
                     required
-                    autofocus
+                    readonly
                     autocomplete="username"
                 />
 
-                <InputError class="mt-2" :message="form.errors.email" />
+                <InputError class="mt-1.5" :message="form.errors.email" />
             </div>
 
-            <div class="mt-4">
-                <InputLabel for="password" value="Password" />
+            <div>
+                <InputLabel for="password" value="Nueva Contraseña" />
 
                 <TextInput
                     id="password"
                     type="password"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full"
                     v-model="form.password"
+                    placeholder="Mínimo 8 caracteres"
                     required
                     autocomplete="new-password"
+                    autofocus
                 />
 
-                <InputError class="mt-2" :message="form.errors.password" />
+                <InputError class="mt-1.5" :message="form.errors.password" />
             </div>
 
-            <div class="mt-4">
+            <div>
                 <InputLabel
                     for="password_confirmation"
-                    value="Confirm Password"
+                    value="Confirmar Nueva Contraseña"
                 />
 
                 <TextInput
                     id="password_confirmation"
                     type="password"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full"
                     v-model="form.password_confirmation"
+                    placeholder="Repite la contraseña"
                     required
                     autocomplete="new-password"
                 />
 
                 <InputError
-                    class="mt-2"
+                    class="mt-1.5"
                     :message="form.errors.password_confirmation"
                 />
             </div>
 
-            <div class="mt-4 flex items-center justify-end">
+            <div class="pt-2">
                 <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
+                    class="w-full justify-center py-3 text-sm font-bold shadow-md shadow-blue-900/10"
+                    :class="{ 'opacity-50 cursor-not-allowed': form.processing }"
                     :disabled="form.processing"
                 >
-                    Reset Password
+                    <span v-if="form.processing" class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Actualizando contraseña...</span>
+                    </span>
+                    <span v-else class="flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span>Restablecer Contraseña</span>
+                    </span>
                 </PrimaryButton>
             </div>
         </form>

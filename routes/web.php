@@ -153,10 +153,15 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
 
 // Panel 2: Cliente
 Route::middleware(['auth', 'role:Cliente'])->group(function () {
-    Route::get('/cliente/dashboard', function () {
+    Route::get('/cliente/dashboard', function (\App\Services\OrderService $orderService) {
         $user = \Illuminate\Support\Facades\Auth::user();
         $customer = $user?->customer;
         $address = $customer?->address;
+        $activeOrder = $customer ? $orderService->getActiveOrderForCustomer($customer) : null;
+        if ($activeOrder) {
+            $activeOrder->loadMissing('items');
+        }
+
         return Inertia::render('Cliente/Dashboard', [
             'customer' => $customer ? [
                 'code' => $customer->code,
@@ -167,7 +172,18 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
                 'total_bottles' => (int) $customer->total_bottles,
                 'has_address' => !is_null($address),
                 'address_summary' => $address ? ($address->street . ($address->exterior_number ? ' #' . $address->exterior_number : '')) : null,
+                'between_streets' => $address?->between_streets,
+                'reference' => $address?->reference,
                 'zone_label' => $address?->zone_label,
+            ] : null,
+            'activeOrder' => $activeOrder ? [
+                'id' => $activeOrder->id,
+                'folio' => $activeOrder->folio,
+                'status' => $activeOrder->status,
+                'status_label' => $activeOrder->status_label,
+                'total_bottles' => (int) $activeOrder->total_bottles,
+                'fixed_quantity' => (int) $activeOrder->fixed_quantity,
+                'exchange_quantity' => (int) $activeOrder->exchange_quantity,
             ] : null,
         ]);
     })->name('cliente.dashboard');
@@ -188,6 +204,8 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
     // Mi perfil de cliente
     Route::get('/cliente/perfil', [\App\Http\Controllers\ProfileController::class, 'edit'])
         ->name('cliente.profile.index');
+    Route::put('/cliente/botellones', [\App\Http\Controllers\Cliente\BottleController::class, 'update'])
+        ->name('cliente.bottles.update');
 
     // Gestión del domicilio único del cliente autenticado (autoservicio)
     Route::get('/cliente/domicilio', [\App\Http\Controllers\Cliente\AddressController::class, 'index'])

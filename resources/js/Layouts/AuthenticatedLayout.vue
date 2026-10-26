@@ -57,7 +57,7 @@ const getInitials = (name) => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-slate-100 flex flex-col antialiased text-slate-800">
+    <div class="min-h-screen bg-slate-50/90 flex flex-col antialiased text-slate-800">
 
         <!-- ========================================================================= -->
         <!-- 1. COMPONENTE DEL SIDEBAR (COLAPSABLE EN ESCRITORIO) -->
@@ -78,18 +78,18 @@ const getInitials = (name) => {
         >
 
             <!-- Barra Superior (Topbar) -->
-            <header class="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6">
+            <header class="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-xs border-b border-slate-200/90 flex items-center justify-between px-4 sm:px-6">
                 <!-- Lado Izquierdo: Botón y logotipo para móviles -->
                 <div class="flex items-center gap-3">
-                    <!-- Botón móvil -->
+                    <!-- Botón móvil con área táctil cómoda -->
                     <button
                         @click="mobileSidebarOpen = true"
                         type="button"
-                        class="lg:hidden h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition focus:outline-none"
+                        class="lg:hidden h-10 w-10 inline-flex items-center justify-center rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                         title="Abrir menú"
-                        aria-label="Abrir menú"
+                        aria-label="Abrir menú de navegación"
                     >
-                        <i class="fa-solid fa-bars text-sm"></i>
+                        <i class="fa-solid fa-bars text-base"></i>
                     </button>
 
                     <!-- Logotipo visible ÚNICAMENTE en móvil -->
@@ -101,31 +101,16 @@ const getInitials = (name) => {
                     </Link>
                 </div>
 
-                <!-- Lado Derecho: Widgets de Fecha, Notificaciones y Perfil -->
-                <div class="flex items-center gap-3 ml-auto">
+                <!-- Lado Derecho: Widgets de Fecha y Perfil -->
+                <div class="flex items-center gap-2.5 sm:gap-3 ml-auto">
                     
                     <!-- WIDGET 1: FECHA ACTUAL (Calendario) -->
-                    <div class="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 bg-white border border-slate-200/90 rounded-xl shadow-xs text-xs font-medium text-slate-700">
-                        <i class="fa-regular fa-calendar text-slate-600 text-sm"></i>
+                    <div class="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700">
+                        <i class="fa-regular fa-calendar text-blue-900 text-xs"></i>
                         <span>{{ formattedDate }}</span>
                     </div>
 
-                    <!-- WIDGET 2: CAMPANA DE NOTIFICACIONES CON BADGE ROJO -->
-                    <div class="relative">
-                        <button
-                            type="button"
-                            class="h-9 w-9 rounded-xl bg-white border border-slate-200/90 flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition shadow-xs focus:outline-none"
-                            title="Notificaciones"
-                            aria-label="3 notificaciones pendientes"
-                        >
-                            <i class="fa-regular fa-bell text-sm"></i>
-                            <span class="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 rounded-full bg-rose-500 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
-                                3
-                            </span>
-                        </button>
-                    </div>
-
-                    <!-- WIDGET 3: MENÚ DE USUARIO / PERFIL -->
+                    <!-- WIDGET 2: MENÚ DE USUARIO / PERFIL -->
                     <Dropdown align="right" width="48">
                         <template #trigger>
                             <button

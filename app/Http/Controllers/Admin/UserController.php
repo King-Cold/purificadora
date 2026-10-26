@@ -140,6 +140,9 @@ class UserController extends Controller
                 'code' => $user->customer->code,
                 'nickname' => $user->customer->nickname,
                 'phone' => $user->customer->phone,
+                'fixed_bottles_count' => (int) ($user->customer->fixed_bottles_count ?? 0),
+                'exchange_bottles_count' => (int) ($user->customer->exchange_bottles_count ?? 0),
+                'total_bottles' => (int) $user->customer->total_bottles,
                 'has_address' => $user->customer->address()->exists(),
             ];
         }
@@ -193,7 +196,7 @@ class UserController extends Controller
             abort(403, 'No tiene autorización para editar una cuenta de Super Admin.');
         }
 
-        $user->load(['roles:id,name', 'customer:id,user_id,code,phone']);
+        $user->load(['roles:id,name', 'customer:id,user_id,code,phone,fixed_bottles_count,exchange_bottles_count']);
         $roleName = $user->roles->first()?->name ?? 'Sin Rol';
 
         $isPositionFixed = $user->hasAnyRole(['Repartidor', 'Operador Planta']);
@@ -211,6 +214,13 @@ class UserController extends Controller
                 'status' => $user->status ?? 'active',
                 'has_customer' => !is_null($user->customer),
                 'customer_code' => $user->customer?->code,
+                'customer' => $user->customer ? [
+                    'id' => $user->customer->id,
+                    'code' => $user->customer->code,
+                    'fixed_bottles_count' => (int) ($user->customer->fixed_bottles_count ?? 0),
+                    'exchange_bottles_count' => (int) ($user->customer->exchange_bottles_count ?? 0),
+                    'total_bottles' => (int) $user->customer->total_bottles,
+                ] : null,
             ],
             'isSelf' => ($user->id === $authUser->id),
         ]);
@@ -255,10 +265,14 @@ class UserController extends Controller
         if (!$isPositionFixed) {
             $rules['name'] = ['required', 'string', 'max:255'];
         }
+        if ($user->customer) {
+            $rules['fixed_bottles_count'] = ['nullable', 'integer', 'min:0', 'max:500'];
+            $rules['exchange_bottles_count'] = ['nullable', 'integer', 'min:0', 'max:500'];
+        }
 
         $validated = $request->validate($rules);
 
-        DB::transaction(function () use ($user, $validated, $targetName) {
+        DB::transaction(function () use ($user, $validated, $targetName, $request) {
             $userData = [
                 'name' => $targetName,
                 'email' => $validated['email'],
@@ -273,10 +287,17 @@ class UserController extends Controller
 
             // Mantener consistencia de datos personales con Customer
             if ($user->customer) {
-                $user->customer->update([
+                $customerUpdate = [
                     'name' => $targetName,
                     'email' => $validated['email'],
-                ]);
+                ];
+                if ($request->has('fixed_bottles_count')) {
+                    $customerUpdate['fixed_bottles_count'] = (int) $request->input('fixed_bottles_count');
+                }
+                if ($request->has('exchange_bottles_count')) {
+                    $customerUpdate['exchange_bottles_count'] = (int) $request->input('exchange_bottles_count');
+                }
+                $user->customer->update($customerUpdate);
             }
         });
 
