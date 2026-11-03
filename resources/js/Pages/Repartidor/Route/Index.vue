@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -723,6 +724,8 @@ const getStopStatusBadge = (status) => {
             </div>
         </div>
 
+        <!-- Barra inferior móvil -->
+        <RepartidorBottomNav />
     </AuthenticatedLayout>
 </template>
 

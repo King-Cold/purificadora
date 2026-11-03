@@ -64,14 +64,37 @@ class TruckLoadController extends Controller
         $validated = $request->validate([
             'confirmed_quantity' => ['nullable', 'integer', 'min:0'],
             'difference_reason' => ['nullable', 'string', 'max:500'],
+            'retained_in_plant' => ['nullable', 'boolean'],
+            'retained_in_plant_quantity' => ['nullable', 'integer', 'min:0'],
+            'damaged_quantity' => ['nullable', 'integer', 'min:0'],
+            'damage_type' => ['nullable', 'string', 'max:50'],
+            'damage_notes' => ['nullable', 'string', 'max:500'],
+            'unlocated_quantity' => ['nullable', 'integer', 'min:0'],
         ]);
 
         try {
             $driver = $user;
             $confirmedQty = isset($validated['confirmed_quantity']) ? (int) $validated['confirmed_quantity'] : null;
             $diffReason = $validated['difference_reason'] ?? null;
+            $retainedInPlant = (bool) ($validated['retained_in_plant'] ?? false);
+            $retainedInPlantQty = (int) ($validated['retained_in_plant_quantity'] ?? 0);
+            $damagedQty = (int) ($validated['damaged_quantity'] ?? 0);
+            $damageType = $validated['damage_type'] ?? null;
+            $damageNotes = $validated['damage_notes'] ?? null;
+            $unlocatedQty = (int) ($validated['unlocated_quantity'] ?? 0);
 
-            $this->truckInventoryService->acceptTransfer($movement, $driver, $confirmedQty, $diffReason);
+            $this->truckInventoryService->acceptTransfer(
+                $movement,
+                $driver,
+                $confirmedQty,
+                $diffReason,
+                $retainedInPlant,
+                $retainedInPlantQty,
+                $damagedQty,
+                $damageType,
+                $damageNotes,
+                $unlocatedQty
+            );
 
             return back()->with('success', 'Transferencia aceptada y sumada a las existencias del camión correctamente.');
         } catch (OrderBusinessRuleException $e) {
@@ -91,11 +114,31 @@ class TruckLoadController extends Controller
 
         $validated = $request->validate([
             'reason' => ['required', 'string', 'min:3', 'max:500'],
+            'retained_in_plant_quantity' => ['nullable', 'integer', 'min:0'],
+            'damaged_quantity' => ['nullable', 'integer', 'min:0'],
+            'damage_type' => ['nullable', 'string', 'max:50'],
+            'damage_notes' => ['nullable', 'string', 'max:500'],
+            'unlocated_quantity' => ['nullable', 'integer', 'min:0'],
         ]);
 
         try {
             $driver = $user;
-            $this->truckInventoryService->rejectTransfer($movement, $driver, $validated['reason']);
+            $retainedInPlantQty = (int) ($validated['retained_in_plant_quantity'] ?? 0);
+            $damagedQty = (int) ($validated['damaged_quantity'] ?? 0);
+            $damageType = $validated['damage_type'] ?? null;
+            $damageNotes = $validated['damage_notes'] ?? null;
+            $unlocatedQty = (int) ($validated['unlocated_quantity'] ?? 0);
+
+            $this->truckInventoryService->rejectTransfer(
+                $movement,
+                $driver,
+                $validated['reason'],
+                $retainedInPlantQty,
+                $damagedQty,
+                $damageType,
+                $damageNotes,
+                $unlocatedQty
+            );
 
             return back()->with('success', 'Transferencia rechazada.');
         } catch (OrderBusinessRuleException $e) {

@@ -243,6 +243,34 @@ class Order extends Model
     }
 
     /**
+     * Determina si el pedido ya inició atención física (entregas, recolecciones o cobros).
+     */
+    public function hasStartedPhysicalAttention(): bool
+    {
+        // 1. Si ya se entregó alguna unidad (cambio o fijos)
+        if ($this->items()->where('delivered_quantity', '>', 0)->exists()) {
+            return true;
+        }
+
+        // 2. Si ya se recolectaron botellones fijos
+        if ($this->items()->where('type', OrderItem::TYPE_FIXED)->where('collected_quantity', '>', 0)->exists()) {
+            return true;
+        }
+
+        // 3. Si tiene pagos registrados
+        if ($this->charges()->where('status', OrderCharge::STATUS_PAID)->exists()) {
+            return true;
+        }
+
+        // 4. Si la parada en ruta ya fue completada o fallida
+        if ($this->routeStops()->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED])->exists()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Determina si el pedido puede ser confirmado (solo cuando está en estado Pendiente).
      */
     public function canBeConfirmed(): bool
@@ -252,15 +280,19 @@ class Order extends Model
 
     /**
      * Determina si el pedido puede ser cancelado normalmente.
-     * Si ya se recogieron envases fijos, la cancelación normal se bloquea por completo.
+     * Si ya se inició atención física o se recogieron envases fijos, la cancelación normal se bloquea por completo.
      */
     public function canBeCancelled(): bool
     {
-        if ($this->hasCollectedFixedCustody()) {
+        if ($this->isCancelled() || $this->isDelivered()) {
             return false;
         }
 
-        return $this->isPending() || $this->isConfirmed();
+        if ($this->hasCollectedFixedCustody() || $this->hasStartedPhysicalAttention()) {
+            return false;
+        }
+
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_CONFIRMED, self::STATUS_IN_ROUTE], true);
     }
 
     /**

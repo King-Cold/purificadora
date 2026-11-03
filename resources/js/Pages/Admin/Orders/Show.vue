@@ -187,16 +187,6 @@ const getStageIconClass = (stageKey) => {
                         <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
                     </button>
 
-                    <!-- Botón Confirmar (Únicamente para pedidos Pendientes) -->
-                    <button
-                        v-if="order.can_confirm && order.is_pending"
-                        type="button"
-                        @click="openConfirmModal"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer"
-                    >
-                        <i class="fa-solid fa-check-circle text-sky-400"></i>
-                        <span>Confirmar Pedido</span>
-                    </button>
 
                     <!-- Botón Cancelar Ordinario (Bloqueado si hay fijos en custodia por regla de negocio) -->
                     <button
@@ -783,78 +773,7 @@ const getStageIconClass = (stageKey) => {
             </div>
         </div>
 
-        <!-- MODAL: CONFIRMAR PEDIDO (SÓLO PARA ESTADO PENDIENTE) -->
-        <transition
-            enter-active-class="transition-opacity duration-200 ease-out"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition-opacity duration-150 ease-in"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="showConfirmModal"
-                class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-                @click.self="closeConfirmModal"
-            >
-                <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-in">
-                    <div class="flex items-center gap-3.5">
-                        <div class="h-12 w-12 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center text-xl shrink-0">
-                            <i class="fa-solid fa-clipboard-check text-blue-900"></i>
-                        </div>
-                        <div>
-                            <h3 class="text-base font-bold text-slate-900">
-                                Confirmar Pedido {{ order.folio }}
-                            </h3>
-                            <p class="text-xs text-slate-500">
-                                Transición de Pendiente a Confirmado
-                            </p>
-                        </div>
-                    </div>
 
-                    <div class="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/70 text-xs text-blue-900 leading-relaxed">
-                        ¿Deseas confirmar el pedido con folio <span class="font-bold">{{ order.folio }}</span>?
-                        El pedido pasará a estado Confirmado para su posterior atención y entrega.
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label for="confirm_comment" class="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                            Comentario opcional
-                        </label>
-                        <textarea
-                            id="confirm_comment"
-                            v-model="confirmForm.comment"
-                            rows="2"
-                            maxlength="500"
-                            placeholder="Comentario o nota administrativa interna (opcional)..."
-                            class="w-full rounded-xl border-slate-200 text-xs sm:text-sm focus:border-blue-900 focus:ring-blue-900 transition"
-                        ></textarea>
-                        <InputError :message="confirmForm.errors.comment" class="mt-1" />
-                    </div>
-
-                    <div class="flex items-center justify-end gap-3 pt-2">
-                        <button
-                            type="button"
-                            @click="closeConfirmModal"
-                            :disabled="confirmForm.processing"
-                            class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            @click="submitConfirmation"
-                            :disabled="confirmForm.processing"
-                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 disabled:opacity-50 transition shadow-xs cursor-pointer"
-                        >
-                            <i v-if="confirmForm.processing" class="fa-solid fa-spinner fa-spin text-sky-400"></i>
-                            <i v-else class="fa-solid fa-check text-sky-400"></i>
-                            <span>{{ confirmForm.processing ? 'Confirmando...' : 'Sí, Confirmar Pedido' }}</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </transition>
 
         <!-- MODAL: CANCELAR PEDIDO (MOTIVO OBLIGATORIO) -->
         <transition

@@ -99,7 +99,7 @@ const getStatusIconClass = (statusKey) => {
                             Gestión de Pedidos
                         </h2>
                         <p class="text-xs text-slate-500">
-                            Consulta global, confirmación y registro administrativo de pedidos
+                            Consulta global, supervisión y registro administrativo de pedidos
                         </p>
                     </div>
                 </div>

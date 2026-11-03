@@ -66,6 +66,10 @@ class DeliveryOperationController extends Controller
                         'folio' => $activeOrder->folio,
                         'status' => $activeOrder->status,
                         'status_label' => $activeOrder->status_label,
+                        'stop_id' => $activeOrder->stops()->whereHas('deliveryRoute', fn ($r) => $r->where('status', \App\Models\DeliveryRoute::STATUS_IN_PROGRESS))->first()?->id
+                            ?: $activeOrder->stops()->first()?->id,
+                        'is_fixed' => $activeOrder->items->contains('type', \App\Models\OrderItem::TYPE_FIXED),
+                        'is_exchange' => $activeOrder->items->contains('type', \App\Models\OrderItem::TYPE_EXCHANGE),
                     ] : null,
                     'weekly_promo' => $weeklyPromo,
                     'pending_debt' => [

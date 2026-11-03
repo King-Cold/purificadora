@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, useForm, usePage, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -40,12 +41,48 @@ const showAcceptModal = ref(false);
 const acceptForm = useForm({
     confirmed_quantity: 0,
     difference_reason: '',
+    retained_in_plant_quantity: 0,
+    damaged_quantity: 0,
+    damage_type: 'fuga_cuerpo',
+    damage_notes: '',
+    unlocated_quantity: 0,
+});
+
+const damageTypes = [
+    { value: 'fuga_cuerpo', label: 'Fuga en cuerpo / fisura' },
+    { value: 'golpe_fondo', label: 'Golpe severo en fondo' },
+    { value: 'cuello_roto', label: 'Cuello / boquilla rota' },
+    { value: 'contaminacion_quimica', label: 'Contaminación u olor penetrante' },
+    { value: 'desgaste_extremo', label: 'Desgaste extremo no apto' },
+];
+
+const transferDifference = computed(() => {
+    if (!selectedTransfer.value) return 0;
+    const proposed = selectedTransfer.value.proposed_quantity || selectedTransfer.value.quantity || 0;
+    return Math.max(0, proposed - (acceptForm.confirmed_quantity || 0));
+});
+
+const acceptBreakdownTotal = computed(() => {
+    return (acceptForm.retained_in_plant_quantity || 0) +
+        (acceptForm.damaged_quantity || 0) +
+        (acceptForm.unlocated_quantity || 0);
+});
+
+const isAcceptBreakdownValid = computed(() => {
+    if (transferDifference.value === 0) return true;
+    return acceptBreakdownTotal.value === transferDifference.value;
 });
 
 const openAcceptModal = (transfer) => {
     selectedTransfer.value = transfer;
-    acceptForm.confirmed_quantity = transfer.quantity;
+    const qty = transfer.proposed_quantity || transfer.quantity;
+    acceptForm.confirmed_quantity = qty;
     acceptForm.difference_reason = '';
+    acceptForm.retained_in_plant_quantity = 0;
+    acceptForm.damaged_quantity = 0;
+    acceptForm.damage_type = 'fuga_cuerpo';
+    acceptForm.damage_notes = '';
+    acceptForm.unlocated_quantity = 0;
     acceptForm.clearErrors();
     showAcceptModal.value = true;
 };
@@ -56,7 +93,7 @@ const closeAcceptModal = () => {
 };
 
 const submitAcceptTransfer = () => {
-    if (!selectedTransfer.value) return;
+    if (!selectedTransfer.value || !isAcceptBreakdownValid.value) return;
 
     acceptForm.post(route('repartidor.truck-load.accept', selectedTransfer.value.id), {
         preserveScroll: true,
@@ -70,11 +107,34 @@ const submitAcceptTransfer = () => {
 const showRejectModal = ref(false);
 const rejectForm = useForm({
     reason: '',
+    retained_in_plant_quantity: 0,
+    damaged_quantity: 0,
+    damage_type: 'fuga_cuerpo',
+    damage_notes: '',
+    unlocated_quantity: 0,
+});
+
+const rejectBreakdownTotal = computed(() => {
+    return (rejectForm.retained_in_plant_quantity || 0) +
+        (rejectForm.damaged_quantity || 0) +
+        (rejectForm.unlocated_quantity || 0);
+});
+
+const isRejectBreakdownValid = computed(() => {
+    if (!selectedTransfer.value) return true;
+    const proposed = selectedTransfer.value.proposed_quantity || selectedTransfer.value.quantity || 0;
+    return rejectBreakdownTotal.value === proposed;
 });
 
 const openRejectModal = (transfer) => {
     selectedTransfer.value = transfer;
+    const qty = transfer.proposed_quantity || transfer.quantity;
     rejectForm.reason = '';
+    rejectForm.retained_in_plant_quantity = qty;
+    rejectForm.damaged_quantity = 0;
+    rejectForm.damage_type = 'fuga_cuerpo';
+    rejectForm.damage_notes = '';
+    rejectForm.unlocated_quantity = 0;
     rejectForm.clearErrors();
     showRejectModal.value = true;
 };
@@ -85,7 +145,7 @@ const closeRejectModal = () => {
 };
 
 const submitRejectTransfer = () => {
-    if (!selectedTransfer.value) return;
+    if (!selectedTransfer.value || !isRejectBreakdownValid.value) return;
 
     rejectForm.post(route('repartidor.truck-load.reject', selectedTransfer.value.id), {
         preserveScroll: true,
@@ -127,6 +187,8 @@ const submitUnload = () => {
         },
     });
 };
+
+const showHistoryMobile = ref(false);
 
 const formatDateTime = (dateStr) => {
     if (!dateStr) return '-';
@@ -193,7 +255,7 @@ const getMovementLabel = (type) => {
                         type="button"
                         class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 shadow-2xs active:scale-95 transition"
                     >
-                        <i class="fa-solid fa-arrow-down"></i> Descargar a Planta
+                        <i class="fa-solid fa-arrow-down"></i> Entregar botellones a planta
                     </button>
                     <Link
                         :href="route('repartidor.dashboard')"
@@ -205,7 +267,7 @@ const getMovementLabel = (type) => {
             </div>
         </template>
 
-        <div class="py-6 sm:py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="py-6 sm:py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-24 md:pb-8">
 
             <!-- Mensajes Flash de Éxito / Error -->
             <div
@@ -446,63 +508,76 @@ const getMovementLabel = (type) => {
             <!-- 4. HISTORIAL RECIENTE DE MOVIMIENTOS                                      -->
             <!-- ========================================================================= -->
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-100">
-                    <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
-                        <i class="fa-solid fa-clock-rotate-left text-slate-700"></i> Historial Reciente de Movimientos
-                    </h3>
-                    <p class="text-xs text-slate-500 mt-0.5">
-                        Registro auditable de cargas, entregas, recolecciones y descargas.
-                    </p>
-                </div>
-
-                <div v-if="recentMovements.length === 0" class="p-6 text-center text-sm text-slate-400">
-                    No se registran movimientos recientes de custodia.
-                </div>
-
-                <div v-else class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-                    <div
-                        v-for="mov in recentMovements"
-                        :key="mov.id"
-                        class="p-3.5 sm:p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition"
+                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-slate-700"></i> Historial Reciente de Movimientos
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Registro auditable de cargas, entregas, recolecciones y entregas a planta.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showHistoryMobile = !showHistoryMobile"
+                        class="sm:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
                     >
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <span
-                                    class="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] border"
-                                    :class="getMovementBadgeClass(mov.movement_type)"
-                                >
-                                    {{ getMovementLabel(mov.movement_type) }}
-                                </span>
-                                <span class="font-bold text-slate-800 text-sm">
-                                    {{ mov.quantity }} u.
-                                </span>
-                                <span class="text-slate-400">
-                                    ({{ mov.bottle_type }} {{ mov.bottle_condition === 'full' ? 'lleno' : 'vacío' }})
-                                </span>
-                                <span
-                                    v-if="mov.status !== 'accepted'"
-                                    class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
-                                >
-                                    {{ mov.status }}
-                                </span>
+                        <span>{{ showHistoryMobile ? 'Ocultar' : 'Ver' }}</span>
+                        <i :class="showHistoryMobile ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'" class="text-[10px]"></i>
+                    </button>
+                </div>
+
+                <!-- Contenido colapsable en móvil -->
+                <div :class="showHistoryMobile ? 'block' : 'hidden sm:block'">
+                    <div v-if="recentMovements.length === 0" class="p-6 text-center text-sm text-slate-400">
+                        No se registran movimientos recientes de custodia.
+                    </div>
+
+                    <div v-else class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                        <div
+                            v-for="mov in recentMovements"
+                            :key="mov.id"
+                            class="p-3.5 sm:p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition"
+                        >
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span
+                                        class="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] border"
+                                        :class="getMovementBadgeClass(mov.movement_type)"
+                                    >
+                                        {{ getMovementLabel(mov.movement_type) }}
+                                    </span>
+                                    <span class="font-bold text-slate-800 text-sm">
+                                        {{ mov.quantity }} u.
+                                    </span>
+                                    <span class="text-slate-400">
+                                        ({{ mov.bottle_type }} {{ mov.bottle_condition === 'full' ? 'lleno' : 'vacío' }})
+                                    </span>
+                                    <span
+                                        v-if="mov.status !== 'accepted'"
+                                        class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
+                                    >
+                                        {{ mov.status }}
+                                    </span>
+                                </div>
+
+                                <p class="text-slate-600">
+                                    <span class="font-medium text-slate-500">Ruta:</span> {{ mov.origin }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 text-slate-400"></i> {{ mov.destination }}
+                                    <template v-if="mov.customer">
+                                        • <span class="font-medium text-slate-500">Cliente:</span> {{ mov.customer.nickname || mov.customer.name }} ({{ mov.customer.code }})
+                                    </template>
+                                </p>
+
+                                <p v-if="mov.difference_reason" class="text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Motivo de diferencia: {{ mov.difference_reason }}
+                                </p>
                             </div>
 
-                            <p class="text-slate-600">
-                                <span class="font-medium text-slate-500">Ruta:</span> {{ mov.origin }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 text-slate-400"></i> {{ mov.destination }}
-                                <template v-if="mov.customer">
-                                    • <span class="font-medium text-slate-500">Cliente:</span> {{ mov.customer.nickname || mov.customer.name }} ({{ mov.customer.code }})
-                                </template>
-                            </p>
-
-                            <p v-if="mov.difference_reason" class="text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 flex items-center gap-1.5">
-                                <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Motivo de diferencia: {{ mov.difference_reason }}
-                            </p>
-                        </div>
-
-                        <div class="text-right text-slate-400 shrink-0">
-                            <div>{{ formatDateTime(mov.created_at) }}</div>
-                            <div v-if="mov.confirmed_by_user" class="text-[11px] text-slate-500">
-                                Conf: {{ mov.confirmed_by_user.name }}
+                            <div class="text-right text-slate-400 shrink-0">
+                                <div>{{ formatDateTime(mov.created_at) }}</div>
+                                <div v-if="mov.confirmed_by_user" class="text-[11px] text-slate-500">
+                                    Conf: {{ mov.confirmed_by_user.name }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -542,6 +617,7 @@ const getMovementLabel = (type) => {
                             v-model.number="acceptForm.confirmed_quantity"
                             type="number"
                             min="0"
+                            :max="selectedTransfer.proposed_quantity || selectedTransfer.quantity"
                             class="w-full text-base font-bold text-slate-900 rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900"
                             required
                         />
@@ -550,21 +626,111 @@ const getMovementLabel = (type) => {
                         </p>
                     </div>
 
-                    <!-- Si la cantidad confirmada difiere de la propuesta, exigir motivo -->
-                    <div v-if="acceptForm.confirmed_quantity !== (selectedTransfer.proposed_quantity || selectedTransfer.quantity)">
-                        <label class="block text-xs font-bold text-amber-800 mb-1">
-                            Motivo de la diferencia * (Obligatorio)
-                        </label>
-                        <textarea
-                            v-model="acceptForm.difference_reason"
-                            rows="2"
-                            class="w-full text-xs rounded-xl border-amber-300 focus:border-amber-500 focus:ring-amber-500"
-                            placeholder="Ej. Faltaron 2 garrafones por envase golpeado o merma en planta"
-                            required
-                        ></textarea>
-                        <p v-if="acceptForm.errors.difference_reason" class="text-xs text-rose-600 mt-1">
-                            {{ acceptForm.errors.difference_reason }}
+                    <!-- Si la cantidad confirmada difiere de la propuesta, capturar desglose estructurado y motivo -->
+                    <div v-if="transferDifference > 0" class="space-y-3 p-3.5 bg-amber-50/60 rounded-xl border border-amber-200">
+                        <div class="flex items-center justify-between text-xs font-bold text-amber-900">
+                            <span>Diferencia no cargada al camión:</span>
+                            <span class="text-sm font-extrabold text-amber-800">{{ transferDifference }} unidades</span>
+                        </div>
+                        <p class="text-[11px] text-amber-800">
+                            Indica qué ocurrió físicamente con las unidades no recibidas para actualizar existencias y custodia de forma transparente:
                         </p>
+
+                        <!-- Controles estructurados de desglose -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">
+                                    Retenidos en Planta
+                                </label>
+                                <input
+                                    v-model.number="acceptForm.retained_in_plant_quantity"
+                                    type="number"
+                                    min="0"
+                                    :max="transferDifference"
+                                    class="w-full text-xs font-bold rounded-lg border-slate-300 focus:border-blue-700"
+                                />
+                                <span class="text-[10px] text-slate-400 mt-0.5 block">Quedan aptos en almacén</span>
+                            </div>
+
+                            <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                                <label class="block text-[11px] font-bold text-rose-700 mb-1">
+                                    Envases Dañados
+                                </label>
+                                <input
+                                    v-model.number="acceptForm.damaged_quantity"
+                                    type="number"
+                                    min="0"
+                                    :max="transferDifference"
+                                    class="w-full text-xs font-bold rounded-lg border-slate-300 focus:border-rose-500"
+                                />
+                                <span class="text-[10px] text-rose-500 mt-0.5 block">Genera incidencia</span>
+                            </div>
+
+                            <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-1">
+                                    Sin Localizar / Faltante
+                                </label>
+                                <input
+                                    v-model.number="acceptForm.unlocated_quantity"
+                                    type="number"
+                                    min="0"
+                                    :max="transferDifference"
+                                    class="w-full text-xs font-bold rounded-lg border-slate-300 focus:border-amber-600"
+                                />
+                                <span class="text-[10px] text-slate-400 mt-0.5 block">Pendiente de aclaración</span>
+                            </div>
+                        </div>
+
+                        <!-- Detalle de daño si aplica -->
+                        <div v-if="acceptForm.damaged_quantity > 0" class="space-y-2 p-2.5 bg-rose-50 rounded-lg border border-rose-200">
+                            <label class="block text-[11px] font-bold text-rose-800 uppercase">
+                                Tipo de daño detectado
+                            </label>
+                            <select
+                                v-model="acceptForm.damage_type"
+                                class="w-full text-xs rounded-lg border-rose-300 focus:border-rose-500"
+                            >
+                                <option v-for="dt in damageTypes" :key="dt.value" :value="dt.value">
+                                    {{ dt.label }}
+                                </option>
+                            </select>
+                            <input
+                                v-model="acceptForm.damage_notes"
+                                type="text"
+                                placeholder="Detalles de rotura / fuga..."
+                                class="w-full text-xs rounded-lg border-rose-300 focus:border-rose-500 mt-1"
+                            />
+                        </div>
+
+                        <!-- Indicador de cuadratura -->
+                        <div
+                            :class="[
+                                'p-2 rounded-lg text-xs font-semibold flex items-center justify-between',
+                                isAcceptBreakdownValid
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                            ]"
+                        >
+                            <span>Total desglosado: {{ acceptBreakdownTotal }} de {{ transferDifference }}</span>
+                            <span v-if="isAcceptBreakdownValid"><i class="fa-solid fa-circle-check text-emerald-600"></i> Cuadrado</span>
+                            <span v-else><i class="fa-solid fa-triangle-exclamation text-rose-600"></i> Descuadre</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-amber-800 mb-1">
+                                Motivo de la diferencia * (Obligatorio)
+                            </label>
+                            <textarea
+                                v-model="acceptForm.difference_reason"
+                                rows="2"
+                                class="w-full text-xs rounded-xl border-amber-300 focus:border-amber-500 focus:ring-amber-500"
+                                placeholder="Ej. Faltaron 2 garrafones por envase fisurado y 1 retenido en planta"
+                                required
+                            ></textarea>
+                            <p v-if="acceptForm.errors.difference_reason" class="text-xs text-rose-600 mt-1">
+                                {{ acceptForm.errors.difference_reason }}
+                            </p>
+                        </div>
                     </div>
 
                     <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -577,8 +743,8 @@ const getMovementLabel = (type) => {
                         </button>
                         <button
                             type="submit"
-                            :disabled="acceptForm.processing"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 active:scale-95 disabled:opacity-50 transition"
+                            :disabled="acceptForm.processing || !isAcceptBreakdownValid"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 active:scale-95 disabled:opacity-50 transition cursor-pointer"
                         >
                             {{ acceptForm.processing ? 'Confirmando...' : 'Aceptar y Sumar a Carga' }}
                         </button>
@@ -604,16 +770,85 @@ const getMovementLabel = (type) => {
                     </button>
                 </div>
 
+                <div class="text-xs text-slate-600 bg-rose-50 p-3 rounded-xl border border-rose-100 space-y-1">
+                    <p><span class="font-bold text-rose-900">Propuesta rechazada:</span> {{ selectedTransfer.proposed_quantity || selectedTransfer.quantity }} unidades</p>
+                    <p class="text-[11px] text-rose-700">Por defecto, las unidades permanecen en Planta y sus reservas se liberan de forma segura.</p>
+                </div>
+
                 <form @submit.prevent="submitRejectTransfer" class="space-y-4">
+                    <!-- Desglose físico de las unidades rechazadas -->
+                    <div class="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase">
+                            Situación física de los envases (Total: {{ selectedTransfer.proposed_quantity || selectedTransfer.quantity }})
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div class="bg-white p-2 rounded-lg border border-slate-200">
+                                <span class="text-[10px] font-bold text-slate-600 block">En Planta (Aptos)</span>
+                                <input
+                                    v-model.number="rejectForm.retained_in_plant_quantity"
+                                    type="number"
+                                    min="0"
+                                    class="w-full text-xs font-bold rounded border-slate-300 mt-1"
+                                />
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200">
+                                <span class="text-[10px] font-bold text-rose-700 block">Dañados</span>
+                                <input
+                                    v-model.number="rejectForm.damaged_quantity"
+                                    type="number"
+                                    min="0"
+                                    class="w-full text-xs font-bold rounded border-slate-300 mt-1"
+                                />
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200">
+                                <span class="text-[10px] font-bold text-slate-600 block">Sin localizar</span>
+                                <input
+                                    v-model.number="rejectForm.unlocated_quantity"
+                                    type="number"
+                                    min="0"
+                                    class="w-full text-xs font-bold rounded border-slate-300 mt-1"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Detalle de daño si aplica en rechazo -->
+                        <div v-if="rejectForm.damaged_quantity > 0" class="space-y-2 pt-2 border-t border-slate-200">
+                            <select
+                                v-model="rejectForm.damage_type"
+                                class="w-full text-xs rounded border-rose-300 focus:border-rose-500"
+                            >
+                                <option v-for="dt in damageTypes" :key="dt.value" :value="dt.value">
+                                    {{ dt.label }}
+                                </option>
+                            </select>
+                            <input
+                                v-model="rejectForm.damage_notes"
+                                type="text"
+                                placeholder="Detalles de envase dañado..."
+                                class="w-full text-xs rounded border-rose-300 focus:border-rose-500"
+                            />
+                        </div>
+
+                        <div
+                            :class="[
+                                'p-1.5 rounded text-[11px] font-semibold flex justify-between',
+                                isRejectBreakdownValid ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'
+                            ]"
+                        >
+                            <span>Desglosado: {{ rejectBreakdownTotal }} u.</span>
+                            <span v-if="!isRejectBreakdownValid">Debe sumar {{ selectedTransfer.proposed_quantity || selectedTransfer.quantity }} u.</span>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">
                             Motivo de rechazo * (Obligatorio)
                         </label>
                         <textarea
                             v-model="rejectForm.reason"
-                            rows="3"
+                            rows="2"
                             class="w-full text-xs rounded-xl border-slate-300 focus:border-rose-500 focus:ring-rose-500"
-                            placeholder="Ej. Carga no autorizada, no corresponde al turno o capacidad excedida"
+                            placeholder="Ej. Carga no solicitada, capacidad del camión llena o envases no listos"
                             required
                         ></textarea>
                         <p v-if="rejectForm.errors.reason" class="text-xs text-rose-600 mt-1">
@@ -631,8 +866,8 @@ const getMovementLabel = (type) => {
                         </button>
                         <button
                             type="submit"
-                            :disabled="rejectForm.processing"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition"
+                            :disabled="rejectForm.processing || !isRejectBreakdownValid"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition cursor-pointer"
                         >
                             {{ rejectForm.processing ? 'Rechazando...' : 'Confirmar Rechazo' }}
                         </button>
@@ -651,7 +886,7 @@ const getMovementLabel = (type) => {
             <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <i class="fa-solid fa-arrow-down text-slate-700"></i> Registrar Descarga a Planta
+                        <i class="fa-solid fa-arrow-down text-slate-700"></i> Entregar botellones a planta
                     </h3>
                     <button @click="closeUnloadModal" type="button" class="text-slate-400 hover:text-slate-700">
                         <i class="fa-solid fa-xmark"></i>
@@ -704,7 +939,7 @@ const getMovementLabel = (type) => {
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">Cantidad a descargar *</label>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Cantidad a entregar *</label>
                         <input
                             v-model.number="unloadForm.quantity"
                             type="number"
@@ -740,12 +975,15 @@ const getMovementLabel = (type) => {
                             :disabled="unloadForm.processing"
                             class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 active:scale-95 disabled:opacity-50 transition"
                         >
-                            {{ unloadForm.processing ? 'Registrando...' : 'Registrar Descarga' }}
+                            {{ unloadForm.processing ? 'Registrando...' : 'Registrar entrega a planta' }}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
+
+        <!-- Barra inferior de navegación móvil para Repartidor -->
+        <RepartidorBottomNav />
     </AuthenticatedLayout>
 </template>
 

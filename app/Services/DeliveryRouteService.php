@@ -58,6 +58,62 @@ class DeliveryRouteService
     }
 
     /**
+     * Inicia la jornada de reparto del único repartidor activo:
+     * - Si ya tiene una ruta en curso, la retorna.
+     * - Si tiene una ruta asignada para hoy (o pendiente), la inicia formalmente.
+     * - Si tiene una ruta en pausa por avería, la reanuda.
+     * - Si no tiene ninguna ruta activa para hoy, crea la ruta de hoy y la inicia automáticamente sin exigir asignación previa.
+     */
+    public function startOrCreateSoleDriverRoute(User $user): DeliveryRoute
+    {
+        $soleDriver = $this->resolveSoleActiveDriver();
+
+        if ($user->hasRole('Repartidor') && (int) $user->id !== (int) $soleDriver->id) {
+            throw new OrderBusinessRuleException(
+                "El repartidor indicado no coincide con el único repartidor activo ({$soleDriver->name}).",
+                'driver',
+                422
+            );
+        }
+
+        $driver = $soleDriver;
+
+        // 1. ¿Tiene ruta en curso?
+        $inProgress = DeliveryRoute::where('driver_user_id', $driver->id)
+            ->where('status', DeliveryRoute::STATUS_IN_PROGRESS)
+            ->orderBy('id', 'desc')
+            ->first();
+        if ($inProgress) {
+            return $inProgress;
+        }
+
+        // 2. ¿Tiene ruta asignada lista para iniciar?
+        $assigned = DeliveryRoute::where('driver_user_id', $driver->id)
+            ->where('status', DeliveryRoute::STATUS_ASSIGNED)
+            ->orderBy('id', 'desc')
+            ->first();
+        if ($assigned) {
+            return $this->startRoute($assigned, $driver);
+        }
+
+        // 3. ¿Tiene ruta en avería/incidencia?
+        $incident = DeliveryRoute::where('driver_user_id', $driver->id)
+            ->where('status', DeliveryRoute::STATUS_INCIDENT)
+            ->orderBy('id', 'desc')
+            ->first();
+        if ($incident) {
+            return $this->resumeRoute($incident, $driver);
+        }
+
+        // 4. Crear nueva ruta de hoy con pedidos confirmados disponibles y arrancar
+        $eligibleData = $this->getEligibleOrdersForRoute();
+        $orderIds = array_column($eligibleData, 'id');
+
+        $newRoute = $this->createRoute($user, $driver, now(), $orderIds, 'Jornada iniciada directamente por repartidor');
+        return $this->startRoute($newRoute, $driver);
+    }
+
+    /**
      * Crea una nueva hoja de ruta de reparto y asigna pedidos confirmados ordenados por parada.
      * Vincula automáticamente las rutas al único repartidor activo sin exigir selección manual.
      */
@@ -117,9 +173,11 @@ class DeliveryRouteService
                     }
                 }
 
-                if (!$order->isConfirmed() && !$order->isInProcess()) {
+                if (!$order->isPending() && !$order->isConfirmed() && !$order->isInProcess()) {
                     throw new OrderBusinessRuleException("El pedido {$order->folio} no se encuentra elegible para asignación a ruta.", 'status', 422);
                 }
+
+                $prevStatus = $order->status;
 
                 $order->update([
                     'delivery_route_id' => $route->id,
@@ -135,7 +193,7 @@ class DeliveryRouteService
 
                 OrderStatusHistory::create([
                     'order_id' => $order->id,
-                    'previous_status' => Order::STATUS_CONFIRMED,
+                    'previous_status' => $prevStatus,
                     'new_status' => Order::STATUS_IN_ROUTE,
                     'user_id' => $creator->id,
                     'reason' => "Pedido asignado a hoja de ruta {$folio}",
@@ -210,6 +268,67 @@ class DeliveryRouteService
             $route->refresh();
 
             return $route;
+        });
+    }
+
+    /**
+     * Incorpora de forma transaccional un pedido pendiente a una hoja de ruta activa.
+     */
+    public function addOrderToActiveRoute(DeliveryRoute $route, Order $order, User $actor): RouteStop
+    {
+        return DB::transaction(function () use ($route, $order, $actor) {
+            $lockedRoute = DeliveryRoute::lockForUpdate()->findOrFail($route->id);
+            if (!in_array($lockedRoute->status, [DeliveryRoute::STATUS_ASSIGNED, DeliveryRoute::STATUS_IN_PROGRESS], true)) {
+                throw new OrderBusinessRuleException('Solo se pueden incorporar pedidos a rutas asignadas o en curso.', 'route', 422);
+            }
+
+            $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
+
+            // Si ya pertenece a esta ruta, regresar la parada existente
+            $existingStop = RouteStop::where('delivery_route_id', $lockedRoute->id)
+                ->where('order_id', $lockedOrder->id)
+                ->first();
+            if ($existingStop) {
+                return $existingStop;
+            }
+
+            // Si está asignado a otra ruta activa, lanzar error
+            if ($lockedOrder->delivery_route_id && (int) $lockedOrder->delivery_route_id !== (int) $lockedRoute->id) {
+                $otherRoute = DeliveryRoute::find($lockedOrder->delivery_route_id);
+                if ($otherRoute && in_array($otherRoute->status, [DeliveryRoute::STATUS_ASSIGNED, DeliveryRoute::STATUS_IN_PROGRESS, DeliveryRoute::STATUS_INCIDENT], true)) {
+                    throw new OrderBusinessRuleException("El pedido {$lockedOrder->folio} ya está asignado a otra ruta activa ({$otherRoute->folio}).", 'order', 422);
+                }
+            }
+
+            if (!$lockedOrder->isPending() && !$lockedOrder->isConfirmed() && !$lockedOrder->isInProcess()) {
+                throw new OrderBusinessRuleException("El pedido {$lockedOrder->folio} no se encuentra elegible para asignación a ruta.", 'status', 422);
+            }
+
+            $prevStatus = $lockedOrder->status;
+            $nextStopNumber = ($lockedRoute->stops()->max('stop_number') ?? 0) + 1;
+
+            $lockedOrder->update([
+                'delivery_route_id' => $lockedRoute->id,
+                'status' => Order::STATUS_IN_ROUTE,
+            ]);
+
+            $stop = RouteStop::create([
+                'delivery_route_id' => $lockedRoute->id,
+                'order_id' => $lockedOrder->id,
+                'stop_number' => $nextStopNumber,
+                'status' => RouteStop::STATUS_PENDING,
+            ]);
+
+            OrderStatusHistory::create([
+                'order_id' => $lockedOrder->id,
+                'previous_status' => $prevStatus,
+                'new_status' => Order::STATUS_IN_ROUTE,
+                'user_id' => $actor->id,
+                'reason' => "Pedido incorporado a la hoja de ruta activa {$lockedRoute->folio}",
+                'created_at' => now(),
+            ]);
+
+            return $stop;
         });
     }
 
@@ -616,7 +735,7 @@ class DeliveryRouteService
         ])->pluck('id');
 
         $orders = Order::with(['customer', 'items'])
-            ->whereIn('status', [Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS])
+            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS])
             ->where(function ($q) use ($activeRouteIds) {
                 $q->whereNull('delivery_route_id')
                   ->orWhereNotIn('delivery_route_id', $activeRouteIds);

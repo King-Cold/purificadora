@@ -306,6 +306,10 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
     Route::get('/dashboard', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'dashboard'])
         ->name('dashboard');
 
+    // Pantalla unificada Reparto (Hub operativo móvil)
+    Route::get('/reparto', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'reparto'])
+        ->name('reparto');
+
     // Control de existencias del camión: "Mi Carga"
     Route::get('/mi-carga', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'index'])
         ->name('truck-load.index');
@@ -316,9 +320,27 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
     Route::post('/mi-carga/descargar', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'proposeUnload'])
         ->name('truck-load.propose-unload');
 
+    // Accesos operativos dedicados: Por recoger, Por entregar, Cobrar pendientes
+    Route::get('/por-recoger', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'porRecoger'])
+        ->name('collections.index');
+    Route::post('/orders/{order}/collect-fixed', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'collectFixed'])
+        ->name('orders.collect-fixed');
+    Route::get('/por-entregar', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'porEntregar'])
+        ->name('deliveries.index');
+    Route::get('/cobrar-pendientes', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'cobrarPendientes'])
+        ->name('debt.index');
+
+    // Incorporar y atender pedidos directamente a la ruta
+    Route::post('/orders/{order}/add-to-route', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'addToRoute'])
+        ->name('orders.add-to-route');
+    Route::post('/orders/{order}/serve', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'serveOrder'])
+        ->name('orders.serve');
+
     // Panel móvil "Mi Ruta"
     Route::get('/mi-ruta', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'index'])
         ->name('route.index');
+    Route::post('/routes/start-today', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'startTodayRoute'])
+        ->name('route.start-today');
     Route::post('/routes/{route}/start', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'start'])
         ->name('route.start');
     Route::post('/routes/{route}/breakdown', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'recordBreakdown'])
@@ -328,7 +350,9 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
     Route::post('/routes/{route}/complete', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'complete'])
         ->name('route.complete');
 
-    // Operaciones en ruta móvil
+    // Directorio y alta rápida de clientes
+    Route::get('/clientes', [\App\Http\Controllers\Repartidor\RouteCustomerController::class, 'index'])
+        ->name('customers.index');
     Route::get('/clientes/nuevo', [\App\Http\Controllers\Repartidor\RouteCustomerController::class, 'create'])
         ->name('customers.create');
     Route::post('/clientes/nuevo', [\App\Http\Controllers\Repartidor\RouteCustomerController::class, 'store'])
@@ -357,11 +381,31 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
         ->name('stops.fail');
 });
 
-// Panel 4: Operador Planta
-Route::middleware(['auth', 'role:Operador Planta'])->group(function () {
-    Route::get('/planta/dashboard', function () {
-        return Inertia::render('Planta/Dashboard');
-    })->name('planta.dashboard');
+// Panel 4: Operador Planta & Supervisión de Planta
+Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])->prefix('planta')->name('planta.')->group(function () {
+    Route::get('/dashboard', [\App\Http\Controllers\Planta\PlantDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/recepcion', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'index'])->name('reception.index');
+    Route::post('/recepcion/fijos', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmFixed'])->name('reception.confirm-fixed');
+    Route::post('/recepcion/cambios', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmExchange'])->name('reception.confirm-exchange');
+    Route::get('/existencias', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'index'])->name('inventory.index');
+    Route::post('/conteo-inicial', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'storeInitialCount'])->name('inventory.initial-count');
+    Route::post('/incidencias', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'storeIncident'])->name('inventory.incidents.store');
+    Route::post('/produccion/iniciar', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'startWashing'])->name('inventory.production.start');
+    Route::post('/produccion/finalizar', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'finishWashing'])->name('inventory.production.finish');
+
+    // Mesa de trabajo: Lavado y Llenado
+    Route::get('/produccion', [\App\Http\Controllers\Planta\PlantProductionController::class, 'index'])->name('production.index');
+    Route::post('/produccion/fijos/iniciar', [\App\Http\Controllers\Planta\PlantProductionController::class, 'startFixed'])->name('production.fixed.start');
+    Route::post('/produccion/fijos/finalizar', [\App\Http\Controllers\Planta\PlantProductionController::class, 'finishFixed'])->name('production.fixed.finish');
+    Route::post('/produccion/fijos/incidencia', [\App\Http\Controllers\Planta\PlantProductionController::class, 'damageFixed'])->name('production.fixed.damage');
+    Route::post('/produccion/cambios/lote/iniciar', [\App\Http\Controllers\Planta\PlantProductionController::class, 'startExchangeBatch'])->name('production.exchange.start');
+    Route::post('/produccion/cambios/lote/finalizar', [\App\Http\Controllers\Planta\PlantProductionController::class, 'finishExchangeBatch'])->name('production.exchange.finish');
+    Route::post('/produccion/cambios/lote/incidencia', [\App\Http\Controllers\Planta\PlantProductionController::class, 'damageExchangeBatch'])->name('production.exchange.damage');
+
+    // Cargas al Repartidor
+    Route::get('/cargas', [\App\Http\Controllers\Planta\PlantLoadController::class, 'index'])->name('loads.index');
+    Route::post('/cargas/proponer', [\App\Http\Controllers\Planta\PlantLoadController::class, 'store'])->name('loads.store');
+    Route::post('/cargas/{movement}/retirar', [\App\Http\Controllers\Planta\PlantLoadController::class, 'withdraw'])->name('loads.withdraw');
 });
 
 // Rutas de gestión de perfil

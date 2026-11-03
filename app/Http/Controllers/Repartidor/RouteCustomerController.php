@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\DeliveryRoute;
 use App\Services\CustomerCodeGenerator;
+use App\Services\DebtAndCreditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,6 +14,57 @@ use Inertia\Response;
 
 class RouteCustomerController extends Controller
 {
+    public function __construct(
+        protected DebtAndCreditService $debtService
+    ) {}
+
+    /**
+     * Directorio de clientes accesible para el Repartidor con búsqueda y semáforo.
+     */
+    public function index(Request $request): Response
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $query = Customer::with('address');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('nickname', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $customers = $query->orderBy('id', 'desc')->paginate(20)->withQueryString();
+
+        $formattedCustomers = $customers->through(function ($cust) {
+            $tl = $this->debtService->getTrafficLight($cust);
+            $debtAmount = $this->debtService->getPendingDebtAmount($cust);
+            $debtBottles = $this->debtService->getPendingDebtBottles($cust);
+
+            return [
+                'id' => $cust->id,
+                'code' => $cust->code,
+                'nickname' => $cust->nickname,
+                'name' => $cust->name,
+                'phone' => $cust->phone,
+                'zone' => $cust->address?->zone ?? 'Sin zona',
+                'address_summary' => $cust->address ? ($cust->address->street . ' #' . $cust->address->exterior_number . ', ' . $cust->address->neighborhood) : 'Sin dirección registrada',
+                'traffic_light' => $tl,
+                'pending_debt_amount' => $debtAmount,
+                'pending_debt_bottles' => $debtBottles,
+            ];
+        });
+
+        return Inertia::render('Repartidor/Customers/Index', [
+            'customers' => $formattedCustomers,
+            'filters' => [
+                'search' => $search,
+            ],
+        ]);
+    }
+
     /**
      * Pantalla para agregar un cliente nuevo directamente desde la sesión de Repartidor.
      * Accesible en cualquier momento, con o sin ruta iniciada y sin requerir pedido.

@@ -204,33 +204,33 @@ class OrderService
         return DB::transaction(function () use ($order, $user, $trimmedReason) {
             $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
+            // Validar pertenencia y estado si quien cancela es Cliente
+            if ($user->hasRole('Cliente')) {
+                if ($lockedOrder->status === Order::STATUS_CONFIRMED) {
+                    throw new OrderBusinessRuleException('El cliente no puede cancelar pedidos que ya han sido confirmados por administración.', 'status', 403);
+                }
+
+                if (!in_array($lockedOrder->status, [Order::STATUS_PENDING, Order::STATUS_IN_ROUTE], true)) {
+                    throw new OrderBusinessRuleException("No se puede cancelar un pedido en estado '{$lockedOrder->status}'.", 'status', 403);
+                }
+            }
+
             // El estado cancelado es terminal
             if ($lockedOrder->isCancelled()) {
                 throw new InvalidOrderTransitionException('El pedido ya se encuentra cancelado (estado terminal).');
             }
 
-            // Regla confirmada Sprint 3: si ya se recogieron envases fijos, se bloquea la cancelación normal
-            if ($lockedOrder->hasCollectedFixedCustody()) {
+            // Regla Sprint 3: Si ya comenzó la atención física (entregas, fijos bajo custodia o pagos), se bloquea la cancelación ordinaria
+            if ($lockedOrder->hasCollectedFixedCustody() || $lockedOrder->hasStartedPhysicalAttention()) {
                 throw new OrderBusinessRuleException(
-                    'No se puede cancelar el pedido normalmente porque ya se han recogido envases fijos del cliente. Registre una incidencia para coordinar su devolución.',
+                    'No se puede cancelar el pedido normalmente porque ya se han recogido envases fijos o ha iniciado la atención física del pedido.',
                     'custody',
                     422
                 );
             }
 
-            // Si el pedido ya estaba Confirmado: únicamente Administrador puede cancelarlo
-            if ($lockedOrder->isConfirmed()) {
-                if ($user->hasRole('Cliente')) {
-                    throw new OrderBusinessRuleException('El cliente no puede cancelar pedidos que ya han sido confirmados.', 'status', 403);
-                }
-
-                if (!$user->hasRole('Administrador') && !$user->hasRole('Super Admin') && !$user->can('orders.cancel')) {
-                    throw new OrderBusinessRuleException('No tienes permisos para cancelar pedidos confirmados.', 'authorization', 403);
-                }
-            }
-
-            // Estados operativos más avanzados (en ruta, en proceso, entregado, incidencia)
-            if (!$lockedOrder->isPending() && !$lockedOrder->isConfirmed()) {
+            // Validar estados cancelables (pendiente, confirmado o en ruta sin atención física)
+            if (!in_array($lockedOrder->status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE], true)) {
                 throw new OrderBusinessRuleException(
                     "No se puede cancelar un pedido en estado '{$lockedOrder->status}'.",
                     'status',
@@ -238,10 +238,20 @@ class OrderService
                 );
             }
 
+            // Si el pedido tiene parada pendiente asociada en hoja de ruta, removerla limpiamente
+            if ($lockedOrder->delivery_route_id) {
+                \App\Models\RouteStop::where('order_id', $lockedOrder->id)
+                    ->where('status', \App\Models\RouteStop::STATUS_PENDING)
+                    ->delete();
+            }
+
             $previousStatus = $lockedOrder->status;
 
-            // Transición a Cancelado
-            $lockedOrder->update(['status' => Order::STATUS_CANCELLED]);
+            // Transición a Cancelado y desvinculación de ruta
+            $lockedOrder->update([
+                'status' => Order::STATUS_CANCELLED,
+                'delivery_route_id' => null,
+            ]);
 
             // Registro en historial
             OrderStatusHistory::create([

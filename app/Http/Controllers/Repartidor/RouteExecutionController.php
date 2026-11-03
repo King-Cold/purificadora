@@ -8,10 +8,14 @@ use App\Models\BottleCustodyMovement;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryRoute;
+use App\Models\Order;
+use App\Models\OrderCharge;
 use App\Models\OrderItem;
 use App\Models\RouteStop;
 use App\Services\DebtAndCreditService;
 use App\Services\DeliveryRouteService;
+use App\Services\OrderCustodyService;
+use App\Services\OrderService;
 use App\Services\SettingService;
 use App\Services\TruckInventoryService;
 use App\Services\WeeklyPromotionService;
@@ -28,7 +32,9 @@ class RouteExecutionController extends Controller
         protected DebtAndCreditService $debtService,
         protected WeeklyPromotionService $promotionService,
         protected TruckInventoryService $truckInventoryService,
-        protected SettingService $settingService
+        protected SettingService $settingService,
+        protected OrderCustodyService $custodyService,
+        protected OrderService $orderService
     ) {}
 
     /**
@@ -191,6 +197,23 @@ class RouteExecutionController extends Controller
         $now = Carbon::now('America/Merida');
         $formattedDate = ucfirst($now->translatedFormat('l, j \d\e F \d\e Y'));
 
+        // Contadores operativos en vivo
+        $collectionsCount = Order::whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+            ->whereHas('items', fn ($q) => $q->where('type', OrderItem::TYPE_FIXED)->whereRaw('(quantity - collected_quantity - cancelled_quantity) > 0'))
+            ->count();
+
+        $deliveriesCount = Order::whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+            ->where(function ($q) {
+                $q->whereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_EXCHANGE)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'))
+                  ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->where('prepared_quantity', '>', 0));
+            })->count();
+
+        $pendingDebtCount = OrderCharge::whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID])
+            ->distinct('customer_id')
+            ->count('customer_id');
+
+        $pendingTransfersCount = count($truckState['pending_transfers'] ?? []);
+
         return Inertia::render('Repartidor/Dashboard', [
             'driver' => [
                 'id' => $user->id,
@@ -199,11 +222,18 @@ class RouteExecutionController extends Controller
             'formattedDate' => $formattedDate,
             'activeRoute' => $formattedActiveRoute,
             'availableRoutes' => $availableRoutes,
+            'counters' => [
+                'por_recoger' => $collectionsCount,
+                'por_entregar' => $deliveriesCount,
+                'cobrar_pendientes' => $pendingDebtCount,
+                'transferencias_pendientes' => $pendingTransfersCount,
+            ],
             'truckInventory' => [
                 'exchange_full_available' => (int) $truckState['truck_inventory']['exchange_full_available'],
                 'exchange_empty_collected' => (int) $truckState['truck_inventory']['exchange_empty_collected'],
                 'total_fixed_in_truck' => $totalFixedInTruck,
                 'fixed_custody' => $fixedCustody,
+                'pending_transfers_count' => $pendingTransfersCount,
             ],
         ]);
     }
@@ -733,6 +763,811 @@ class RouteExecutionController extends Controller
             return redirect()->route('repartidor.route.index')->with('success', "Servicio directo registrado exitosamente (Folio {$order->folio}).");
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['direct' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Pantalla móvil "Por Recoger": Lista pedidos confirmados con fijos pendientes de recoger.
+     */
+    public function porRecoger(Request $request): Response
+    {
+        $user = $request->user();
+
+        // Ruta activa del chofer
+        $activeRoute = DeliveryRoute::with('stops')
+            ->where('driver_user_id', $user->id)
+            ->whereIn('status', [DeliveryRoute::STATUS_IN_PROGRESS, DeliveryRoute::STATUS_INCIDENT, DeliveryRoute::STATUS_ASSIGNED])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        // Pedidos pendientes / confirmados / en ruta / en proceso con botellones fijos pendientes de recolectar
+        $orders = Order::with(['customer.address', 'items', 'deliveryRoute.stops'])
+            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+            ->whereHas('items', function ($q) {
+                $q->where('type', OrderItem::TYPE_FIXED)
+                  ->whereRaw('(quantity - collected_quantity - cancelled_quantity) > 0');
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $activeRouteStopsByOrderId = $activeRoute ? $activeRoute->stops->keyBy('order_id') : collect();
+
+        $canonicalZones = CustomerAddress::ZONES;
+        $zoneCounts = ['all' => $orders->count(), 'none' => 0];
+        foreach (array_keys($canonicalZones) as $zk) {
+            $zoneCounts[$zk] = 0;
+        }
+
+        $formattedOrders = $orders->map(function ($order) use ($activeRoute, $activeRouteStopsByOrderId, &$zoneCounts) {
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+            $pendingToCollect = max(0, (int) ($fixedItem?->quantity ?? 0) - (int) ($fixedItem?->collected_quantity ?? 0) - (int) ($fixedItem?->cancelled_quantity ?? 0));
+
+            $customer = $order->customer;
+
+            // Domicilio o sin registrar
+            $hasAddress = !empty($order->delivery_street) || !empty($customer?->address?->street);
+            $street = $order->delivery_street ?: $customer?->address?->street;
+            $ext = $order->delivery_exterior_number ?: $customer?->address?->exterior_number;
+            $col = $order->delivery_neighborhood ?: $customer?->address?->neighborhood;
+            $addressSummary = $hasAddress
+                ? ($street . ($ext ? ' #' . $ext : '') . ($col ? ', ' . $col : ''))
+                : 'Sin domicilio registrado (Servicio al paso)';
+
+            // Normalización de zona
+            $rawZone = $order->delivery_zone ?: $customer?->address?->delivery_zone;
+            $zoneKey = 'none';
+            $zoneLabel = 'Sin zona';
+            if (!empty($rawZone)) {
+                $norm = strtolower(trim($rawZone));
+                if (in_array($norm, ['north', 'norte'])) {
+                    $zoneKey = 'north';
+                    $zoneLabel = 'Norte';
+                } elseif (in_array($norm, ['south', 'sur'])) {
+                    $zoneKey = 'south';
+                    $zoneLabel = 'Sur';
+                } elseif (in_array($norm, ['east', 'este'])) {
+                    $zoneKey = 'east';
+                    $zoneLabel = 'Este';
+                } elseif (in_array($norm, ['west', 'oeste'])) {
+                    $zoneKey = 'west';
+                    $zoneLabel = 'Oeste';
+                }
+            }
+
+            if (isset($zoneCounts[$zoneKey])) {
+                $zoneCounts[$zoneKey]++;
+            } else {
+                $zoneCounts['none']++;
+            }
+
+            // Asignación a ruta
+            $activeStop = $activeRouteStopsByOrderId->get($order->id);
+            $isAssignedToCurrentRoute = $activeStop !== null;
+            $isAssignedOtherRoute = !$isAssignedToCurrentRoute && $order->delivery_route_id !== null;
+
+            $phone = $order->recipient_phone ?: $customer?->phone;
+
+            return [
+                'id' => $order->id,
+                'folio' => $order->folio,
+                'status' => $order->status,
+                'status_label' => $order->status_label,
+                'customer' => [
+                    'id' => $customer?->id,
+                    'code' => $customer?->code ?? "CLI-{$customer?->id}",
+                    'name' => $customer?->name,
+                    'nickname' => $customer?->nickname,
+                    'phone' => $phone,
+                    'has_phone' => !empty($phone),
+                ],
+                'fixed_quantity_pending' => $pendingToCollect,
+                'total_fixed_in_order' => (int) ($fixedItem?->quantity ?? 0),
+                'address_summary' => $addressSummary,
+                'delivery_zone' => $zoneLabel,
+                'delivery_zone_key' => $zoneKey,
+                'is_assigned_to_current_route' => $isAssignedToCurrentRoute,
+                'is_assigned_to_other_route' => $isAssignedOtherRoute,
+                'assigned_route_folio' => $order->deliveryRoute?->folio,
+                'stop_id' => $activeStop?->id,
+                'stop_number' => $activeStop?->stop_number,
+                'stop_status' => $activeStop?->status,
+            ];
+        });
+
+        return Inertia::render('Repartidor/Collections/Index', [
+            'orders' => $formattedOrders,
+            'zoneCounts' => $zoneCounts,
+            'activeRoute' => $activeRoute ? [
+                'id' => $activeRoute->id,
+                'folio' => $activeRoute->folio,
+                'status' => $activeRoute->status,
+                'is_in_progress' => $activeRoute->status === DeliveryRoute::STATUS_IN_PROGRESS,
+                'is_assigned' => $activeRoute->status === DeliveryRoute::STATUS_ASSIGNED,
+                'is_incident' => $activeRoute->status === DeliveryRoute::STATUS_INCIDENT,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * Confirma la recolección física de botellones fijos vacíos.
+     */
+    public function collectFixed(Order $order, Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $fixedItem = $order->items()->where('type', OrderItem::TYPE_FIXED)->firstOrFail();
+        $pendingToCollect = max(0, (int) $fixedItem->quantity - (int) $fixedItem->collected_quantity - (int) $fixedItem->cancelled_quantity);
+
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', "max:{$pendingToCollect}"],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->custodyService->recordFixedBottlesCollected(
+                $order,
+                (int) $validated['quantity'],
+                $user,
+                $validated['notes'] ?? 'Recolección física confirmada por repartidor en ruta'
+            );
+
+            // Si el pedido está asignado como parada en la ruta activa, marcar parada completada si no restan intercambios
+            $activeRoute = DeliveryRoute::where('driver_user_id', $user->id)
+                ->where('status', DeliveryRoute::STATUS_IN_PROGRESS)
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($activeRoute) {
+                $stop = RouteStop::where('delivery_route_id', $activeRoute->id)
+                    ->where('order_id', $order->id)
+                    ->where('status', RouteStop::STATUS_PENDING)
+                    ->first();
+
+                if ($stop) {
+                    $hasPendingExchange = $order->items()->where('type', OrderItem::TYPE_EXCHANGE)
+                        ->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0')
+                        ->exists();
+
+                    if (!$hasPendingExchange) {
+                        $stop->update([
+                            'status' => RouteStop::STATUS_COMPLETED,
+                            'completed_at' => now(),
+                            'notes' => 'Recolección de fijos concluida exitosamente',
+                        ]);
+                    }
+                }
+            }
+
+            return back()->with('success', "Se recolectaron exitosamente {$validated['quantity']} botellón(es) fijos. En camión rumbo a planta.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['collect' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Pantalla móvil "Por Entregar": Muestra pedidos de cambio y fijos preparados para devolución.
+     */
+    public function porEntregar(Request $request): Response
+    {
+        $user = $request->user();
+
+        // 1. Inventario del camión
+        $truckState = $this->truckInventoryService->getTruckInventoryState($user);
+        $exchangeAvailable = (int) $truckState['truck_inventory']['exchange_full_available'];
+
+        // 2. Ruta activa
+        $activeRoute = DeliveryRoute::with('stops')
+            ->where('driver_user_id', $user->id)
+            ->whereIn('status', [DeliveryRoute::STATUS_IN_PROGRESS, DeliveryRoute::STATUS_INCIDENT, DeliveryRoute::STATUS_ASSIGNED])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $activeRouteStopsByOrderId = $activeRoute ? $activeRoute->stops->keyBy('order_id') : collect();
+
+        // 3. Pedidos con entregas pendientes
+        $orders = Order::with(['customer.address', 'items', 'deliveryRoute.stops'])
+            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+            ->where(function ($q) {
+                $q->whereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_EXCHANGE)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'))
+                  ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'));
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $canonicalZones = CustomerAddress::ZONES;
+        $zoneCounts = ['all' => $orders->count(), 'none' => 0];
+        foreach (array_keys($canonicalZones) as $zk) {
+            $zoneCounts[$zk] = 0;
+        }
+
+        $formattedDeliveries = $orders->map(function ($order) use ($activeRoute, $activeRouteStopsByOrderId, $exchangeAvailable, &$zoneCounts) {
+            $customer = $order->customer;
+            $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+
+            $exchangeQty = max(0, (int) ($exchangeItem?->quantity ?? 0) - (int) ($exchangeItem?->delivered_quantity ?? 0) - (int) ($exchangeItem?->cancelled_quantity ?? 0));
+            $fixedQty = max(0, (int) ($fixedItem?->quantity ?? 0) - (int) ($fixedItem?->delivered_quantity ?? 0) - (int) ($fixedItem?->cancelled_quantity ?? 0));
+            $fixedPrepared = (int) ($fixedItem?->prepared_quantity ?? 0);
+
+            // Ubicación
+            $hasAddress = !empty($order->delivery_street) || !empty($customer?->address?->street);
+            $street = $order->delivery_street ?: $customer?->address?->street;
+            $ext = $order->delivery_exterior_number ?: $customer?->address?->exterior_number;
+            $col = $order->delivery_neighborhood ?: $customer?->address?->neighborhood;
+            $addressSummary = $hasAddress
+                ? ($street . ($ext ? ' #' . $ext : '') . ($col ? ', ' . $col : ''))
+                : 'Sin domicilio registrado';
+
+            // Normalización de zona
+            $rawZone = $order->delivery_zone ?: $customer?->address?->delivery_zone;
+            $zoneKey = 'none';
+            $zoneLabel = 'Sin zona';
+            if (!empty($rawZone)) {
+                $norm = strtolower(trim($rawZone));
+                if (in_array($norm, ['north', 'norte'])) {
+                    $zoneKey = 'north';
+                    $zoneLabel = 'Norte';
+                } elseif (in_array($norm, ['south', 'sur'])) {
+                    $zoneKey = 'south';
+                    $zoneLabel = 'Sur';
+                } elseif (in_array($norm, ['east', 'este'])) {
+                    $zoneKey = 'east';
+                    $zoneLabel = 'Este';
+                } elseif (in_array($norm, ['west', 'oeste'])) {
+                    $zoneKey = 'west';
+                    $zoneLabel = 'Oeste';
+                }
+            }
+
+            if (isset($zoneCounts[$zoneKey])) {
+                $zoneCounts[$zoneKey]++;
+            } else {
+                $zoneCounts['none']++;
+            }
+
+            // Semáforo de deuda
+            $trafficLight = $customer ? $this->debtService->getTrafficLight($customer) : null;
+
+            // Evaluación de disponibilidad y bloqueos
+            $isBlocked = false;
+            $blockReason = null;
+
+            if ($exchangeQty > 0 && $exchangeAvailable < $exchangeQty) {
+                $isBlocked = true;
+                $blockReason = "Falta carga en camión: Requiere {$exchangeQty} garrafón(es) de cambio, pero hay {$exchangeAvailable} disponibles.";
+            }
+
+            if ($fixedQty > 0 && $fixedPrepared < $fixedQty) {
+                $isBlocked = true;
+                $blockReason = "En preparación en Planta: {$fixedQty} garrafón(es) fijos se encuentran en proceso de lavado/rellenado y aún no han sido autorizados para devolución.";
+            }
+
+            $activeStop = $activeRouteStopsByOrderId->get($order->id);
+            $isAssignedToCurrentRoute = $activeStop !== null;
+
+            $phone = $order->recipient_phone ?: $customer?->phone;
+
+            return [
+                'id' => $order->id,
+                'folio' => $order->folio,
+                'status' => $order->status,
+                'status_label' => $order->status_label,
+                'customer' => [
+                    'id' => $customer?->id,
+                    'code' => $customer?->code ?? "CLI-{$customer?->id}",
+                    'name' => $customer?->name,
+                    'nickname' => $customer?->nickname,
+                    'phone' => $phone,
+                    'has_phone' => !empty($phone),
+                ],
+                'exchange_quantity' => $exchangeQty,
+                'fixed_quantity' => $fixedQty,
+                'fixed_prepared' => $fixedPrepared,
+                'total_bottles_to_deliver' => $exchangeQty + $fixedQty,
+                'address_summary' => $addressSummary,
+                'delivery_zone' => $zoneLabel,
+                'delivery_zone_key' => $zoneKey,
+                'traffic_light' => $trafficLight,
+                'is_blocked' => $isBlocked,
+                'block_reason' => $blockReason,
+                'is_assigned_to_current_route' => $isAssignedToCurrentRoute,
+                'stop_id' => $activeStop?->id,
+                'stop_number' => $activeStop?->stop_number,
+                'stop_status' => $activeStop?->status,
+            ];
+        });
+
+        return Inertia::render('Repartidor/Deliveries/Index', [
+            'deliveries' => $formattedDeliveries,
+            'zoneCounts' => $zoneCounts,
+            'truckExchangeAvailable' => $exchangeAvailable,
+            'activeRoute' => $activeRoute ? [
+                'id' => $activeRoute->id,
+                'folio' => $activeRoute->folio,
+                'status' => $activeRoute->status,
+                'is_in_progress' => $activeRoute->status === DeliveryRoute::STATUS_IN_PROGRESS,
+                'is_assigned' => $activeRoute->status === DeliveryRoute::STATUS_ASSIGNED,
+                'is_incident' => $activeRoute->status === DeliveryRoute::STATUS_INCIDENT,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * Pantalla móvil "Cobrar Pendientes": Acceso independiente para liquidar saldos de clientes.
+     */
+    public function cobrarPendientes(Request $request): Response
+    {
+        $searchTerm = trim((string) $request->query('q', ''));
+
+        $customersQuery = Customer::query()
+            ->whereHas('charges', function ($q) {
+                $q->whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID]);
+            })
+            ->with(['charges' => function ($q) {
+                $q->whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID])
+                  ->orderBy('created_at', 'asc');
+            }, 'address']);
+
+        if (!empty($searchTerm)) {
+            $customersQuery->where(function ($q) use ($searchTerm) {
+                $q->where('code', 'like', "%{$searchTerm}%")
+                  ->orWhere('name', 'like', "%{$searchTerm}%")
+                  ->orWhere('nickname', 'like', "%{$searchTerm}%")
+                  ->orWhere('phone', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        $customersWithDebt = $customersQuery->limit(25)->get()->map(function ($cust) {
+            $pendingBottles = $this->debtService->getPendingDebtBottles($cust);
+            $pendingAmount = $this->debtService->getPendingDebtAmount($cust);
+            $trafficLight = $this->debtService->getTrafficLight($cust);
+            $promo = $this->promotionService->getWeeklyProgress($cust);
+
+            $chargesDetail = $cust->charges->map(function ($charge) {
+                $unitPrice = (float) $charge->unit_price;
+                $alreadyPaidUnits = $unitPrice > 0 ? (int) floor((float) $charge->paid_amount / $unitPrice) : 0;
+                $unpaidUnits = max(0, (int) $charge->quantity_delivered - $alreadyPaidUnits);
+
+                return [
+                    'id' => $charge->id,
+                    'order_folio' => $charge->order?->folio ?? "PED-{$charge->order_id}",
+                    'unit_price' => $unitPrice,
+                    'quantity_delivered' => (int) $charge->quantity_delivered,
+                    'unpaid_units' => $unpaidUnits,
+                    'remaining_amount' => (float) $charge->remainingAmount(),
+                    'date' => $charge->created_at?->format('d/m/Y'),
+                ];
+            })->values();
+
+            return [
+                'id' => $cust->id,
+                'code' => $cust->code ?? "CLI-{$cust->id}",
+                'name' => $cust->name,
+                'nickname' => $cust->nickname,
+                'phone' => $cust->phone,
+                'pending_bottles' => $pendingBottles,
+                'pending_amount' => $pendingAmount,
+                'traffic_light' => $trafficLight,
+                'weekly_promo' => $promo,
+                'charges' => $chargesDetail,
+            ];
+        });
+
+        $selectedCustomerId = $request->query('customer_id');
+        $selectedCustomer = null;
+        if ($selectedCustomerId) {
+            $selectedCustomer = $customersWithDebt->firstWhere('id', (int) $selectedCustomerId);
+            if (!$selectedCustomer) {
+                $single = Customer::with(['charges' => function ($q) {
+                    $q->whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID])
+                      ->orderBy('created_at', 'asc');
+                }])->find($selectedCustomerId);
+
+                if ($single) {
+                    $pendingBottles = $this->debtService->getPendingDebtBottles($single);
+                    $pendingAmount = $this->debtService->getPendingDebtAmount($single);
+                    $trafficLight = $this->debtService->getTrafficLight($single);
+                    $promo = $this->promotionService->getWeeklyProgress($single);
+
+                    $selectedCustomer = [
+                        'id' => $single->id,
+                        'code' => $single->code ?? "CLI-{$single->id}",
+                        'name' => $single->name,
+                        'nickname' => $single->nickname,
+                        'phone' => $single->phone,
+                        'pending_bottles' => $pendingBottles,
+                        'pending_amount' => $pendingAmount,
+                        'traffic_light' => $trafficLight,
+                        'weekly_promo' => $promo,
+                        'charges' => $single->charges->map(fn ($c) => [
+                            'id' => $c->id,
+                            'order_folio' => $c->order?->folio ?? "PED-{$c->order_id}",
+                            'unit_price' => (float) $c->unit_price,
+                            'quantity_delivered' => (int) $c->quantity_delivered,
+                            'unpaid_units' => max(0, (int) $c->quantity_delivered - (int) floor((float) $c->paid_amount / max(0.01, (float) $c->unit_price))),
+                            'remaining_amount' => (float) $c->remainingAmount(),
+                            'date' => $c->created_at?->format('d/m/Y'),
+                        ])->values(),
+                    ];
+                }
+            }
+        }
+
+        return Inertia::render('Repartidor/Debt/Index', [
+            'customersWithDebt' => $customersWithDebt,
+            'selectedCustomer' => $selectedCustomer,
+            'searchTerm' => $searchTerm,
+        ]);
+    }
+
+    /**
+     * Inicia explícitamente el recorrido del repartidor único activo.
+     */
+    public function startTodayRoute(Request $request): RedirectResponse
+    {
+        try {
+            $route = $this->routeService->startOrCreateSoleDriverRoute($request->user());
+            return redirect()->route('repartidor.route.index')->with('success', "¡Jornada de reparto iniciada con la hoja de ruta {$route->folio}!");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['route' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Pantalla unificada: REPARTO
+     * Reúne las 5 pestañas operativas (pendientes, por_recoger, por_entregar, en_proceso, atendidos)
+     * y el filtrado por zonas en una sola vista móvil optimizada.
+     */
+    public function reparto(Request $request): Response
+    {
+        $user = $request->user();
+        $activeTab = $request->query('tab', 'pendientes');
+        if (!in_array($activeTab, ['pendientes', 'por_recoger', 'por_entregar', 'en_proceso', 'atendidos'], true)) {
+            $activeTab = 'pendientes';
+        }
+
+        $activeZone = $request->query('zone', 'all');
+        if (!in_array($activeZone, ['all', 'north', 'south', 'east', 'west', 'none'], true)) {
+            $activeZone = 'all';
+        }
+
+        // 1. Resolver chofer único y ruta activa
+        $driver = $this->routeService->resolveSoleActiveDriver();
+        $activeRoute = DeliveryRoute::with([
+            'stops' => fn ($q) => $q->orderBy('stop_number', 'asc')->with([
+                'order.customer',
+                'order.items',
+                'order.charges',
+            ]),
+        ])
+            ->where('driver_user_id', $driver->id)
+            ->whereIn('status', [
+                DeliveryRoute::STATUS_ASSIGNED,
+                DeliveryRoute::STATUS_IN_PROGRESS,
+                DeliveryRoute::STATUS_INCIDENT,
+            ])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        // Si no hay ruta activa, buscar la última de hoy
+        $completedTodayRoute = null;
+        if (!$activeRoute) {
+            $completedTodayRoute = DeliveryRoute::with([
+                'stops' => fn ($q) => $q->orderBy('stop_number', 'asc')->with([
+                    'order.customer',
+                    'order.items',
+                ]),
+            ])
+                ->where('driver_user_id', $driver->id)
+                ->where('status', DeliveryRoute::STATUS_COMPLETED)
+                ->whereDate('date', now()->toDateString())
+                ->orderBy('id', 'desc')
+                ->first();
+        }
+
+        // Estado de la jornada
+        $journeyStatus = 'sin_iniciar';
+        $journeyStatusLabel = 'Sin iniciar';
+        if ($activeRoute) {
+            if ($activeRoute->status === DeliveryRoute::STATUS_IN_PROGRESS) {
+                $journeyStatus = 'en_ruta';
+                $journeyStatusLabel = 'En ruta';
+            } elseif ($activeRoute->status === DeliveryRoute::STATUS_INCIDENT) {
+                $journeyStatus = 'detenida';
+                $journeyStatusLabel = 'Detenida por avería';
+            } elseif ($activeRoute->status === DeliveryRoute::STATUS_ASSIGNED) {
+                $journeyStatus = 'sin_iniciar';
+                $journeyStatusLabel = 'Ruta asignada (lista para iniciar)';
+            }
+        } elseif ($completedTodayRoute) {
+            $journeyStatus = 'cerrada';
+            $journeyStatusLabel = 'Jornada cerrada';
+        }
+
+        // 2. Inventario del camión
+        $truckState = $this->truckInventoryService->getTruckInventoryState($driver);
+        $exchangeAvailable = (int) ($truckState['exchange_full_available'] ?? 0);
+        $exchangeEmpty = (int) ($truckState['exchange_empty_collected'] ?? 0);
+        $fixedTransporting = (int) ($truckState['fixed_transporting_to_plant'] ?? 0);
+
+        // 3. Obtener pedidos disponibles (no asignados a rutas activas)
+        $activeRouteIds = DeliveryRoute::whereIn('status', [
+            DeliveryRoute::STATUS_ASSIGNED,
+            DeliveryRoute::STATUS_IN_PROGRESS,
+            DeliveryRoute::STATUS_INCIDENT,
+        ])->pluck('id');
+
+        $allOrders = Order::with(['customer', 'items', 'charges'])
+            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS])
+            ->where(function ($q) use ($activeRouteIds) {
+                $q->whereNull('delivery_route_id')
+                  ->orWhereNotIn('delivery_route_id', $activeRouteIds);
+            })
+            ->orderBy('id', 'asc')
+            ->get();
+
+        // Mapeo canónico de zona
+        $mapOrderZone = function ($order) {
+            $z = strtolower(trim((string) ($order->delivery_zone ?? '')));
+            if (in_array($z, ['north', 'norte'], true)) return 'north';
+            if (in_array($z, ['south', 'sur'], true)) return 'south';
+            if (in_array($z, ['east', 'este'], true)) return 'east';
+            if (in_array($z, ['west', 'oeste'], true)) return 'west';
+            return 'none';
+        };
+
+        // Formateador de tarjeta
+        $formatOrderCard = function ($order) use ($mapOrderZone) {
+            $customer = $order->customer;
+            $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+
+            $exchangeQty = (int) ($exchangeItem?->quantity ?? 0);
+            $exchangeDelivered = (int) ($exchangeItem?->delivered_quantity ?? 0);
+            $exchangePending = max(0, $exchangeQty - $exchangeDelivered);
+
+            $fixedQty = (int) ($fixedItem?->quantity ?? 0);
+            $fixedCollected = (int) ($fixedItem?->collected_quantity ?? 0);
+            $fixedPrepared = (int) ($fixedItem?->prepared_quantity ?? 0);
+            $fixedDelivered = (int) ($fixedItem?->delivered_quantity ?? 0);
+            $fixedToCollect = max(0, $fixedQty - $fixedCollected);
+            $fixedToDeliver = max(0, $fixedPrepared - $fixedDelivered);
+
+            $opType = 'intercambio';
+            $opLabel = 'Cambio de botellones';
+            if ($exchangeQty > 0 && $fixedQty > 0) {
+                $opType = 'mixto';
+                $opLabel = 'Mixto (Cambio + Fijos)';
+            } elseif ($fixedQty > 0) {
+                if ($fixedPrepared > 0) {
+                    $opType = 'devolucion_fijos';
+                    $opLabel = 'Devolución de fijos';
+                } else {
+                    $opType = 'recoleccion_fijos';
+                    $opLabel = 'Recolección de fijos';
+                }
+            }
+
+            $tl = $customer ? $this->debtService->getTrafficLight($customer) : null;
+            $debtAmount = $customer ? $this->debtService->getPendingDebtAmount($customer) : 0;
+            $debtBottles = $customer ? $this->debtService->getPendingDebtBottles($customer) : 0;
+
+            $address = $order->delivery_street 
+                ? ($order->delivery_street . ($order->delivery_exterior_number ? ' #' . $order->delivery_exterior_number : '') . ($order->delivery_neighborhood ? ', ' . $order->delivery_neighborhood : ''))
+                : 'Sin ubicación registrada';
+
+            return [
+                'id' => $order->id,
+                'folio' => $order->folio,
+                'status' => $order->status,
+                'status_label' => $order->status_label,
+                'customer_id' => $order->customer_id,
+                'customer_code' => $customer?->code ?? "CLI-{$order->customer_id}",
+                'customer_name' => $customer?->name,
+                'customer_nickname' => $customer?->nickname ?? 'Cliente',
+                'customer_phone' => $order->recipient_phone ?: $customer?->phone,
+                'zone_key' => $mapOrderZone($order),
+                'zone_label' => match ($mapOrderZone($order)) {
+                    'north' => 'Norte',
+                    'south' => 'Sur',
+                    'east' => 'Este',
+                    'west' => 'Oeste',
+                    default => 'Sin zona',
+                },
+                'address_summary' => $address,
+                'operation_type' => $opType,
+                'operation_label' => $opLabel,
+                'exchange_quantity' => $exchangeQty,
+                'exchange_pending' => $exchangePending,
+                'fixed_quantity' => $fixedQty,
+                'fixed_to_collect' => $fixedToCollect,
+                'fixed_to_deliver' => $fixedToDeliver,
+                'total_bottles' => $exchangeQty + $fixedQty,
+                'traffic_light' => $tl,
+                'pending_debt_amount' => $debtAmount,
+                'pending_debt_bottles' => $debtBottles,
+                'created_at' => $order->created_at?->format('d/m H:i'),
+            ];
+        };
+
+        // Listados por pestaña
+        $pendientesList = $allOrders->map($formatOrderCard);
+
+        $porRecogerList = $allOrders->filter(function ($order) {
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+            return $fixedItem && ($fixedItem->quantity > $fixedItem->collected_quantity);
+        })->map($formatOrderCard)->values();
+
+        $porEntregarList = $allOrders->filter(function ($order) {
+            $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+            $hasExchange = $exchangeItem && ($exchangeItem->quantity > $exchangeItem->delivered_quantity);
+            $hasFixedToDeliver = $fixedItem && ($fixedItem->prepared_quantity > $fixedItem->delivered_quantity);
+            return $hasExchange || $hasFixedToDeliver;
+        })->map($formatOrderCard)->values();
+
+        $enProcesoList = collect();
+        $atendidosList = collect();
+
+        if ($activeRoute) {
+            $pendingStops = $activeRoute->stops->where('status', RouteStop::STATUS_PENDING);
+            $enProcesoList = $pendingStops->map(function ($stop) use ($formatOrderCard) {
+                $card = $formatOrderCard($stop->order);
+                $card['stop_id'] = $stop->id;
+                $card['stop_number'] = $stop->stop_number;
+                $card['stop_status'] = $stop->status;
+                return $card;
+            })->values();
+
+            $handledStops = $activeRoute->stops->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED]);
+            $atendidosList = $handledStops->map(function ($stop) use ($formatOrderCard) {
+                $card = $formatOrderCard($stop->order);
+                $card['stop_id'] = $stop->id;
+                $card['stop_number'] = $stop->stop_number;
+                $card['stop_status'] = $stop->status;
+                $card['failure_reason'] = $stop->failure_reason;
+                $card['completed_at'] = $stop->completed_at?->format('H:i');
+                return $card;
+            })->values();
+        } elseif ($completedTodayRoute) {
+            $atendidosList = $completedTodayRoute->stops->map(function ($stop) use ($formatOrderCard) {
+                $card = $formatOrderCard($stop->order);
+                $card['stop_id'] = $stop->id;
+                $card['stop_number'] = $stop->stop_number;
+                $card['stop_status'] = $stop->status;
+                $card['failure_reason'] = $stop->failure_reason;
+                $card['completed_at'] = $stop->completed_at?->format('H:i');
+                return $card;
+            })->values();
+        }
+
+        // Conteo por pestañas
+        $tabCounts = [
+            'pendientes' => $pendientesList->count(),
+            'por_recoger' => $porRecogerList->count(),
+            'por_entregar' => $porEntregarList->count(),
+            'en_proceso' => $enProcesoList->count(),
+            'atendidos' => $atendidosList->count(),
+        ];
+
+        // Colección seleccionada
+        $currentCollection = match ($activeTab) {
+            'por_recoger' => $porRecogerList,
+            'por_entregar' => $porEntregarList,
+            'en_proceso' => $enProcesoList,
+            'atendidos' => $atendidosList,
+            default => $pendientesList,
+        };
+
+        // Conteo por zonas de la colección activa
+        $zoneCounts = [
+            'all' => $currentCollection->count(),
+            'north' => $currentCollection->where('zone_key', 'north')->count(),
+            'south' => $currentCollection->where('zone_key', 'south')->count(),
+            'east' => $currentCollection->where('zone_key', 'east')->count(),
+            'west' => $currentCollection->where('zone_key', 'west')->count(),
+            'none' => $currentCollection->where('zone_key', 'none')->count(),
+        ];
+
+        // Elementos filtrados
+        $filteredItems = $activeZone === 'all'
+            ? $currentCollection->values()->all()
+            : $currentCollection->where('zone_key', $activeZone)->values()->all();
+
+        return Inertia::render('Repartidor/Reparto/Index', [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+            ],
+            'activeRoute' => $activeRoute ? [
+                'id' => $activeRoute->id,
+                'folio' => $activeRoute->folio,
+                'status' => $activeRoute->status,
+                'total_stops' => $activeRoute->stops->count(),
+                'pending_stops' => $activeRoute->stops->where('status', RouteStop::STATUS_PENDING)->count(),
+                'completed_stops' => $activeRoute->stops->where('status', RouteStop::STATUS_COMPLETED)->count(),
+                'failed_stops' => $activeRoute->stops->where('status', RouteStop::STATUS_FAILED)->count(),
+            ] : null,
+            'journeyStatus' => $journeyStatus,
+            'journeyStatusLabel' => $journeyStatusLabel,
+            'truckState' => [
+                'exchange_full_available' => $exchangeAvailable,
+                'exchange_empty_collected' => $exchangeEmpty,
+                'fixed_transporting_to_plant' => $fixedTransporting,
+            ],
+            'activeTab' => $activeTab,
+            'activeZone' => $activeZone,
+            'tabCounts' => $tabCounts,
+            'zoneCounts' => $zoneCounts,
+            'items' => $filteredItems,
+            'lastUpdatedAt' => now('America/Merida')->format('d/m/Y H:i:s'),
+        ]);
+    }
+
+    /**
+     * Incorpora un pedido disponible a la ruta activa del repartidor.
+     */
+    public function addToRoute(Order $order, Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $driver = $this->routeService->resolveSoleActiveDriver();
+
+        $activeRoute = DeliveryRoute::where('driver_user_id', $driver->id)
+            ->whereIn('status', [DeliveryRoute::STATUS_ASSIGNED, DeliveryRoute::STATUS_IN_PROGRESS])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$activeRoute) {
+            try {
+                $activeRoute = $this->routeService->startOrCreateSoleDriverRoute($user);
+            } catch (OrderBusinessRuleException $e) {
+                return back()->withErrors(['route' => $e->getMessage()]);
+            }
+        }
+
+        try {
+            $this->routeService->addOrderToActiveRoute($activeRoute, $order, $user);
+            return back()->with('success', "Pedido {$order->folio} incorporado a tu ruta activa ({$activeRoute->folio}).");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['route' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Atiende directamente un pedido: si la ruta activa existe y está en curso,
+     * auto-incorpora el pedido y redirige inmediatamente a la pantalla táctil de atención de parada.
+     */
+    public function serveOrder(Order $order, Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $driver = $this->routeService->resolveSoleActiveDriver();
+
+        $activeRoute = DeliveryRoute::where('driver_user_id', $driver->id)
+            ->whereIn('status', [DeliveryRoute::STATUS_ASSIGNED, DeliveryRoute::STATUS_IN_PROGRESS, DeliveryRoute::STATUS_INCIDENT])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$activeRoute) {
+            try {
+                $activeRoute = $this->routeService->startOrCreateSoleDriverRoute($user);
+            } catch (OrderBusinessRuleException $e) {
+                return back()->withErrors(['route' => $e->getMessage()]);
+            }
+        }
+
+        if ($activeRoute->status === DeliveryRoute::STATUS_INCIDENT) {
+            return back()->withErrors(['stop' => 'La ruta se encuentra en pausa por avería mecánica. Reanúdala para atender pedidos.']);
+        }
+
+        if ($activeRoute->status === DeliveryRoute::STATUS_ASSIGNED) {
+            $activeRoute = $this->routeService->startRoute($activeRoute, $user);
+        }
+
+        try {
+            $stop = $this->routeService->addOrderToActiveRoute($activeRoute, $order, $user);
+            return redirect()->route('repartidor.stops.serve', $stop->id);
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['stop' => $e->getMessage()]);
         }
     }
 }

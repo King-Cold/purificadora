@@ -106,9 +106,9 @@ class OrderPolicy
 
     /**
      * Determina si el usuario puede cancelar un pedido.
-     * Administrador: permitido tanto para pedidos Pendientes como Confirmados.
-     * Cliente: permitido ÚNICAMENTE si el pedido está Pendiente Y es de su propiedad.
-     * Repartidor y Operador Planta: sin acceso en este bloque.
+     * Administrador: permitido para pedidos Pendientes, Confirmados o En ruta sin atención física.
+     * Cliente: permitido si el pedido es de su propiedad y no ha comenzado la atención física.
+     * Repartidor y Operador Planta: sin acceso a cancelación ordinaria.
      */
     public function cancel(User $user, Order $order): bool
     {
@@ -116,27 +116,27 @@ class OrderPolicy
             return false;
         }
 
-        // El estado cancelado es terminal
-        if ($order->isCancelled()) {
+        // El estado cancelado o entregado es terminal
+        if ($order->isCancelled() || $order->isDelivered()) {
             return false;
         }
 
-        // Si ya se recogieron botellones fijos, se bloquea la cancelación ordinaria para todos
-        if ($order->hasCollectedFixedCustody()) {
+        // Si ya comenzó la atención física o se recogieron botellones fijos, se bloquea la cancelación ordinaria para todos
+        if ($order->hasCollectedFixedCustody() || $order->hasStartedPhysicalAttention()) {
             return false;
         }
 
         // Si el usuario es Administrador o Super Admin
         if ($user->hasRole(['Administrador', 'Super Admin']) || $user->can('orders.cancel')) {
-            return $order->isPending() || $order->isConfirmed();
+            return in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE], true);
         }
 
-        // Si el usuario es Cliente: solo puede cancelar sus pedidos mientras estén en estado Pendiente
+        // Si el usuario es Cliente: no puede cancelar si fue confirmado por administración, pero sí en pendiente o en ruta antes de atención física
         if ($user->hasRole('Cliente')) {
             $customer = $user->customer;
             $isOwner = $customer && (int) $order->customer_id === (int) $customer->id;
 
-            return $isOwner && $order->isPending();
+            return $isOwner && in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_IN_ROUTE], true);
         }
 
         return false;

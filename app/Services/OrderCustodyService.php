@@ -147,9 +147,17 @@ class OrderCustodyService
             $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
             $fixedItem = $lockedOrder->items()->where('type', OrderItem::TYPE_FIXED)->lockForUpdate()->firstOrFail();
 
+            $pendingToPrepare = $fixedItem->received_at_plant_quantity - $fixedItem->prepared_quantity - $fixedItem->damaged_quantity;
+            if ($quantity > $pendingToPrepare) {
+                throw new OrderBusinessRuleException("Cantidad excede lo pendiente de preparar ({$pendingToPrepare}).", 'quantity', 422);
+            }
+
+            $newPreparedQty = $fixedItem->prepared_quantity + $quantity;
+            $allEligiblePrepared = $newPreparedQty >= ($fixedItem->received_at_plant_quantity - $fixedItem->damaged_quantity);
+
             $fixedItem->update([
-                'prepared_quantity' => $fixedItem->prepared_quantity + $quantity,
-                'status' => OrderItem::STATUS_READY_FOR_DELIVERY,
+                'prepared_quantity' => $newPreparedQty,
+                'status' => $allEligiblePrepared ? OrderItem::STATUS_READY_FOR_DELIVERY : OrderItem::STATUS_WASHING,
             ]);
 
             BottleCustodyMovement::create([

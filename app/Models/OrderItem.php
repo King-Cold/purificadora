@@ -53,7 +53,10 @@ class OrderItem extends Model
         'unit_price',
         'collected_quantity',
         'received_at_plant_quantity',
+        'washing_quantity',
+        'damaged_quantity',
         'prepared_quantity',
+        'reserved_quantity',
         'loaded_quantity',
         'returned_empty_quantity',
         'status',
@@ -73,7 +76,10 @@ class OrderItem extends Model
             'unit_price' => 'decimal:2',
             'collected_quantity' => 'integer',
             'received_at_plant_quantity' => 'integer',
+            'washing_quantity' => 'integer',
+            'damaged_quantity' => 'integer',
             'prepared_quantity' => 'integer',
+            'reserved_quantity' => 'integer',
             'loaded_quantity' => 'integer',
             'returned_empty_quantity' => 'integer',
         ];
@@ -95,6 +101,60 @@ class OrderItem extends Model
     public function custodyMovements(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(BottleCustodyMovement::class);
+    }
+
+    public function incidents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BottleIncident::class);
+    }
+
+    /**
+     * Cantidad de botellones fijos recibidos aptos en planta aún pendientes de ingresar a lavado.
+     */
+    public function getPendingToWashQuantity(): int
+    {
+        return max(0, (int)$this->received_at_plant_quantity - (int)$this->washing_quantity);
+    }
+
+    /**
+     * Cantidad de botellones dañados en la etapa de lavado.
+     */
+    public function getDamagedInWashingQuantity(): int
+    {
+        return (int) $this->incidents()->where('stage', 'lavado')->sum('quantity');
+    }
+
+    /**
+     * Cantidad de botellones fijos actualmente en proceso de lavado y llenado (en túnel).
+     */
+    public function getInWashingQuantity(): int
+    {
+        return max(0, (int)$this->washing_quantity - (int)$this->prepared_quantity - $this->getDamagedInWashingQuantity());
+    }
+
+    /**
+     * Cantidad de botellones dañados en almacenamiento de preparados.
+     */
+    public function getDamagedInStorageQuantity(): int
+    {
+        return (int) $this->incidents()->whereIn('stage', ['preparado', 'almacen_planta'])->sum('quantity');
+    }
+
+    /**
+     * Cantidad de botellones fijos preparados y listos para proponer en carga al camión.
+     * Excluye cargados, reservados en propuestas activas y dañados.
+     */
+    public function getReadyToLoadQuantity(): int
+    {
+        return max(0, (int)$this->prepared_quantity - (int)$this->loaded_quantity - (int)$this->reserved_quantity - $this->getDamagedInStorageQuantity());
+    }
+
+    /**
+     * Cantidad de botellones actualmente en el camión camino al cliente.
+     */
+    public function getInTruckQuantity(): int
+    {
+        return max(0, (int)$this->loaded_quantity - (int)$this->delivered_quantity);
     }
 
     /**

@@ -136,8 +136,8 @@ const getStageIconClass = (stageKey) => {
                             <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
                         </button>
 
-                        <!-- Botón Cancelar (Exclusivo para pedidos Pendientes) -->
-                        <div v-if="order.can_cancel && order.is_pending" class="flex items-center">
+                        <!-- Botón Cancelar (Disponible mientras no inicie atención física) -->
+                        <div v-if="order.can_cancel" class="flex items-center">
                             <button
                                 type="button"
                                 @click="openCancelModal"

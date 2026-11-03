@@ -283,6 +283,29 @@ const submitDirectOrder = () => {
                 {{ flashError }}
             </div>
 
+            <!-- Aviso y acción para iniciar ruta si no hay una en curso -->
+            <div
+                v-if="!activeRoute || activeRoute.status !== 'in_progress'"
+                class="p-4 rounded-2xl bg-blue-50 border border-blue-200/80 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+            >
+                <div class="space-y-0.5">
+                    <span class="font-extrabold text-blue-950 flex items-center gap-1.5 text-sm">
+                        <i class="fa-solid fa-route text-blue-800"></i> No tienes una ruta en curso activa
+                    </span>
+                    <p class="text-blue-800">
+                        Inicia tu recorrido para que los pedidos al paso queden vinculados automáticamente a tu hoja de ruta.
+                    </p>
+                </div>
+                <Link
+                    :href="route('repartidor.route.start-today')"
+                    method="post"
+                    as="button"
+                    class="px-4 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-extrabold rounded-xl text-xs active:scale-95 transition shadow-xs shrink-0 inline-flex items-center gap-1.5"
+                >
+                    <i class="fa-solid fa-play"></i> Iniciar Jornada de Hoy
+                </Link>
+            </div>
+
             <!-- Existencias en Camión -->
             <div class="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/70 text-xs flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -371,7 +394,7 @@ const submitDirectOrder = () => {
                         <!-- ALERTA SI TIENE PEDIDO ACTIVO -->
                         <div
                             v-if="selectedCustomer.active_order"
-                            class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2"
+                            class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-3"
                         >
                             <div class="flex items-center gap-2 font-black text-amber-900">
                                 <i class="fa-solid fa-triangle-exclamation text-amber-700"></i>
@@ -379,16 +402,30 @@ const submitDirectOrder = () => {
                             </div>
                             <p class="text-amber-800 leading-relaxed">
                                 Pedido <strong>{{ selectedCustomer.active_order.folio }}</strong> en estado <strong>{{ selectedCustomer.active_order.status_label }}</strong>.
-                                Por política del sistema, cada cliente tiene como máximo un pedido activo a la vez.
+                                Por regla de negocio, cada cliente tiene un único pedido activo a la vez. Puedes atender la operación pendiente directamente:
                             </p>
-                            <div class="pt-1">
-                                <a
-                                    :href="route('orders.show', selectedCustomer.active_order.id)"
-                                    target="_blank"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 transition"
+                            <div class="flex items-center gap-2 flex-wrap pt-1">
+                                <Link
+                                    v-if="selectedCustomer.active_order.stop_id"
+                                    :href="route('repartidor.stops.serve', selectedCustomer.active_order.stop_id)"
+                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs hover:bg-emerald-700 transition shadow-2xs"
                                 >
-                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Consultar Pedido Activo
-                                </a>
+                                    <i class="fa-solid fa-bottle-water"></i> Atender Parada en Mi Ruta
+                                </Link>
+                                <Link
+                                    v-else-if="selectedCustomer.active_order.is_fixed"
+                                    :href="route('repartidor.collections.index')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white font-extrabold text-xs hover:bg-amber-700 transition shadow-2xs"
+                                >
+                                    <i class="fa-solid fa-hand-holding-hand"></i> Ir a Por Recoger
+                                </Link>
+                                <Link
+                                    v-else
+                                    :href="route('repartidor.deliveries.index')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-900 text-white font-extrabold text-xs hover:bg-blue-800 transition shadow-2xs"
+                                >
+                                    <i class="fa-solid fa-truck-ramp-box"></i> Ir a Por Entregar
+                                </Link>
                             </div>
                         </div>
 
