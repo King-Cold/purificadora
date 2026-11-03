@@ -1,0 +1,230 @@
+<script setup>
+import { ref, computed } from 'vue';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import InputError from '@/Components/InputError.vue';
+
+const props = defineProps({
+    hasActiveRoute: {
+        type: Boolean,
+        default: false,
+    },
+    createdCustomer: {
+        type: Object,
+        default: null,
+    },
+});
+
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
+const newlyCreated = ref(props.createdCustomer || null);
+
+const form = useForm({
+    nickname: '',
+    name: '',
+});
+
+const submitCustomer = () => {
+    form.post(route('repartidor.customers.store-quick'), {
+        preserveScroll: true,
+        onSuccess: (pageRes) => {
+            if (pageRes.props.flash?.createdCustomer) {
+                newlyCreated.value = pageRes.props.flash.createdCustomer;
+            } else if (page.props.createdCustomer) {
+                newlyCreated.value = page.props.createdCustomer;
+            }
+            form.reset();
+        },
+    });
+};
+
+const registerAnother = () => {
+    newlyCreated.value = null;
+    form.reset();
+    form.clearErrors();
+};
+</script>
+
+<template>
+    <Head title="Agregar Cliente - Reparto Móvil" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <Link
+                        :href="route('repartidor.route.index')"
+                        class="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-50 shadow-2xs transition"
+                        title="Volver a Mi Ruta"
+                    >
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </Link>
+                    <div>
+                        <h2 class="text-xl font-bold leading-tight text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-user-plus text-blue-900"></i> Agregar Cliente en Ruta
+                        </h2>
+                        <p class="text-xs text-slate-500">Alta rápida sin trámites pesados</p>
+                    </div>
+                </div>
+
+                <Link
+                    :href="route('repartidor.dashboard')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                >
+                    Panel
+                </Link>
+            </div>
+        </template>
+
+        <div class="py-6 sm:py-8 max-w-xl mx-auto px-4 sm:px-6 space-y-5">
+
+            <!-- Mensaje de éxito si existe flash -->
+            <div
+                v-if="flashSuccess"
+                class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm flex items-start gap-3 shadow-2xs"
+            >
+                <i class="fa-solid fa-circle-check text-lg text-emerald-600 mt-0.5 shrink-0"></i>
+                <div class="flex-1 font-medium">{{ flashSuccess }}</div>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- 1. CASO: CLIENTE RECIÉN GUARDADO (OFRECER REGISTRAR SERVICIO)              -->
+            <!-- ========================================================================= -->
+            <div
+                v-if="newlyCreated"
+                class="bg-white rounded-3xl p-6 sm:p-7 border border-emerald-200 shadow-sm text-center space-y-5"
+            >
+                <div class="w-16 h-16 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+
+                <div class="space-y-1">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                        {{ newlyCreated.code }}
+                    </span>
+                    <h3 class="text-2xl font-black text-slate-900 pt-2">
+                        "{{ newlyCreated.nickname }}"
+                    </h3>
+                    <p v-if="newlyCreated.name" class="text-sm text-slate-600 font-medium">
+                        {{ newlyCreated.name }}
+                    </p>
+                    <p class="text-xs text-slate-400 pt-1">
+                        Cliente registrado correctamente y disponible para pedidos.
+                    </p>
+                </div>
+
+                <!-- Botones de Acción Posterior -->
+                <div class="space-y-2.5 pt-2">
+                    <!-- Opción principal: Registrar servicio al paso -->
+                    <Link
+                        :href="route('repartidor.direct-service.create', { customer_id: newlyCreated.id })"
+                        class="w-full py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base bg-emerald-600 text-white hover:bg-emerald-700 active:scale-98 transition shadow-sm inline-flex items-center justify-center gap-2"
+                    >
+                        <i class="fa-solid fa-bottle-water text-lg"></i> Registrar servicio a este cliente
+                    </Link>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            @click="registerAnother"
+                            class="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 active:scale-98 transition inline-flex items-center justify-center gap-1.5"
+                        >
+                            <i class="fa-solid fa-user-plus"></i> Otro cliente
+                        </button>
+
+                        <Link
+                            :href="route('repartidor.route.index')"
+                            class="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition inline-flex items-center justify-center gap-1.5"
+                        >
+                            <i class="fa-solid fa-route"></i> Ir a Mi Ruta
+                        </Link>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- 2. FORMULARIO DE ALTA RÁPIDA                                              -->
+            <!-- ========================================================================= -->
+            <form
+                v-else
+                @submit.prevent="submitCustomer"
+                class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-5"
+            >
+                <div class="space-y-1">
+                    <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-address-card text-blue-900"></i> Datos del Nuevo Cliente
+                    </h3>
+                    <p class="text-xs text-slate-500">
+                        Solo ingresa el apodo con el que lo identificas. No es necesario solicitar teléfono, correo, contraseña ni domicilio.
+                    </p>
+                </div>
+
+                <!-- Campo obligatorio: Apodo -->
+                <div class="space-y-1.5">
+                    <label for="nickname" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Apodo o Identificador del Cliente <span class="text-rose-500">*</span>
+                    </label>
+                    <input
+                        id="nickname"
+                        v-model="form.nickname"
+                        type="text"
+                        required
+                        autofocus
+                        placeholder="Ej. Don Beto, Doña Mary, Taller El Güero..."
+                        class="w-full rounded-2xl border-slate-300 text-sm sm:text-base font-semibold focus:border-blue-900 focus:ring-blue-900 transition"
+                    />
+                    <InputError :message="form.errors.nickname" class="mt-1" />
+                    <p class="text-[11px] text-slate-400">
+                        Permite apodos repetidos sin mezclar clientes; cada uno recibe su propio código CLI único.
+                    </p>
+                </div>
+
+                <!-- Campo opcional: Nombre completo -->
+                <div class="space-y-1.5">
+                    <label for="name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Nombre completo <span class="text-slate-400 text-[11px] font-normal lowercase">(opcional)</span>
+                    </label>
+                    <input
+                        id="name"
+                        v-model="form.name"
+                        type="text"
+                        placeholder="Ej. Alberto Pérez Dzul (si te lo proporciona)"
+                        class="w-full rounded-2xl border-slate-300 text-sm focus:border-blue-900 focus:ring-blue-900 transition"
+                    />
+                    <InputError :message="form.errors.name" class="mt-1" />
+                </div>
+
+                <!-- Aviso informativo de agilidad -->
+                <div class="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100 text-xs text-blue-900 space-y-1">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <i class="fa-solid fa-bolt text-blue-700"></i> Guardado inmediato
+                    </p>
+                    <p class="text-slate-600 text-[11px] leading-relaxed">
+                        Puedes registrar al cliente en cualquier momento aunque no tengas ruta iniciada ni pedido pendiente. Al terminar, el sistema te ofrecerá registrar un servicio si el cliente lo requiere.
+                    </p>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
+                    <button
+                        type="submit"
+                        :disabled="form.processing || !form.nickname.trim()"
+                        class="w-full sm:flex-1 py-3.5 px-4 rounded-2xl font-extrabold text-sm sm:text-base bg-blue-900 text-white hover:bg-blue-800 disabled:opacity-50 active:scale-98 transition shadow-xs inline-flex items-center justify-center gap-2"
+                    >
+                        <i class="fa-solid fa-check"></i>
+                        <span>{{ form.processing ? 'Guardando...' : 'Guardar cliente' }}</span>
+                    </button>
+
+                    <Link
+                        :href="route('repartidor.route.index')"
+                        class="w-full sm:w-auto py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition text-center"
+                    >
+                        Cancelar
+                    </Link>
+                </div>
+            </form>
+
+        </div>
+    </AuthenticatedLayout>
+</template>
+

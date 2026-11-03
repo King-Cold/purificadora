@@ -59,6 +59,7 @@ class OrderController extends Controller
                 'folio' => $order->folio,
                 'status' => $order->status,
                 'status_label' => $order->status_label,
+                'operational_progress' => $order->getOperationalProgress(),
                 'is_active' => $order->id === $activeOrderId,
                 'fixed_quantity' => $order->fixed_quantity,
                 'exchange_quantity' => $order->exchange_quantity,
@@ -66,7 +67,7 @@ class OrderController extends Controller
                 'delivery_street' => $order->delivery_street,
                 'delivery_zone_label' => $addressSnapshot['delivery_zone_label'] ?? $order->delivery_zone,
                 'created_at' => $order->created_at->format('d/m/Y H:i'),
-                'can_cancel' => $order->isPending(),
+                'can_cancel' => Gate::forUser(auth()->user())->allows('cancel', $order),
             ];
         });
 
@@ -80,6 +81,7 @@ class OrderController extends Controller
                 'folio' => $activeOrder->folio,
                 'status' => $activeOrder->status,
                 'status_label' => $activeOrder->status_label,
+                'operational_progress' => $activeOrder->getOperationalProgress(),
                 'created_at' => $activeOrder->created_at->format('d/m/Y H:i'),
                 'total_bottles' => $activeOrder->total_bottles,
             ] : null,
@@ -89,6 +91,7 @@ class OrderController extends Controller
                 'nickname' => $customer->nickname,
                 'code' => $customer->code,
             ],
+            'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
     }
 
@@ -206,7 +209,7 @@ class OrderController extends Controller
         // Autorización estricta por política (únicamente pedidos propios del cliente)
         Gate::authorize('view', $order);
 
-        $order->load(['items', 'statusHistories']);
+        $order->load(['items', 'statusHistories', 'charges', 'payments', 'deliveryRoute']);
 
         $addressSnapshot = $order->address_snapshot ?: [];
         $historicalAddress = [
@@ -248,6 +251,37 @@ class OrderController extends Controller
 
         $canCancel = Gate::forUser($request->user())->allows('cancel', $order);
 
+        // Cargos de este pedido
+        $charges = $order->charges->map(fn ($c) => [
+            'id' => $c->id,
+            'bottle_type' => $c->bottle_type,
+            'bottle_type_label' => $c->bottle_type === 'fijo' ? 'Botellón Fijo (20L)' : 'Botellón de Cambio (20L)',
+            'quantity_delivered' => (int) $c->quantity_delivered,
+            'unit_price' => (float) $c->unit_price,
+            'total_amount' => (float) $c->total_amount,
+            'paid_amount' => (float) $c->paid_amount,
+            'is_waived_promotion' => $c->status === \App\Models\OrderCharge::STATUS_WAIVED_PROMOTION,
+            'status' => $c->status,
+            'status_label' => match ($c->status) {
+                \App\Models\OrderCharge::STATUS_PAID => 'Pagado',
+                \App\Models\OrderCharge::STATUS_WAIVED_PROMOTION => 'Gratis (Promoción semanal)',
+                \App\Models\OrderCharge::STATUS_PARTIALLY_PAID => 'Parcialmente pagado',
+                default => 'Pendiente de pago',
+            },
+        ]);
+
+        // Pagos registrados de este pedido
+        $payments = $order->payments->map(fn ($p) => [
+            'id' => $p->id,
+            'amount' => (float) $p->amount,
+            'cash_tendered' => (float) $p->cash_tendered,
+            'change_returned' => (float) $p->change_returned,
+            'bottles_count' => (int) $p->bottles_covered_count,
+            'payment_method' => $p->payment_method,
+            'notes' => $p->notes,
+            'date' => $p->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+        ]);
+
         return Inertia::render('Cliente/Orders/Show', [
             'order' => [
                 'id' => $order->id,
@@ -266,7 +300,11 @@ class OrderController extends Controller
                 'address' => $historicalAddress,
                 'history' => $history,
                 'can_cancel' => $canCancel,
+                'operational_progress' => $order->getOperationalProgress(),
+                'charges' => $charges,
+                'payments' => $payments,
             ],
+            'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
     }
 

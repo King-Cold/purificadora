@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\UpdateBottlePresentationRequest;
 use App\Http\Requests\Admin\UpdateScheduleRequest;
 use App\Models\BottlePresentation;
 use App\Models\BranchSchedule;
+use App\Services\SettingService;
 use App\Services\StoreScheduleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,7 +56,22 @@ class GeneralSettingController extends Controller
         return Inertia::render('Admin/Settings/Index', [
             'schedule' => $scheduleSummary,
             'bottlePresentations' => $presentations,
+            'max_pending_payment_bottles' => app(SettingService::class)->getMaxPendingPaymentBottles(),
         ]);
+    }
+
+    /**
+     * Actualiza el límite general de botellones pendientes de pago por cliente.
+     */
+    public function updateDebtLimit(Request $request, SettingService $settingService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'max_pending_payment_bottles' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $settingService->setMaxPendingPaymentBottles((int) $validated['max_pending_payment_bottles']);
+
+        return redirect()->back()->with('success', 'El límite máximo de botellones pendientes de pago se actualizó correctamente.');
     }
 
     /**

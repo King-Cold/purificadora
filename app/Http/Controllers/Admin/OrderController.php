@@ -242,7 +242,18 @@ class OrderController extends Controller
     {
         Gate::authorize('view', $order);
 
-        $order->load(['items', 'customer.address', 'creator.roles', 'statusHistories.user.roles']);
+        $order->load([
+            'items',
+            'customer.address',
+            'creator.roles',
+            'statusHistories.user.roles',
+            'deliveryRoute.driver',
+            'routeStops.deliveryRoute.driver',
+            'charges',
+            'payments.receivedBy',
+            'custodyMovements.user.roles',
+            'custodyMovements.confirmedByUser.roles',
+        ]);
 
         $customer = $order->customer;
         $addressSnapshot = $order->address_snapshot ?: [];
@@ -289,6 +300,73 @@ class OrderController extends Controller
             $cancellationReason = $cancelledHistory?->reason ?? $order->notes;
         }
 
+        // Paradas de ruta vinculadas
+        $routeStops = $order->routeStops->map(fn ($s) => [
+            'id' => $s->id,
+            'route_folio' => $s->deliveryRoute?->folio,
+            'driver_name' => $s->deliveryRoute?->driver?->name ?? 'Repartidor',
+            'stop_number' => $s->stop_number,
+            'status' => $s->status,
+            'status_label' => match ($s->status) {
+                \App\Models\RouteStop::STATUS_COMPLETED => 'Atendida',
+                \App\Models\RouteStop::STATUS_FAILED => 'Fallida',
+                default => 'Pendiente',
+            },
+            'failure_reason' => $s->failure_reason,
+            'notes' => $s->notes,
+            'completed_at' => $s->completed_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+        ]);
+
+        // Movimientos auditables de custodia de botellones
+        $custodyMovements = $order->custodyMovements->map(fn ($m) => [
+            'id' => $m->id,
+            'movement_type' => $m->movement_type,
+            'bottle_type' => $m->bottle_type,
+            'bottle_condition' => $m->bottle_condition,
+            'quantity' => (int) $m->quantity,
+            'origin' => $m->origin,
+            'destination' => $m->destination,
+            'status' => $m->status,
+            'notes' => $m->notes,
+            'difference_reason' => $m->difference_reason,
+            'user_name' => $m->user?->name ?? 'Sistema',
+            'confirmed_by_name' => $m->confirmedByUser?->name,
+            'created_at' => $m->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+        ]);
+
+        // Cargos con precios unitarios históricos
+        $charges = $order->charges->map(fn ($c) => [
+            'id' => $c->id,
+            'bottle_type' => $c->bottle_type,
+            'quantity_delivered' => (int) $c->quantity_delivered,
+            'unit_price' => (float) $c->unit_price,
+            'total_amount' => (float) $c->total_amount,
+            'paid_amount' => (float) $c->paid_amount,
+            'is_waived_promotion' => $c->status === \App\Models\OrderCharge::STATUS_WAIVED_PROMOTION,
+            'status' => $c->status,
+            'status_label' => match ($c->status) {
+                \App\Models\OrderCharge::STATUS_PAID => 'Liquidado',
+                \App\Models\OrderCharge::STATUS_WAIVED_PROMOTION => 'Bonificado (10º gratis)',
+                \App\Models\OrderCharge::STATUS_PARTIALLY_PAID => 'Parcialmente liquidado',
+                default => 'Pendiente de cobro',
+            },
+        ]);
+
+        // Pagos en efectivo registrados
+        $payments = $order->payments->map(fn ($p) => [
+            'id' => $p->id,
+            'amount' => (float) $p->amount,
+            'cash_tendered' => (float) $p->cash_tendered,
+            'change_returned' => (float) $p->change_returned,
+            'bottles_count' => (int) $p->bottles_covered_count,
+            'payment_method' => $p->payment_method,
+            'received_by' => $p->receivedBy?->name ?? 'Repartidor',
+            'notes' => $p->notes,
+            'date' => $p->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+        ]);
+
+        $hasCollectedFixedCustody = $order->hasCollectedFixedCustody();
+
         return Inertia::render('Admin/Orders/Show', [
             'order' => [
                 'id' => $order->id,
@@ -298,6 +376,7 @@ class OrderController extends Controller
                 'is_pending' => $order->isPending(),
                 'is_confirmed' => $order->isConfirmed(),
                 'is_cancelled' => $order->isCancelled(),
+                'has_collected_fixed_custody' => $hasCollectedFixedCustody,
                 'can_confirm' => Gate::forUser($request->user())->allows('confirm', $order),
                 'can_cancel' => Gate::forUser($request->user())->allows('cancel', $order),
                 'fixed_quantity' => $order->fixed_quantity,
@@ -317,7 +396,13 @@ class OrderController extends Controller
                     'phone' => $customer->phone,
                     'has_account' => $customer->user_id !== null,
                 ] : null,
+                'operational_progress' => $order->getOperationalProgress(),
+                'route_stops' => $routeStops,
+                'custody_movements' => $custodyMovements,
+                'charges' => $charges,
+                'payments' => $payments,
             ],
+            'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
     }
 

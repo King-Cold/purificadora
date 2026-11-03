@@ -42,9 +42,11 @@ class CustomerAddressService
 
             $streetAndNumber = trim($data['street_and_number'] ?? ($data['street'] ?? ''));
 
-            // Extracción o asignación de número exterior para compatibilidad con la base de datos
-            $exteriorNumber = 'S/N';
-            if (preg_match('/(?:#|No\.|Num\.|número)?\s*([0-9]+[A-Za-z\-0-9]*)\s*$/i', $streetAndNumber, $matches)) {
+            // No se exige número de casa ni se asigna 'S/N' automáticamente
+            $exteriorNumber = null;
+            if (!empty($data['exterior_number']) && $data['exterior_number'] !== 'S/N') {
+                $exteriorNumber = trim($data['exterior_number']);
+            } elseif (preg_match('/(?:#|No\.|Num\.|número)\s*([0-9]+[A-Za-z\-0-9]*)\s*$/i', $streetAndNumber, $matches)) {
                 $exteriorNumber = $matches[1];
             }
 
@@ -92,8 +94,10 @@ class CustomerAddressService
 
             $streetAndNumber = trim($data['street_and_number'] ?? ($data['street'] ?? ''));
 
-            $exteriorNumber = 'S/N';
-            if (preg_match('/(?:#|No\.|Num\.|número)?\s*([0-9]+[A-Za-z\-0-9]*)\s*$/i', $streetAndNumber, $matches)) {
+            $exteriorNumber = null;
+            if (!empty($data['exterior_number']) && $data['exterior_number'] !== 'S/N') {
+                $exteriorNumber = trim($data['exterior_number']);
+            } elseif (preg_match('/(?:#|No\.|Num\.|número)\s*([0-9]+[A-Za-z\-0-9]*)\s*$/i', $streetAndNumber, $matches)) {
                 $exteriorNumber = $matches[1];
             }
 

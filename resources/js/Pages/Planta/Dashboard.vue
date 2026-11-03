@@ -27,7 +27,7 @@ import { Head, Link } from '@inertiajs/vue3';
                     <div class="p-8">
                         <div class="flex items-center gap-4 mb-6">
                             <div class="h-14 w-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-2xl shadow-inner">
-                                ⚙️
+                                <i class="fa-solid fa-gears text-2xl"></i>
                             </div>
                             <div>
                                 <h3 class="text-2xl font-bold text-gray-900">

@@ -2,14 +2,29 @@
 import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InputError from '@/Components/InputError.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 
 const props = defineProps({
     order: {
         type: Object,
         required: true,
     },
+    last_updated_at: {
+        type: String,
+        default: null,
+    },
 });
+
+const isReloading = ref(false);
+const reloadData = () => {
+    isReloading.value = true;
+    router.reload({
+        preserveScroll: true,
+        onFinish: () => {
+            isReloading.value = false;
+        },
+    });
+};
 
 const showCancelModal = ref(false);
 
@@ -37,29 +52,55 @@ const submitCancellation = () => {
     });
 };
 
-const getStatusBadgeClass = (status) => {
-    switch (status) {
-        case 'pending':
-            return 'bg-amber-50 text-amber-900 border-amber-300';
+const getStageBadgeClass = (stageKey) => {
+    switch (stageKey) {
+        case 'entregado':
+            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        case 'en_reparticion':
+            return 'bg-indigo-50 text-indigo-900 border-indigo-300';
+        case 'asignado_a_ruta':
+            return 'bg-purple-50 text-purple-900 border-purple-300';
+        case 'llevando_a_planta':
+        case 'lavando':
+        case 'listo_para_entregar':
+            return 'bg-sky-50 text-sky-900 border-sky-300';
         case 'confirmed':
+        case 'confirmado':
             return 'bg-blue-50 text-blue-900 border-blue-300';
         case 'cancelled':
-            return 'bg-rose-50 text-rose-900 border-rose-300';
+        case 'cancelado':
+            return 'bg-rose-50 text-rose-800 border-rose-300';
+        case 'pending':
+        case 'pendiente':
         default:
-            return 'bg-slate-100 text-slate-700 border-slate-300';
+            return 'bg-amber-50 text-amber-900 border-amber-300';
     }
 };
 
-const getStatusIconClass = (status) => {
-    switch (status) {
-        case 'pending':
-            return 'fa-regular fa-clock text-amber-600';
+const getStageIconClass = (stageKey) => {
+    switch (stageKey) {
+        case 'entregado':
+            return 'fa-solid fa-check-double text-emerald-600';
+        case 'en_reparticion':
+            return 'fa-solid fa-truck-fast text-indigo-600';
+        case 'asignado_a_ruta':
+            return 'fa-solid fa-route text-purple-600';
+        case 'llevando_a_planta':
+            return 'fa-solid fa-truck-arrow-right text-sky-600';
+        case 'lavando':
+            return 'fa-solid fa-soap text-sky-600';
+        case 'listo_para_entregar':
+            return 'fa-solid fa-boxes-packing text-sky-600';
         case 'confirmed':
+        case 'confirmado':
             return 'fa-solid fa-circle-check text-blue-700';
         case 'cancelled':
+        case 'cancelado':
             return 'fa-solid fa-ban text-rose-600';
+        case 'pending':
+        case 'pendiente':
         default:
-            return 'fa-solid fa-circle text-slate-400';
+            return 'fa-regular fa-clock text-amber-600';
     }
 };
 </script>
@@ -71,7 +112,7 @@ const getStatusIconClass = (status) => {
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
             <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
 
-                <!-- Barra superior de navegación y estado del pedido -->
+                <!-- BARRA SUPERIOR DE NAVEGACIÓN Y ACCIONES -->
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div class="flex items-center gap-3">
                         <Link
@@ -83,43 +124,145 @@ const getStatusIconClass = (status) => {
                         </Link>
                     </div>
 
-                    <!-- Botón Cancelar (Exclusivo para pedidos Pendientes) -->
-                    <div v-if="order.can_cancel && order.is_pending" class="flex items-center gap-2 self-start sm:self-auto">
+                    <div class="flex items-center gap-3">
                         <button
                             type="button"
-                            @click="openCancelModal"
-                            class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
+                            @click="reloadData"
+                            :disabled="isReloading"
+                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition shadow-2xs cursor-pointer"
+                            title="Recalcular estado actual"
                         >
-                            <i class="fa-solid fa-ban"></i>
-                            <span>Cancelar Pedido</span>
+                            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin text-blue-900': isReloading }"></i>
+                            <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
                         </button>
-                    </div>
-                </div>
 
-                <!-- Tarjeta de identificación del pedido -->
-                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div class="space-y-1">
-                        <div class="flex flex-wrap items-center gap-2.5">
-                            <span class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                                Pedido {{ order.folio }}
-                            </span>
-                            <span
-                                :class="[
-                                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                                    getStatusBadgeClass(order.status)
-                                ]"
+                        <!-- Botón Cancelar (Exclusivo para pedidos Pendientes) -->
+                        <div v-if="order.can_cancel && order.is_pending" class="flex items-center">
+                            <button
+                                type="button"
+                                @click="openCancelModal"
+                                class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
                             >
-                                <i :class="getStatusIconClass(order.status)" class="text-[11px]"></i>
-                                <span>{{ order.status_label }}</span>
-                            </span>
+                                <i class="fa-solid fa-ban"></i>
+                                <span>Cancelar Pedido</span>
+                            </button>
                         </div>
-                        <p class="text-xs text-slate-500">
-                            Registrado el {{ order.created_at }} &bull; Botellones de 20 Litros
-                        </p>
                     </div>
                 </div>
 
-                <!-- 1. ALERTAS FLASH (ÉXITO O ERROR) -->
+                <!-- TARJETA PRINCIPAL DE ESTADO Y ETAPA OPERATIVA -->
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/80 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-2.5">
+                                <span class="text-xl sm:text-2xl font-black tracking-tight text-slate-900 font-mono">
+                                    {{ order.folio }}
+                                </span>
+                                <span
+                                    :class="[
+                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
+                                        getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
+                                    ]"
+                                >
+                                    <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
+                                    <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500">
+                                Registrado el {{ order.created_at }} &bull; Presentación de 20 Litros
+                            </p>
+                        </div>
+
+                        <div v-if="last_updated_at" class="text-right text-[11px] text-slate-400 font-mono">
+                            Calculado al: {{ last_updated_at }}
+                        </div>
+                    </div>
+
+                    <!-- Explicación de la etapa actual -->
+                    <div v-if="order.operational_progress?.explanation" class="p-4 rounded-xl bg-blue-50/70 border border-blue-200/70 text-xs sm:text-sm text-blue-950 font-medium leading-relaxed flex items-start gap-3">
+                        <i class="fa-solid fa-circle-info text-blue-800 text-base mt-0.5 shrink-0"></i>
+                        <span>{{ order.operational_progress.explanation }}</span>
+                    </div>
+
+                    <!-- DESGLOSE OPERATIVO INDEPENDIENTE (CAMBIO VS FIJOS) -->
+                    <div v-if="order.operational_progress" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                        <!-- Tarjeta Cambio -->
+                        <div
+                            v-if="order.operational_progress.exchange"
+                            class="p-4 rounded-xl border border-sky-200 bg-sky-50/40 space-y-2.5"
+                        >
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold uppercase tracking-wider text-sky-900 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-arrows-rotate text-sky-700"></i>
+                                    <span>Botellones de Cambio</span>
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-sky-900 border border-sky-300">
+                                    {{ order.operational_progress.exchange.stage_label }}
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div class="bg-white p-2 rounded-lg border border-sky-100">
+                                    <span class="text-[10px] text-slate-400 uppercase block">Solicitados</span>
+                                    <span class="font-mono font-bold text-slate-900 text-sm">{{ order.operational_progress.exchange.quantity_requested }}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border border-sky-100">
+                                    <span class="text-[10px] text-emerald-600 uppercase block">Entregados</span>
+                                    <span class="font-mono font-bold text-emerald-700 text-sm">{{ order.operational_progress.exchange.delivered_quantity }}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border border-sky-100">
+                                    <span class="text-[10px] text-rose-500 uppercase block">Cancelados</span>
+                                    <span class="font-mono font-bold text-rose-700 text-sm">{{ order.operational_progress.exchange.cancelled_quantity }}</span>
+                                </div>
+                            </div>
+
+                            <p v-if="order.operational_progress.exchange.cancellation_reason" class="text-xs text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                                <span class="font-bold">Motivo de cancelación:</span> {{ order.operational_progress.exchange.cancellation_reason }}
+                            </p>
+                        </div>
+
+                        <!-- Tarjeta Fijos -->
+                        <div
+                            v-if="order.operational_progress.fixed"
+                            class="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5"
+                        >
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-id-badge text-blue-800"></i>
+                                    <span>Botellones Fijos (Identificados)</span>
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-blue-900 border border-blue-300">
+                                    {{ order.operational_progress.fixed.stage_label }}
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
+                                <div class="bg-white p-2 rounded-lg border border-blue-100">
+                                    <span class="text-[9px] text-slate-400 uppercase block">Solicitados</span>
+                                    <span class="font-mono font-bold text-slate-900 text-xs">{{ order.operational_progress.fixed.quantity_requested }}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border border-blue-100">
+                                    <span class="text-[9px] text-sky-600 uppercase block">Recolectados</span>
+                                    <span class="font-mono font-bold text-sky-800 text-xs">{{ order.operational_progress.fixed.collected_quantity }}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border border-blue-100">
+                                    <span class="text-[9px] text-emerald-600 uppercase block">Devueltos</span>
+                                    <span class="font-mono font-bold text-emerald-700 text-xs">{{ order.operational_progress.fixed.delivered_quantity }}</span>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border border-blue-100">
+                                    <span class="text-[9px] text-rose-500 uppercase block">Cancelados</span>
+                                    <span class="font-mono font-bold text-rose-700 text-xs">{{ order.operational_progress.fixed.cancelled_quantity }}</span>
+                                </div>
+                            </div>
+
+                            <p v-if="order.operational_progress.fixed.cancellation_reason" class="text-xs text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                                <span class="font-bold">Motivo:</span> {{ order.operational_progress.fixed.cancellation_reason }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. ALERTAS FLASH -->
                 <div
                     v-if="$page.props.flash?.success"
                     class="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-xs flex items-start gap-3.5"
@@ -225,7 +368,76 @@ const getStatusIconClass = (status) => {
                     </div>
                 </div>
 
-                <!-- 4. DOMICILIO Y CONTACTO HISTÓRICOS INMUTABLES -->
+                <!-- 4. CARGOS Y PAGOS DEL PEDIDO -->
+                <div v-if="order.charges?.length > 0 || order.payments?.length > 0" class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                            <i class="fa-solid fa-receipt text-blue-900"></i>
+                            <span>Cargos y Pagos de este Pedido</span>
+                        </h3>
+                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                            Precios históricos
+                        </span>
+                    </div>
+
+                    <!-- Lista de Cargos -->
+                    <div v-if="order.charges?.length > 0" class="space-y-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cargos por entregas realizadas</h4>
+                        <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                            <div
+                                v-for="c in order.charges"
+                                :key="c.id"
+                                class="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white"
+                            >
+                                <div>
+                                    <div class="font-bold text-slate-900 text-xs sm:text-sm">
+                                        {{ c.quantity_delivered }} botellón(es) &bull; {{ c.bottle_type_label }}
+                                    </div>
+                                    <div class="text-xs text-slate-500">
+                                        Precio unitario: <span class="font-mono font-semibold">${{ Number(c.unit_price).toFixed(2) }}</span> &bull; Total: <span class="font-mono font-bold">${{ Number(c.total_amount).toFixed(2) }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3 self-end sm:self-auto">
+                                    <span
+                                        :class="[
+                                            'px-2.5 py-0.5 rounded-full text-xs font-semibold border',
+                                            c.status === 'paid' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                                            c.status === 'waived_promotion' ? 'bg-purple-50 text-purple-900 border-purple-300' :
+                                            'bg-amber-50 text-amber-900 border-amber-300'
+                                        ]"
+                                    >
+                                        {{ c.status_label }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Pagos Recibidos -->
+                    <div v-if="order.payments?.length > 0" class="space-y-3 pt-2">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Pagos en efectivo registrados</h4>
+                        <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                            <div
+                                v-for="p in order.payments"
+                                :key="p.id"
+                                class="p-3 flex items-center justify-between bg-slate-50/50 text-xs"
+                            >
+                                <div>
+                                    <span class="font-bold text-slate-900">{{ p.bottles_count }} botellón(es) pagado(s)</span>
+                                    <span class="text-slate-500 text-[11px] block">{{ p.date }}</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-mono font-black text-emerald-700 text-sm">${{ Number(p.amount).toFixed(2) }}</span>
+                                    <span v-if="p.cash_tendered > p.amount" class="text-[10px] text-slate-400 block">
+                                        Efectivo: ${{ Number(p.cash_tendered).toFixed(2) }} &bull; Cambio: ${{ Number(p.change_returned).toFixed(2) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. DOMICILIO Y CONTACTO HISTÓRICOS INMUTABLES -->
                 <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
                     <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                         <div class="flex items-center gap-2">
@@ -281,7 +493,7 @@ const getStatusIconClass = (status) => {
                     </div>
                 </div>
 
-                <!-- 5. OBSERVACIONES -->
+                <!-- 6. OBSERVACIONES -->
                 <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                         <i class="fa-regular fa-comment-dots text-slate-500"></i>
@@ -295,7 +507,7 @@ const getStatusIconClass = (status) => {
                     </p>
                 </div>
 
-                <!-- 6. HISTORIAL CRONOLÓGICO DE ESTADOS (EN ESPAÑOL) -->
+                <!-- 7. HISTORIAL CRONOLÓGICO DE ESTADOS (SIN EXPONER DATOS INTERNOS DE PERSONAL) -->
                 <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
                     <div class="border-b border-slate-100 pb-3">
                         <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -311,7 +523,7 @@ const getStatusIconClass = (status) => {
                             class="relative flex items-start gap-4 pl-1"
                         >
                             <div class="h-7 w-7 rounded-full bg-white border-2 border-blue-900 text-blue-900 flex items-center justify-center shrink-0 z-10 text-[10px] shadow-2xs">
-                                <i :class="getStatusIconClass(historyItem.new_status)"></i>
+                                <i :class="getStageIconClass(historyItem.new_status)"></i>
                             </div>
 
                             <div class="flex-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
@@ -331,7 +543,7 @@ const getStatusIconClass = (status) => {
                     </div>
                 </div>
 
-                <!-- 7. BOTONES DE NAVEGACIÓN INFERIOR -->
+                <!-- 8. BOTONES DE NAVEGACIÓN INFERIOR -->
                 <div class="flex items-center justify-between pt-2">
                     <Link
                         :href="route('cliente.orders.index')"
@@ -352,9 +564,7 @@ const getStatusIconClass = (status) => {
             </div>
         </div>
 
-        <!-- ========================================================================= -->
         <!-- MODAL DE CANCELACIÓN DE PEDIDO PENDIENTE -->
-        <!-- ========================================================================= -->
         <div
             v-if="showCancelModal"
             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"

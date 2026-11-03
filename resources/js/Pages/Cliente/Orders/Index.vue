@@ -20,9 +20,24 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    last_updated_at: {
+        type: String,
+        default: null,
+    },
 });
 
 const currentStatus = ref(props.filters.status || 'all');
+const isReloading = ref(false);
+
+const reloadData = () => {
+    isReloading.value = true;
+    router.reload({
+        preserveScroll: true,
+        onFinish: () => {
+            isReloading.value = false;
+        },
+    });
+};
 
 const filterByStatus = (statusKey) => {
     currentStatus.value = statusKey;
@@ -37,29 +52,55 @@ const filterByStatus = (statusKey) => {
     );
 };
 
-const getStatusBadgeClass = (status) => {
-    switch (status) {
-        case 'pending':
-            return 'bg-amber-50 text-amber-900 border-amber-200/80';
+const getStageBadgeClass = (stageKey) => {
+    switch (stageKey) {
+        case 'entregado':
+            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        case 'en_reparticion':
+            return 'bg-indigo-50 text-indigo-900 border-indigo-300';
+        case 'asignado_a_ruta':
+            return 'bg-purple-50 text-purple-900 border-purple-300';
+        case 'llevando_a_planta':
+        case 'lavando':
+        case 'listo_para_entregar':
+            return 'bg-sky-50 text-sky-900 border-sky-300';
         case 'confirmed':
-            return 'bg-blue-50 text-blue-900 border-blue-200/80';
+        case 'confirmado':
+            return 'bg-blue-50 text-blue-900 border-blue-300';
         case 'cancelled':
-            return 'bg-rose-50 text-rose-800 border-rose-200/80';
+        case 'cancelado':
+            return 'bg-rose-50 text-rose-800 border-rose-300';
+        case 'pending':
+        case 'pendiente':
         default:
-            return 'bg-slate-100 text-slate-700 border-slate-200';
+            return 'bg-amber-50 text-amber-900 border-amber-300';
     }
 };
 
-const getStatusIconClass = (status) => {
-    switch (status) {
-        case 'pending':
-            return 'fa-regular fa-clock text-amber-600';
+const getStageIconClass = (stageKey) => {
+    switch (stageKey) {
+        case 'entregado':
+            return 'fa-solid fa-check-double text-emerald-600';
+        case 'en_reparticion':
+            return 'fa-solid fa-truck-fast text-indigo-600';
+        case 'asignado_a_ruta':
+            return 'fa-solid fa-route text-purple-600';
+        case 'llevando_a_planta':
+            return 'fa-solid fa-truck-arrow-right text-sky-600';
+        case 'lavando':
+            return 'fa-solid fa-soap text-sky-600';
+        case 'listo_para_entregar':
+            return 'fa-solid fa-boxes-packing text-sky-600';
         case 'confirmed':
+        case 'confirmado':
             return 'fa-solid fa-circle-check text-blue-700';
         case 'cancelled':
+        case 'cancelado':
             return 'fa-solid fa-ban text-rose-600';
+        case 'pending':
+        case 'pendiente':
         default:
-            return 'fa-solid fa-circle text-slate-400';
+            return 'fa-regular fa-clock text-amber-600';
     }
 };
 </script>
@@ -71,6 +112,42 @@ const getStatusIconClass = (status) => {
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
             <div class="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
 
+                <!-- BARRA SUPERIOR: ENCABEZADO Y BOTÓN ACTUALIZAR -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-slate-200/80">
+                    <div>
+                        <h1 class="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <i class="fa-solid fa-box-archive text-blue-900"></i>
+                            <span>Mis Pedidos a Domicilio</span>
+                        </h1>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Seguimiento inmutable de solicitudes, entregas y custodia de botellones de 20L
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <span v-if="last_updated_at" class="text-[11px] text-slate-400 font-mono hidden md:inline">
+                            Actualizado: {{ last_updated_at }}
+                        </span>
+                        <button
+                            type="button"
+                            @click="reloadData"
+                            :disabled="isReloading"
+                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                            title="Recalcular estado actual"
+                        >
+                            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin text-blue-900': isReloading }"></i>
+                            <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
+                        </button>
+                        <Link
+                            :href="route('cliente.orders.create')"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer shrink-0"
+                        >
+                            <i class="fa-solid fa-plus text-xs"></i>
+                            <span>Nuevo pedido</span>
+                        </Link>
+                    </div>
+                </div>
+
                 <!-- 1. ALERTA DESTACADA: PEDIDO ACTIVO EN CURSO (SI EXISTE) -->
                 <div
                     v-if="activeOrder"
@@ -80,7 +157,7 @@ const getStatusIconClass = (status) => {
                         <div class="h-11 w-11 rounded-xl bg-white/10 text-sky-400 flex items-center justify-center shrink-0 border border-white/10 text-lg">
                             <i class="fa-solid fa-truck-fast"></i>
                         </div>
-                        <div class="space-y-0.5">
+                        <div class="space-y-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-xs font-semibold uppercase tracking-wider text-sky-200">
                                     Pedido Activo en Curso
@@ -88,12 +165,15 @@ const getStatusIconClass = (status) => {
                                 <span class="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-white text-blue-950">
                                     {{ activeOrder.folio }}
                                 </span>
-                                <span class="px-2 py-0.5 rounded-lg text-xs font-semibold bg-sky-400/20 text-sky-200 border border-sky-400/30">
-                                    {{ activeOrder.status_label }}
+                                <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-400/20 text-sky-200 border border-sky-400/30">
+                                    {{ activeOrder.operational_progress?.overall_stage_label || activeOrder.status_label }}
                                 </span>
                             </div>
                             <p class="text-xs text-slate-300">
                                 Solicitado el <strong>{{ activeOrder.created_at }}</strong> &bull; Total: <strong>{{ activeOrder.total_bottles }} botellón(es) de 20L</strong>
+                            </p>
+                            <p v-if="activeOrder.operational_progress?.explanation" class="text-xs text-sky-200 font-medium">
+                                {{ activeOrder.operational_progress.explanation }}
                             </p>
                         </div>
                     </div>
@@ -173,17 +253,8 @@ const getStatusIconClass = (status) => {
                         </button>
                     </div>
 
-                    <div class="flex items-center gap-3">
-                        <div class="text-xs text-slate-500 hidden sm:block">
-                            Total: <span class="font-bold text-slate-900">{{ orders.total }}</span> pedido(s)
-                        </div>
-                        <Link
-                            :href="route('cliente.orders.create')"
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer min-h-[40px] shrink-0"
-                        >
-                            <i class="fa-solid fa-plus text-xs"></i>
-                            <span>Nuevo pedido</span>
-                        </Link>
+                    <div class="text-xs text-slate-500">
+                        Total: <span class="font-bold text-slate-900">{{ orders.total }}</span> pedido(s)
                     </div>
                 </div>
 
@@ -200,7 +271,7 @@ const getStatusIconClass = (status) => {
                                     <th scope="col" class="py-3.5 px-4 text-center">Fijos (20L)</th>
                                     <th scope="col" class="py-3.5 px-4 text-center">Cambio (20L)</th>
                                     <th scope="col" class="py-3.5 px-4 text-center">Total (20L)</th>
-                                    <th scope="col" class="py-3.5 px-4">Estado</th>
+                                    <th scope="col" class="py-3.5 px-4">Estado y Etapa Operativa</th>
                                     <th scope="col" class="py-3.5 px-5 text-right">Acciones</th>
                                 </tr>
                             </thead>
@@ -229,7 +300,7 @@ const getStatusIconClass = (status) => {
                                     </td>
 
                                     <!-- Fecha -->
-                                    <td class="py-4 px-4 text-xs text-slate-600">
+                                    <td class="py-4 px-4 text-xs text-slate-600 whitespace-nowrap">
                                         {{ order.created_at }}
                                     </td>
 
@@ -246,25 +317,40 @@ const getStatusIconClass = (status) => {
                                     <!-- Total -->
                                     <td class="py-4 px-4 text-center">
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                                            {{ order.total_bottles }} envases
+                                            {{ order.total_bottles }} u.
                                         </span>
                                     </td>
 
-                                    <!-- Estado -->
+                                    <!-- Estado y Etapa Operativa -->
                                     <td class="py-4 px-4">
-                                        <span
-                                            :class="[
-                                                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border',
-                                                getStatusBadgeClass(order.status)
-                                            ]"
-                                        >
-                                            <i :class="getStatusIconClass(order.status)" class="text-[11px]"></i>
-                                            <span>{{ order.status_label }}</span>
-                                        </span>
+                                        <div class="space-y-1">
+                                            <span
+                                                :class="[
+                                                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border',
+                                                    getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
+                                                ]"
+                                            >
+                                                <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
+                                                <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
+                                            </span>
+
+                                            <!-- Si es mixto y tienen diferente avance -->
+                                            <div
+                                                v-if="order.operational_progress?.is_mixed"
+                                                class="flex flex-wrap gap-1 text-[10px]"
+                                            >
+                                                <span class="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-medium">
+                                                    Cambio: {{ order.operational_progress.exchange?.stage_label }}
+                                                </span>
+                                                <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-medium">
+                                                    Fijos: {{ order.operational_progress.fixed?.stage_label }}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </td>
 
                                     <!-- Acciones -->
-                                    <td class="py-4 px-5 text-right">
+                                    <td class="py-4 px-5 text-right whitespace-nowrap">
                                         <Link
                                             :href="route('cliente.orders.show', order.id)"
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200/70 transition shadow-2xs"
@@ -305,11 +391,11 @@ const getStatusIconClass = (status) => {
                                 <span
                                     :class="[
                                         'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border',
-                                        getStatusBadgeClass(order.status)
+                                        getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
                                     ]"
                                 >
-                                    <i :class="getStatusIconClass(order.status)" class="text-[10px]"></i>
-                                    <span>{{ order.status_label }}</span>
+                                    <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[10px]"></i>
+                                    <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
                                 </span>
                             </div>
 
@@ -330,6 +416,21 @@ const getStatusIconClass = (status) => {
                                 <div class="border-l border-slate-200">
                                     <span class="text-[10px] font-bold text-blue-900 uppercase block">Total 20L</span>
                                     <span class="font-mono font-bold text-slate-900 text-sm">{{ order.total_bottles }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Explicación granular si es mixto -->
+                            <div
+                                v-if="order.operational_progress?.is_mixed"
+                                class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1"
+                            >
+                                <div class="flex items-center justify-between text-slate-600">
+                                    <span class="font-semibold text-sky-900">Cambio:</span>
+                                    <span>{{ order.operational_progress.exchange?.stage_label }}</span>
+                                </div>
+                                <div class="flex items-center justify-between text-slate-600">
+                                    <span class="font-semibold text-blue-900">Fijos:</span>
+                                    <span>{{ order.operational_progress.fixed?.stage_label }}</span>
                                 </div>
                             </div>
 

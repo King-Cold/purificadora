@@ -165,6 +165,38 @@ class Customer extends Model
     }
 
     /**
+     * Cargos por entregas realizadas al cliente.
+     */
+    public function charges(): HasMany
+    {
+        return $this->hasMany(OrderCharge::class);
+    }
+
+    /**
+     * Pagos en efectivo recibidos del cliente.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(OrderPayment::class);
+    }
+
+    /**
+     * Registro de beneficios de la promoción semanal 9+1.
+     */
+    public function promotions(): HasMany
+    {
+        return $this->hasMany(CustomerPromotion::class);
+    }
+
+    /**
+     * Movimientos de custodia de botellones del cliente.
+     */
+    public function custodyMovements(): HasMany
+    {
+        return $this->hasMany(BottleCustodyMovement::class);
+    }
+
+    /**
      * Determina si el cliente está habilitado para realizar nuevos pedidos.
      * Toda cuenta registrada permanece habilitada mientras no esté eliminada.
      */

@@ -209,6 +209,15 @@ class OrderService
                 throw new InvalidOrderTransitionException('El pedido ya se encuentra cancelado (estado terminal).');
             }
 
+            // Regla confirmada Sprint 3: si ya se recogieron envases fijos, se bloquea la cancelación normal
+            if ($lockedOrder->hasCollectedFixedCustody()) {
+                throw new OrderBusinessRuleException(
+                    'No se puede cancelar el pedido normalmente porque ya se han recogido envases fijos del cliente. Registre una incidencia para coordinar su devolución.',
+                    'custody',
+                    422
+                );
+            }
+
             // Si el pedido ya estaba Confirmado: únicamente Administrador puede cancelarlo
             if ($lockedOrder->isConfirmed()) {
                 if ($user->hasRole('Cliente')) {
@@ -218,6 +227,15 @@ class OrderService
                 if (!$user->hasRole('Administrador') && !$user->hasRole('Super Admin') && !$user->can('orders.cancel')) {
                     throw new OrderBusinessRuleException('No tienes permisos para cancelar pedidos confirmados.', 'authorization', 403);
                 }
+            }
+
+            // Estados operativos más avanzados (en ruta, en proceso, entregado, incidencia)
+            if (!$lockedOrder->isPending() && !$lockedOrder->isConfirmed()) {
+                throw new OrderBusinessRuleException(
+                    "No se puede cancelar un pedido en estado '{$lockedOrder->status}'.",
+                    'status',
+                    422
+                );
             }
 
             $previousStatus = $lockedOrder->status;
@@ -436,12 +454,18 @@ class OrderService
     }
 
     /**
-     * Obtiene el pedido activo actual de un cliente (en estado Pendiente o Confirmado).
+     * Obtiene el pedido activo actual de un cliente.
      */
     public function getActiveOrderForCustomer(Customer $customer, bool $lockForUpdate = false): ?Order
     {
         $query = Order::where('customer_id', $customer->id)
-            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED]);
+            ->whereIn('status', [
+                Order::STATUS_PENDING,
+                Order::STATUS_CONFIRMED,
+                Order::STATUS_IN_ROUTE,
+                Order::STATUS_IN_PROCESS,
+                Order::STATUS_INCIDENT,
+            ]);
 
         if ($lockForUpdate) {
             $query->lockForUpdate();

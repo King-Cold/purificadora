@@ -12,6 +12,11 @@ class OrderPolicy
      */
     public function before(User $user, string $ability): ?bool
     {
+        // La regla de custodia de fijos aplica incluso para Super Admin en cancelaciones
+        if ($ability === 'cancel') {
+            return null;
+        }
+
         if ($user->hasRole('Super Admin')) {
             return true;
         }
@@ -116,8 +121,13 @@ class OrderPolicy
             return false;
         }
 
-        // Si el usuario es Administrador
-        if ($user->hasRole('Administrador') || $user->can('orders.cancel')) {
+        // Si ya se recogieron botellones fijos, se bloquea la cancelación ordinaria para todos
+        if ($order->hasCollectedFixedCustody()) {
+            return false;
+        }
+
+        // Si el usuario es Administrador o Super Admin
+        if ($user->hasRole(['Administrador', 'Super Admin']) || $user->can('orders.cancel')) {
             return $order->isPending() || $order->isConfirmed();
         }
 

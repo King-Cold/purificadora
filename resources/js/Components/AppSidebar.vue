@@ -32,6 +32,19 @@ const isRouteActive = (pattern) => {
     }
 };
 
+const isTopDashboardActive = computed(() => {
+    if (isAdmin.value) {
+        return isRouteActive('admin.dashboard');
+    }
+    if (isRepartidor.value) {
+        return isRouteActive('repartidor.dashboard');
+    }
+    if (isPlanta.value) {
+        return isRouteActive('planta.dashboard');
+    }
+    return isRouteActive('dashboard');
+});
+
 const getRouteUrl = (name) => {
     try {
         if (name && route().has(name)) {
@@ -323,7 +336,7 @@ onUnmounted(() => {
                             :class="[
                                 'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
                                 collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('dashboard') || isRouteActive('admin.dashboard') || isRouteActive('repartidor.dashboard') || isRouteActive('planta.dashboard')
+                                isTopDashboardActive
                                     ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                             ]"
@@ -331,7 +344,7 @@ onUnmounted(() => {
                             aria-label="Dashboard"
                         >
                             <span
-                                v-if="isRouteActive('dashboard') || isRouteActive('admin.dashboard') || isRouteActive('repartidor.dashboard') || isRouteActive('planta.dashboard')"
+                                v-if="isTopDashboardActive"
                                 class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
                             ></span>
                             <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
@@ -438,24 +451,106 @@ onUnmounted(() => {
                             <span v-if="!collapsed" class="truncate">Pedidos</span>
                         </Link>
 
+                        <!-- Gestión de Rutas (Administrador) -->
                         <Link
-                            v-if="isAdmin || isRepartidor"
+                            v-if="isAdmin"
+                            :href="getRouteUrl('admin.routes.index')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('admin.routes.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Rutas' : ''"
+                        >
+                            <span v-if="isRouteActive('admin.routes.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-route"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Rutas</span>
+                        </Link>
+
+                        <Link
+                            v-if="isAdmin"
                             :href="getRouteUrl('repartidor.dashboard')"
                             @click="handleLinkClick"
                             :class="[
                                 'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
                                 collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.*')
+                                isRouteActive('repartidor.dashboard')
                                     ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                             ]"
                             :title="collapsed ? 'Reparto' : ''"
                         >
-                            <span v-if="isRouteActive('repartidor.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <span v-if="isRouteActive('repartidor.dashboard')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
                             <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
                                 <i class="fa-solid fa-truck-fast"></i>
                             </div>
                             <span v-if="!collapsed" class="truncate">Reparto</span>
+                        </Link>
+
+                        <!-- Mi Ruta (Repartidor) -->
+                        <Link
+                            v-if="isAdmin || isRepartidor"
+                            :href="getRouteUrl('repartidor.route.index')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('repartidor.route.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Mi Ruta' : ''"
+                        >
+                            <span v-if="isRouteActive('repartidor.route.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-map-location-dot"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Mi Ruta</span>
+                        </Link>
+
+                        <Link
+                            v-if="isAdmin || isRepartidor"
+                            :href="getRouteUrl('repartidor.truck-load.index')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('repartidor.truck-load.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Mi Carga' : ''"
+                        >
+                            <span v-if="isRouteActive('repartidor.truck-load.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Mi Carga</span>
+                        </Link>
+
+                        <Link
+                            v-if="isAdmin || isRepartidor"
+                            :href="getRouteUrl('repartidor.customers.create')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('repartidor.customers.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Agregar Cliente' : ''"
+                        >
+                            <span v-if="isRouteActive('repartidor.customers.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-user-plus"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Agregar Cliente</span>
                         </Link>
 
                         <Link

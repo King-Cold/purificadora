@@ -117,6 +117,9 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::put('/settings/schedule', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'updateSchedule'])
         ->name('settings.schedule.update')
         ->middleware('permission:settings.manage');
+    Route::put('/settings/debt-limit', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'updateDebtLimit'])
+        ->name('settings.debt-limit.update')
+        ->middleware('permission:settings.manage');
     Route::post('/settings/bottle-presentations', [\App\Http\Controllers\Admin\GeneralSettingController::class, 'storeBottlePresentation'])
         ->name('settings.bottle-presentations.store')
         ->middleware('permission:settings.manage');
@@ -149,18 +152,73 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Admin\OrderController::class, 'cancel'])
         ->name('orders.cancel')
         ->middleware('permission:orders.cancel');
+
+    // Módulo de Gestión de Hojas de Ruta (Administrador)
+    Route::get('/routes', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'index'])
+        ->name('routes.index')
+        ->middleware('permission:routes.view');
+    Route::get('/routes/create', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'create'])
+        ->name('routes.create')
+        ->middleware('permission:routes.assign');
+    Route::post('/routes', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'store'])
+        ->name('routes.store')
+        ->middleware('permission:routes.assign');
+    Route::get('/routes/{route}', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'show'])
+        ->name('routes.show')
+        ->middleware('permission:routes.view');
+    Route::post('/routes/{route}/resume', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'resume'])
+        ->name('routes.resume')
+        ->middleware('permission:routes.assign');
 });
 
 // Panel 2: Cliente
 Route::middleware(['auth', 'role:Cliente'])->group(function () {
-    Route::get('/cliente/dashboard', function (\App\Services\OrderService $orderService) {
+    Route::get('/cliente/dashboard', function (
+        \App\Services\OrderService $orderService,
+        \App\Services\DebtAndCreditService $debtService,
+        \App\Services\WeeklyPromotionService $promoService
+    ) {
         $user = \Illuminate\Support\Facades\Auth::user();
         $customer = $user?->customer;
         $address = $customer?->address;
         $activeOrder = $customer ? $orderService->getActiveOrderForCustomer($customer) : null;
         if ($activeOrder) {
-            $activeOrder->loadMissing('items');
+            $activeOrder->loadMissing(['items', 'deliveryRoute']);
         }
+
+        $pendingDebtBottles = $customer ? $debtService->getPendingDebtBottles($customer) : 0;
+        $pendingDebtAmount = $customer ? $debtService->getPendingDebtAmount($customer) : 0.0;
+        $weeklyPromo = $customer ? $promoService->getWeeklyProgress($customer) : null;
+
+        // Historial de pagos del cliente
+        $paymentHistory = $customer ? \App\Models\OrderPayment::where('customer_id', $customer->id)
+            ->with('order')
+            ->orderBy('id', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'amount' => (float) $p->amount,
+                'cash_tendered' => (float) $p->cash_tendered,
+                'change_returned' => (float) $p->change_returned,
+                'bottles_count' => (int) $p->bottles_covered_count,
+                'order_folio' => $p->order?->folio,
+                'date' => $p->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+            ]) : [];
+
+        // Historial de entregas gratuitas
+        $freeDeliveries = $customer ? \App\Models\OrderCharge::where('customer_id', $customer->id)
+            ->where('status', \App\Models\OrderCharge::STATUS_WAIVED_PROMOTION)
+            ->with('order')
+            ->orderBy('id', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'order_folio' => $c->order?->folio,
+                'bottles_count' => (int) $c->quantity_delivered,
+                'date' => $c->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+            ]) : [];
 
         return Inertia::render('Cliente/Dashboard', [
             'customer' => $customer ? [
@@ -184,7 +242,20 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
                 'total_bottles' => (int) $activeOrder->total_bottles,
                 'fixed_quantity' => (int) $activeOrder->fixed_quantity,
                 'exchange_quantity' => (int) $activeOrder->exchange_quantity,
+                'operational_progress' => $activeOrder->getOperationalProgress(),
             ] : null,
+            'debt' => [
+                'pending_bottles' => $pendingDebtBottles,
+                'pending_debt_bottles' => $pendingDebtBottles,
+                'pending_amount' => $pendingDebtAmount,
+                'pending_debt_amount' => $pendingDebtAmount,
+                'disclaimer' => 'Son botellones pendientes de pago, no envases por devolver.',
+                'clarification_note' => 'Son botellones pendientes de pago, no envases por devolver.',
+            ],
+            'weekly_promo' => $weeklyPromo,
+            'payment_history' => $paymentHistory,
+            'free_deliveries' => $freeDeliveries,
+            'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
     })->name('cliente.dashboard');
 
@@ -231,10 +302,59 @@ Route::middleware(['auth', 'role:Cliente'])->group(function () {
 });
 
 // Panel 3: Repartidor
-Route::middleware(['auth', 'role:Repartidor'])->group(function () {
-    Route::get('/repartidor/dashboard', function () {
-        return Inertia::render('Repartidor/Dashboard');
-    })->name('repartidor.dashboard');
+Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix('repartidor')->name('repartidor.')->group(function () {
+    Route::get('/dashboard', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'dashboard'])
+        ->name('dashboard');
+
+    // Control de existencias del camión: "Mi Carga"
+    Route::get('/mi-carga', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'index'])
+        ->name('truck-load.index');
+    Route::post('/mi-carga/accept/{movement}', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'acceptTransfer'])
+        ->name('truck-load.accept');
+    Route::post('/mi-carga/reject/{movement}', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'rejectTransfer'])
+        ->name('truck-load.reject');
+    Route::post('/mi-carga/descargar', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'proposeUnload'])
+        ->name('truck-load.propose-unload');
+
+    // Panel móvil "Mi Ruta"
+    Route::get('/mi-ruta', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'index'])
+        ->name('route.index');
+    Route::post('/routes/{route}/start', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'start'])
+        ->name('route.start');
+    Route::post('/routes/{route}/breakdown', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'recordBreakdown'])
+        ->name('route.breakdown');
+    Route::post('/routes/{route}/resume', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'resume'])
+        ->name('route.resume');
+    Route::post('/routes/{route}/complete', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'complete'])
+        ->name('route.complete');
+
+    // Operaciones en ruta móvil
+    Route::get('/clientes/nuevo', [\App\Http\Controllers\Repartidor\RouteCustomerController::class, 'create'])
+        ->name('customers.create');
+    Route::post('/clientes/nuevo', [\App\Http\Controllers\Repartidor\RouteCustomerController::class, 'store'])
+        ->name('customers.store-quick');
+    Route::get('/customers/search', [\App\Http\Controllers\Repartidor\DeliveryOperationController::class, 'searchCustomers'])
+        ->name('customers.search');
+    Route::get('/customers/{customer}/traffic-light', [\App\Http\Controllers\Repartidor\DeliveryOperationController::class, 'trafficLight'])
+        ->name('customers.traffic-light');
+    Route::post('/customers', [\App\Http\Controllers\Repartidor\DeliveryOperationController::class, 'storeCustomer'])
+        ->name('customers.store');
+    Route::post('/customers/{customer}/settle-debt', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'settleDebt'])
+        ->name('customers.settle-debt');
+    Route::post('/orders/direct', [\App\Http\Controllers\Repartidor\DeliveryOperationController::class, 'storeDirectOrder'])
+        ->name('orders.direct');
+    Route::get('/servicio-directo', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'directService'])
+        ->name('direct-service.create');
+    Route::post('/servicio-directo', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'storeDirectService'])
+        ->name('direct-service.store');
+    Route::get('/stops/{stop}/serve', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'serve'])
+        ->name('stops.serve');
+    Route::post('/stops/{stop}/serve', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'processServe'])
+        ->name('stops.process-serve');
+    Route::post('/stops/{stop}/complete', [\App\Http\Controllers\Repartidor\DeliveryOperationController::class, 'completeStop'])
+        ->name('stops.complete');
+    Route::post('/stops/{stop}/fail', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'failStop'])
+        ->name('stops.fail');
 });
 
 // Panel 4: Operador Planta
