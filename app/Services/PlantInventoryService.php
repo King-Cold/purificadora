@@ -235,9 +235,10 @@ class PlantInventoryService
                 'exchange_washing_filling' => (int) $inv->exchange_washing_filling,
                 'exchange_full_available' => (int) $inv->exchange_full_available,
                 'exchange_full_reserved' => (int) $inv->exchange_full_reserved,
+                'exchange_unlocated' => (int) ($inv->exchange_unlocated ?? 0),
                 'exchange_damaged_total' => $exchangeDamagedTotal,
                 'fixed_damaged_total' => $fixedDamagedTotal,
-                'exchange_total_physical' => (int) ($inv->exchange_empty_available + $inv->exchange_washing_filling + $inv->exchange_full_available + $inv->exchange_full_reserved + $exchangeDamagedTotal),
+                'exchange_total_physical' => (int) ($inv->exchange_empty_available + $inv->exchange_washing_filling + $inv->exchange_full_available + $inv->exchange_full_reserved + ($inv->exchange_unlocated ?? 0) + $exchangeDamagedTotal),
             ],
             'fixed_in_plant_by_customer' => $fixedByCustomer,
             'incidents' => $incidents,
@@ -271,10 +272,16 @@ class PlantInventoryService
         $stage = trim((string) ($data['stage'] ?? ''));
         $validStages = [
             BottleIncident::STAGE_RECEPTION,
+            BottleIncident::STAGE_EMPTY_STORAGE,
             BottleIncident::STAGE_WASHING,
             BottleIncident::STAGE_FILLING,
             BottleIncident::STAGE_STORAGE,
+            BottleIncident::STAGE_PLANT_STORAGE,
+            BottleIncident::STAGE_PREPARED,
             BottleIncident::STAGE_LOADING,
+            BottleIncident::STAGE_TRUCK_LOADING,
+            BottleIncident::STAGE_ON_TRUCK,
+            BottleIncident::STAGE_ROUTE,
         ];
         if (!in_array($stage, $validStages, true)) {
             throw new OrderBusinessRuleException('Etapa operativa inválida.', 'stage', 422);
@@ -323,55 +330,94 @@ class PlantInventoryService
                     $orderItemId = $fixedItem->id;
                     $orderId = $fixedItem->order_id;
 
-                    // Validar existencias disponibles de este fijo en planta
-                    $received = (int) $fixedItem->received_at_plant_quantity;
-                    $damaged = (int) $fixedItem->damaged_quantity;
-                    $prepared = (int) $fixedItem->prepared_quantity;
-                    $loaded = (int) $fixedItem->loaded_quantity;
+                    // Validar existencias disponibles de este fijo según su etapa operativa
+                    if (in_array($stage, [BottleIncident::STAGE_RECEPTION, BottleIncident::STAGE_EMPTY_STORAGE], true)) {
+                        $availableInStage = $fixedItem->getPendingToWashQuantity();
+                        $stageLabel = 'almacén de vacíos (pendientes de lavar)';
+                        $condition = BottleCustodyMovement::CONDITION_EMPTY;
+                    } elseif (in_array($stage, [BottleIncident::STAGE_WASHING, BottleIncident::STAGE_FILLING], true)) {
+                        $availableInStage = $fixedItem->washing_quantity > 0
+                            ? $fixedItem->getInWashingQuantity()
+                            : max(0, (int) $fixedItem->received_at_plant_quantity - (int) $fixedItem->damaged_quantity - (int) $fixedItem->prepared_quantity);
+                        $stageLabel = 'túnel de lavado/llenado';
+                        $condition = BottleCustodyMovement::CONDITION_EMPTY;
+                    } elseif (in_array($stage, [BottleIncident::STAGE_STORAGE, BottleIncident::STAGE_PLANT_STORAGE, BottleIncident::STAGE_PREPARED, BottleIncident::STAGE_LOADING, BottleIncident::STAGE_TRUCK_LOADING], true)) {
+                        $availableInStage = $fixedItem->getReadyToLoadQuantity();
+                        $stageLabel = 'almacén de preparados en planta';
+                        $condition = BottleCustodyMovement::CONDITION_FULL;
+                    } elseif (in_array($stage, [BottleIncident::STAGE_ON_TRUCK, BottleIncident::STAGE_ROUTE], true)) {
+                        $availableInStage = $fixedItem->getInTruckQuantity();
+                        $stageLabel = 'camión en tránsito';
+                        $condition = BottleCustodyMovement::CONDITION_FULL;
+                    } else {
+                        $availableInStage = max(0, (int) $fixedItem->received_at_plant_quantity - (int) $fixedItem->damaged_quantity - (int) $fixedItem->delivered_quantity);
+                        $stageLabel = 'custodia del pedido';
+                    }
 
-                    // Fijos en planta aptos (no cargados aún y no dañados previamente)
-                    $availableInPlant = max(0, $received - $damaged - $loaded);
-                    if ($quantity > $availableInPlant) {
+                    if ($quantity > $availableInStage) {
                         throw new OrderBusinessRuleException(
-                            "No se pueden registrar {$quantity} fijos dañados. Disponibles en planta para este pedido: {$availableInPlant}.",
+                            "No se pueden registrar {$quantity} fijos dañados en {$stageLabel}. Disponibles en esa etapa: {$availableInStage}.",
                             'quantity',
                             422
                         );
                     }
 
-                    // Separar los dañados de los disponibles:
+                    // Separar los dañados de los disponibles sin alterar acumulados históricos (recibidos, lavados, preparados o cargados):
                     $fixedItem->increment('damaged_quantity', $quantity);
                 }
             } else {
-                // Botellón de cambio genérico: descontar de las existencias de planta según la etapa
-                $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+                // Botellón de cambio genérico: descontar de las existencias reales según la etapa
+                if (in_array($stage, [BottleIncident::STAGE_ON_TRUCK, BottleIncident::STAGE_ROUTE], true)) {
+                    $driver = $reporter;
+                    $truckInv = TruckInventory::lockForUpdate()->firstOrCreate(
+                        ['driver_user_id' => $driver->id],
+                        [
+                            'exchange_full_available' => 0,
+                            'exchange_full_initial' => 0,
+                            'exchange_full_delivered' => 0,
+                            'exchange_empty_collected' => 0,
+                        ]
+                    );
 
-                if (in_array($stage, [BottleIncident::STAGE_RECEPTION, BottleIncident::STAGE_WASHING], true)) {
-                    // Si estaba en lavado o recibido vacío
-                    if ($stage === BottleIncident::STAGE_WASHING && $inv->exchange_washing_filling >= $quantity) {
-                        $inv->decrement('exchange_washing_filling', $quantity);
+                    if ($truckInv->exchange_full_available < $quantity) {
+                        throw new OrderBusinessRuleException(
+                            "No hay suficientes botellones de cambio llenos en el camión para reportar daño. Disponibles: {$truckInv->exchange_full_available}, reportados: {$quantity}.",
+                            'quantity',
+                            422
+                        );
+                    }
+                    $truckInv->decrement('exchange_full_available', $quantity);
+                    $condition = BottleCustodyMovement::CONDITION_FULL;
+                } else {
+                    $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+
+                    if (in_array($stage, [BottleIncident::STAGE_RECEPTION, BottleIncident::STAGE_EMPTY_STORAGE, BottleIncident::STAGE_WASHING], true)) {
+                        // Si estaba en lavado o recibido vacío
+                        if ($stage === BottleIncident::STAGE_WASHING && $inv->exchange_washing_filling >= $quantity) {
+                            $inv->decrement('exchange_washing_filling', $quantity);
+                        } else {
+                            if ($inv->exchange_empty_available < $quantity) {
+                                throw new OrderBusinessRuleException(
+                                    "No hay suficientes botellones vacíos en planta para reportar merma. Disponibles: {$inv->exchange_empty_available}, reportados: {$quantity}.",
+                                    'quantity',
+                                    422
+                                );
+                            }
+                            $inv->decrement('exchange_empty_available', $quantity);
+                        }
+                        $condition = BottleCustodyMovement::CONDITION_EMPTY;
                     } else {
-                        if ($inv->exchange_empty_available < $quantity) {
+                        // En llenado, almacén o carga (estaba lleno)
+                        if ($inv->exchange_full_available < $quantity) {
                             throw new OrderBusinessRuleException(
-                                "No hay suficientes botellones vacíos en planta para reportar merma. Disponibles: {$inv->exchange_empty_available}, reportados: {$quantity}.",
+                                "No hay suficientes botellones llenos disponibles en planta para reportar merma. Disponibles: {$inv->exchange_full_available}, reportados: {$quantity}.",
                                 'quantity',
                                 422
                             );
                         }
-                        $inv->decrement('exchange_empty_available', $quantity);
+                        $inv->decrement('exchange_full_available', $quantity);
+                        $condition = BottleCustodyMovement::CONDITION_FULL;
                     }
-                    $condition = BottleCustodyMovement::CONDITION_EMPTY;
-                } else {
-                    // En llenado, almacén o carga (estaba lleno)
-                    if ($inv->exchange_full_available < $quantity) {
-                        throw new OrderBusinessRuleException(
-                            "No hay suficientes botellones llenos disponibles en planta para reportar merma. Disponibles: {$inv->exchange_full_available}, reportados: {$quantity}.",
-                            'quantity',
-                            422
-                        );
-                    }
-                    $inv->decrement('exchange_full_available', $quantity);
-                    $condition = BottleCustodyMovement::CONDITION_FULL;
                 }
             }
 
@@ -555,6 +601,25 @@ class PlantInventoryService
         if (!is_null($inv->initial_count_completed_at)) {
             $toCommit = min($quantity, $inv->exchange_full_reserved);
             $inv->decrement('exchange_full_reserved', $toCommit);
+        }
+    }
+
+    /**
+     * Registra botellones de cambio sin localizar durante la transferencia al camión.
+     * Descuenta la reserva y los conserva en el saldo de discrepancia/aclaración.
+     */
+    public function commitExchangeUnlocated(int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+
+        if (!is_null($inv->initial_count_completed_at)) {
+            $toCommit = min($quantity, $inv->exchange_full_reserved);
+            $inv->decrement('exchange_full_reserved', $toCommit);
+            $inv->increment('exchange_unlocated', $quantity);
         }
     }
 

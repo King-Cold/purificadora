@@ -194,10 +194,26 @@ class PlantLoadController extends Controller
     {
         $this->ensureIsPhysicalOperator($request);
 
-        try {
-            $this->truckInventoryService->withdrawTransferProposal($movement, $request->user());
+        $validated = $request->validate([
+            'retained_quantity' => ['nullable', 'integer', 'min:0'],
+            'damaged_quantity' => ['nullable', 'integer', 'min:0'],
+            'damage_type' => ['nullable', 'string', 'max:50'],
+            'damage_notes' => ['nullable', 'string', 'max:255'],
+            'unlocated_quantity' => ['nullable', 'integer', 'min:0'],
+        ]);
 
-            return back()->with('success', 'Propuesta de carga retirada y reservas liberadas correctamente.');
+        try {
+            $this->truckInventoryService->withdrawTransferProposal(
+                $movement,
+                $request->user(),
+                (int) ($validated['retained_quantity'] ?? 0),
+                (int) ($validated['damaged_quantity'] ?? 0),
+                $validated['damage_type'] ?? null,
+                $validated['damage_notes'] ?? null,
+                (int) ($validated['unlocated_quantity'] ?? 0)
+            );
+
+            return back()->with('success', 'Propuesta de carga retirada y reservas conciliadas correctamente.');
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['withdraw' => $e->getMessage()]);
         }

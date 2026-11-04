@@ -15,6 +15,7 @@ class BottleCustodyMovement extends Model
     // Statuses
     public const STATUS_PROPOSED = 'proposed';
     public const STATUS_ACCEPTED = 'accepted';
+    public const STATUS_ACCEPTED_WITH_DISCREPANCY = 'accepted_with_discrepancy';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_CANCELLED = 'cancelled';
 

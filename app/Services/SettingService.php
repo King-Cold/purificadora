@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AppSetting;
+use App\Models\BottlePresentation;
 
 class SettingService
 {
@@ -41,15 +42,20 @@ class SettingService
     }
 
     /**
+     * Obtiene el precio vigente de llenado en planta para botellón de 20L.
+     */
+    public function getCurrentStorePrice(): float
+    {
+        $pres = BottlePresentation::getTwentyLiters();
+        return (float) ($pres->store_price ?? 10.00);
+    }
+
+    /**
      * Obtiene el precio vigente de recarga para botellón de 20L a domicilio desde Configuración General.
      */
     public function getCurrentRefillPrice(): float
     {
-        $pres = \App\Models\BottlePresentation::where('capacity', 20.00)
-            ->where('is_available_for_delivery', true)
-            ->first();
-
-        return (float) ($pres?->refill_price ?? 15.00);
+        $pres = BottlePresentation::getTwentyLiters();
+        return (float) ($pres->refill_price ?? 15.00);
     }
 }
-

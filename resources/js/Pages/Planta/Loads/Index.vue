@@ -88,11 +88,40 @@ const submitFixedProposal = () => {
 };
 
 // Retirar Propuesta
-const withdrawProposal = (proposal) => {
+const withdrawModalOpen = ref(false);
+const proposalToWithdraw = ref(null);
+const withdrawForm = useForm({
+    retained_quantity: 0,
+    damaged_quantity: 0,
+    damage_type: 'rotura',
+    damage_notes: '',
+    unlocated_quantity: 0,
+});
+
+const openWithdrawModal = (proposal) => {
     if (!props.isOperator) return;
-    if (confirm(`¿Deseas retirar la propuesta de ${proposal.quantity} botellones? Se liberarán las reservas en planta de inmediato.`)) {
-        router.post(route('planta.loads.withdraw', proposal.id));
+    proposalToWithdraw.value = proposal;
+    withdrawForm.retained_quantity = proposal.quantity;
+    withdrawForm.damaged_quantity = 0;
+    withdrawForm.damage_type = 'rotura';
+    withdrawForm.damage_notes = '';
+    withdrawForm.unlocated_quantity = 0;
+    withdrawModalOpen.value = true;
+};
+
+const submitWithdraw = () => {
+    if (!proposalToWithdraw.value) return;
+    const total = Number(withdrawForm.retained_quantity || 0) + Number(withdrawForm.damaged_quantity || 0) + Number(withdrawForm.unlocated_quantity || 0);
+    if (total !== proposalToWithdraw.value.quantity) {
+        alert(`La suma del desglose (Retenidas: ${withdrawForm.retained_quantity}, Dañadas: ${withdrawForm.damaged_quantity}, Sin localizar: ${withdrawForm.unlocated_quantity}) debe ser exactamente igual a ${proposalToWithdraw.value.quantity}.`);
+        return;
     }
+    withdrawForm.post(route('planta.loads.withdraw', proposalToWithdraw.value.id), {
+        onSuccess: () => {
+            withdrawModalOpen.value = false;
+            proposalToWithdraw.value = null;
+        },
+    });
 };
 
 const totalFixedReady = computed(() => {
@@ -431,9 +460,9 @@ const getStatusBadge = (status) => {
                                     <button
                                         v-if="isOperator"
                                         type="button"
-                                        @click="withdrawProposal(prop)"
+                                        @click="openWithdrawModal(prop)"
                                         class="px-3 py-1 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
-                                        title="Retirar propuesta antes de que sea aceptada y liberar reservas"
+                                        title="Retirar propuesta antes de que sea aceptada y conciliar reservas"
                                     >
                                         <i class="fa-solid fa-rotate-left mr-1"></i> Retirar
                                     </button>
@@ -579,6 +608,131 @@ const getStatusBadge = (status) => {
                             class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow-2xs transition-colors cursor-pointer"
                         >
                             Enviar Propuesta
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Retiro de Propuesta con Desglose Físico -->
+        <div
+            v-if="withdrawModalOpen"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+        >
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-rotate-left text-rose-600"></i>
+                        Retirar Propuesta de Carga
+                    </h3>
+                    <button
+                        type="button"
+                        @click="withdrawModalOpen = false"
+                        class="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <div v-if="proposalToWithdraw" class="text-xs bg-rose-50 p-3 rounded-xl border border-rose-200 text-rose-900 space-y-1">
+                    <div>Propuesta: <strong>{{ proposalToWithdraw.bottle_type_label }} ({{ proposalToWithdraw.quantity }} botellones)</strong></div>
+                    <div v-if="proposalToWithdraw.customer_name">Cliente: <strong>{{ proposalToWithdraw.customer_name }}</strong></div>
+                    <p class="text-[11px] text-rose-700">
+                        Indica el estado físico real de los botellones para conciliar las existencias y reservas de Planta sin pérdida de trazabilidad.
+                    </p>
+                </div>
+
+                <form @submit.prevent="submitWithdraw" class="space-y-4">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Retenidos Aptos
+                            </label>
+                            <input
+                                v-model.number="withdrawForm.retained_quantity"
+                                type="number"
+                                min="0"
+                                :max="proposalToWithdraw ? proposalToWithdraw.quantity : 0"
+                                required
+                                class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-500 focus:ring-rose-500 text-center font-bold"
+                            />
+                            <p class="text-[10px] text-slate-400 mt-1">Se liberan a disponibles</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Dañados
+                            </label>
+                            <input
+                                v-model.number="withdrawForm.damaged_quantity"
+                                type="number"
+                                min="0"
+                                :max="proposalToWithdraw ? proposalToWithdraw.quantity : 0"
+                                required
+                                class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-500 focus:ring-rose-500 text-center font-bold text-rose-600"
+                            />
+                            <p class="text-[10px] text-slate-400 mt-1">Envases rotos/dañados</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Sin Localizar
+                            </label>
+                            <input
+                                v-model.number="withdrawForm.unlocated_quantity"
+                                type="number"
+                                min="0"
+                                :max="proposalToWithdraw ? proposalToWithdraw.quantity : 0"
+                                required
+                                class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-500 focus:ring-rose-500 text-center font-bold text-amber-600"
+                            />
+                            <p class="text-[10px] text-slate-400 mt-1">Pendientes de aclarar</p>
+                        </div>
+                    </div>
+
+                    <div v-if="withdrawForm.damaged_quantity > 0" class="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Tipo de daño detectado
+                            </label>
+                            <select
+                                v-model="withdrawForm.damage_type"
+                                class="w-full rounded-xl border-slate-300 text-xs focus:border-rose-500 focus:ring-rose-500"
+                            >
+                                <option value="rotura">Rotura</option>
+                                <option value="fisura">Fisura / Microfisura</option>
+                                <option value="contaminacion">Contaminación</option>
+                                <option value="deformacion">Deformación</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                                Detalle del daño
+                            </label>
+                            <input
+                                v-model="withdrawForm.damage_notes"
+                                type="text"
+                                placeholder="Describe el daño o rotura al manipular"
+                                class="w-full rounded-xl border-slate-300 text-xs focus:border-rose-500 focus:ring-rose-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                            type="button"
+                            @click="withdrawModalOpen = false"
+                            class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="withdrawForm.processing"
+                            class="px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs transition-colors cursor-pointer"
+                        >
+                            Confirmar Retiro
                         </button>
                     </div>
                 </form>

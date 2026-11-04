@@ -42,7 +42,7 @@ class TruckInventoryService
         $fixedMovements = BottleCustodyMovement::with('customer')
             ->whereNotNull('customer_id')
             ->where('bottle_type', OrderItem::TYPE_FIXED)
-            ->where('status', BottleCustodyMovement::STATUS_ACCEPTED)
+            ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
             ->get();
 
         $customersMap = [];
@@ -211,11 +211,29 @@ class TruckInventoryService
      * Retira/cancela una propuesta de carga antes de que el repartidor la acepte.
      * Libera las reservas de forma segura garantizando que no hubo traspaso físico.
      */
+    /**
+     * Retira/cancela una propuesta de carga antes de que el repartidor la acepte.
+     * Libera las reservas de forma segura garantizando que no hubo traspaso físico.
+     * Permite confirmar físicamente el desglose de unidades retenidas aptas en planta, dañadas o sin localizar.
+     */
     public function withdrawTransferProposal(
         BottleCustodyMovement $movement,
-        User $operator
+        User $operator,
+        int $retainedInPlantQuantity = 0,
+        int $damagedQuantity = 0,
+        ?string $damageType = null,
+        ?string $damageNotes = null,
+        int $unlocatedQuantity = 0
     ): BottleCustodyMovement {
-        return DB::transaction(function () use ($movement, $operator) {
+        return DB::transaction(function () use (
+            $movement,
+            $operator,
+            $retainedInPlantQuantity,
+            $damagedQuantity,
+            $damageType,
+            $damageNotes,
+            $unlocatedQuantity
+        ) {
             $lockedMovement = BottleCustodyMovement::lockForUpdate()->findOrFail($movement->id);
 
             if ($lockedMovement->status !== BottleCustodyMovement::STATUS_PROPOSED) {
@@ -226,8 +244,58 @@ class TruckInventoryService
                 throw new OrderBusinessRuleException('Solo se pueden retirar transferencias de carga hacia el camión.', 'destination', 422);
             }
 
+            $proposedQty = (int)$lockedMovement->quantity;
+            $rQty = max(0, $retainedInPlantQuantity);
+            $dQty = max(0, $damagedQuantity);
+            $lQty = max(0, $unlocatedQuantity);
+
+            if ($rQty + $dQty + $lQty === 0) {
+                $rQty = $proposedQty;
+            } elseif (($rQty + $dQty + $lQty) !== $proposedQty) {
+                throw new OrderBusinessRuleException(
+                    "El desglose de unidades al retirar propuesta (Retenidas: {$rQty}, Dañadas: {$dQty}, Sin localizar: {$lQty}) debe sumar la cantidad propuesta ({$proposedQty}).",
+                    'withdraw_breakdown',
+                    422
+                );
+            }
+
+            $plantService = app(PlantInventoryService::class);
+
             if ($lockedMovement->bottle_type === OrderItem::TYPE_EXCHANGE) {
-                app(PlantInventoryService::class)->releaseExchangeReservation($lockedMovement->quantity);
+                if ($rQty > 0) {
+                    $plantService->releaseExchangeReservation($rQty);
+                }
+                if ($dQty > 0) {
+                    $plantService->commitExchangeTruckLoad($dQty);
+                    $incident = BottleIncident::create([
+                        'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                        'stage' => 'almacen_planta',
+                        'damage_type' => $damageType ?: 'rotura',
+                        'quantity' => $dQty,
+                        'reported_by_user_id' => $operator->id,
+                        'responsible_user_id' => $operator->id,
+                        'status' => BottleIncident::STATUS_PENDING,
+                        'notes' => 'Envase de cambio dañado al retirar propuesta en planta: ' . ($damageNotes ?: 'Detectado durante maniobra'),
+                    ]);
+
+                    BottleCustodyMovement::create([
+                        'user_id' => $operator->id,
+                        'movement_type' => BottleCustodyMovement::TYPE_BOTTLE_INCIDENT,
+                        'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                        'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+                        'quantity' => $dQty,
+                        'origin' => 'plant_full_storage',
+                        'destination' => 'quarantine_damaged',
+                        'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                        'confirmed_by_user_id' => $operator->id,
+                        'confirmed_at' => now(),
+                        'notes' => "Envase de cambio dañado al retirar propuesta ({$dQty} u.). Incidencia #{$incident->id}",
+                        'created_at' => now(),
+                    ]);
+                }
+                if ($lQty > 0) {
+                    $plantService->commitExchangeUnlocated($lQty);
+                }
             } elseif ($lockedMovement->bottle_type === OrderItem::TYPE_FIXED) {
                 $orderItem = null;
                 if ($lockedMovement->order_item_id) {
@@ -240,18 +308,68 @@ class TruckInventoryService
                 }
 
                 if ($orderItem) {
-                    $toRelease = min($lockedMovement->quantity, (int)$orderItem->reserved_quantity);
+                    $toRelease = min($proposedQty, (int)$orderItem->reserved_quantity);
                     if ($toRelease > 0) {
                         $orderItem->decrement('reserved_quantity', $toRelease);
                     }
+
+                    if ($dQty > 0) {
+                        $orderItem->increment('damaged_quantity', $dQty);
+                        $incident = BottleIncident::create([
+                            'order_id' => $lockedMovement->order_id,
+                            'order_item_id' => $orderItem->id,
+                            'customer_id' => $lockedMovement->customer_id,
+                            'bottle_type' => OrderItem::TYPE_FIXED,
+                            'stage' => 'almacen_planta',
+                            'damage_type' => $damageType ?: 'rotura',
+                            'quantity' => $dQty,
+                            'reported_by_user_id' => $operator->id,
+                            'responsible_user_id' => $operator->id,
+                            'status' => BottleIncident::STATUS_PENDING,
+                            'notes' => 'Envase fijo dañado al retirar propuesta en planta: ' . ($damageNotes ?: 'Detectado durante maniobra'),
+                        ]);
+
+                        BottleCustodyMovement::create([
+                            'order_id' => $lockedMovement->order_id,
+                            'order_item_id' => $orderItem->id,
+                            'customer_id' => $lockedMovement->customer_id,
+                            'user_id' => $operator->id,
+                            'movement_type' => BottleCustodyMovement::TYPE_BOTTLE_INCIDENT,
+                            'bottle_type' => OrderItem::TYPE_FIXED,
+                            'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+                            'quantity' => $dQty,
+                            'origin' => 'plant_full_storage',
+                            'destination' => 'quarantine_damaged',
+                            'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                            'confirmed_by_user_id' => $operator->id,
+                            'confirmed_at' => now(),
+                            'notes' => "Envase fijo dañado al retirar propuesta ({$dQty} u.). Incidencia #{$incident->id}",
+                            'created_at' => now(),
+                        ]);
+                    }
+
+                    if ($lQty > 0) {
+                        $orderItem->increment('unlocated_quantity', $lQty);
+                    }
                 }
+            }
+
+            $notes = $lockedMovement->notes . ' | Propuesta retirada por Planta antes de su aceptación física';
+            if ($rQty > 0) {
+                $notes .= " ({$rQty} retenidos aptos en planta)";
+            }
+            if ($dQty > 0) {
+                $notes .= " ({$dQty} dañados)";
+            }
+            if ($lQty > 0) {
+                $notes .= " ({$lQty} sin localizar)";
             }
 
             $lockedMovement->update([
                 'status' => BottleCustodyMovement::STATUS_CANCELLED,
                 'confirmed_by_user_id' => $operator->id,
                 'confirmed_at' => now(),
-                'notes' => $lockedMovement->notes . ' | Propuesta retirada por Planta antes de su aceptación física',
+                'notes' => $notes,
             ]);
 
             return $lockedMovement;
@@ -416,7 +534,7 @@ class TruckInventoryService
                 }
 
                 if ($lQty > 0) {
-                    $plantService->commitExchangeTruckLoad($lQty);
+                    $plantService->commitExchangeUnlocated($lQty);
                 }
             } elseif ($lockedMovement->bottle_type === OrderItem::TYPE_FIXED) {
                 $orderItem = null;
@@ -473,6 +591,10 @@ class TruckInventoryService
                             'notes' => "Envase fijo dañado en carga ({$dQty} u.). Incidencia #{$incident->id}",
                             'created_at' => now(),
                         ]);
+                    }
+
+                    if ($lQty > 0) {
+                        $orderItem->increment('unlocated_quantity', $lQty);
                     }
                 }
             }
@@ -550,7 +672,7 @@ class TruckInventoryService
                     ]);
                 }
                 if ($lQty > 0) {
-                    $plantService->commitExchangeTruckLoad($lQty);
+                    $plantService->commitExchangeUnlocated($lQty);
                 }
             } elseif ($lockedMovement->bottle_type === OrderItem::TYPE_FIXED) {
                 $orderItem = null;
@@ -584,6 +706,10 @@ class TruckInventoryService
                             'status' => BottleIncident::STATUS_PENDING,
                             'notes' => 'Envase fijo dañado en propuesta rechazada: ' . ($damageNotes ?: $trimmedReason),
                         ]);
+                    }
+
+                    if ($lQty > 0) {
+                        $orderItem->increment('unlocated_quantity', $lQty);
                     }
                 }
             }

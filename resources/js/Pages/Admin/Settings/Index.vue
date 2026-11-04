@@ -3,22 +3,28 @@ import { computed, ref, reactive, watch } from 'vue';
 import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
-import Modal from '@/Components/Modal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import DangerButton from '@/Components/DangerButton.vue';
 
 const props = defineProps({
     schedule: {
         type: Object,
         required: true,
     },
+    bottlePresentation: {
+        type: Object,
+        default: null,
+    },
     bottlePresentations: {
         type: Array,
         default: () => [],
+    },
+    max_pending_payment_bottles: {
+        type: Number,
+        default: 5,
     },
 });
 
@@ -128,145 +134,89 @@ const submitSchedule = () => {
 };
 
 /* =========================================================================
-   SECCIÓN 2: CATÁLOGO DE ENVASES Y PRECIOS
+   SECCIÓN 2: CONFIGURACIÓN EXCLUSIVA DEL BOTELLÓN DE 20 LITROS Y PRECIOS
    ========================================================================= */
-const isPresentationModalOpen = ref(false);
-const editingPresentation = ref(null);
-const imagePreview = ref(null);
+const currentBottle = computed(() => {
+    return props.bottlePresentation || props.bottlePresentations?.[0] || {
+        id: 1,
+        name: 'Botellón 20 Litros',
+        capacity: 20.00,
+        unit: 'Litros',
+        formatted_capacity: '20 Litros',
+        refill_price: 15.00,
+        store_price: 10.00,
+        new_bottle_price: 95.00,
+        image_path: '/images/garrafon-20l.png',
+        image_url: '/images/garrafon-20l.png',
+        is_available_for_delivery: true,
+        is_active: true,
+    };
+});
+
+const bottleForm = useForm({
+    name: currentBottle.value.name || 'Botellón 20 Litros',
+    refill_price: currentBottle.value.refill_price !== null ? currentBottle.value.refill_price : '',
+    store_price: currentBottle.value.store_price !== null ? currentBottle.value.store_price : '',
+    new_bottle_price: currentBottle.value.new_bottle_price !== null ? currentBottle.value.new_bottle_price : '',
+    image_path: currentBottle.value.image_path || '/images/garrafon-20l.png',
+    image: null,
+    is_available_for_delivery: Boolean(currentBottle.value.is_available_for_delivery),
+});
+
+const imagePreview = ref(currentBottle.value.image_url || currentBottle.value.image_path || '/images/garrafon-20l.png');
 const fileInputRef = ref(null);
 
 const presetImages = [
-    { label: 'Garrafón 20L', path: '/images/garrafon-20l.png' },
-    { label: 'Garrafón 10L', path: '/images/garrafon-10l.png' },
+    { label: 'Garrafón Estándar 20L', path: '/images/garrafon-20l.png' },
 ];
 
-const presentationForm = useForm({
-    name: '',
-    capacity: '',
-    unit: 'Litros',
-    refill_price: '',
-    store_price: '',
-    new_bottle_price: '',
-    image_path: '',
-    image: null,
-    is_available_for_delivery: false,
-    is_active: true,
-});
-
 const selectPresetImage = (path) => {
-    presentationForm.image_path = path;
-    presentationForm.image = null;
+    bottleForm.image_path = path;
+    bottleForm.image = null;
     imagePreview.value = path;
 };
 
 const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (file) {
-        presentationForm.image = file;
-        presentationForm.image_path = '';
+        bottleForm.image = file;
+        bottleForm.image_path = '';
         imagePreview.value = URL.createObjectURL(file);
     }
 };
 
 const removeImage = () => {
-    presentationForm.image = null;
-    presentationForm.image_path = '';
-    imagePreview.value = null;
+    bottleForm.image = null;
+    bottleForm.image_path = '/images/garrafon-20l.png';
+    imagePreview.value = '/images/garrafon-20l.png';
     if (fileInputRef.value) {
         fileInputRef.value.value = '';
     }
 };
 
-const openCreatePresentationModal = () => {
-    editingPresentation.value = null;
-    presentationForm.reset();
-    presentationForm.clearErrors();
-    presentationForm.unit = 'Litros';
-    presentationForm.is_available_for_delivery = false;
-    presentationForm.is_active = true;
-    presentationForm.image_path = '';
-    presentationForm.image = null;
-    imagePreview.value = null;
-    if (fileInputRef.value) fileInputRef.value.value = '';
-    isPresentationModalOpen.value = true;
-};
-
-const openEditPresentationModal = (presentation) => {
-    editingPresentation.value = presentation;
-    presentationForm.clearErrors();
-    presentationForm.name = presentation.name;
-    presentationForm.capacity = presentation.capacity;
-    presentationForm.unit = presentation.unit;
-    presentationForm.refill_price = presentation.refill_price !== null ? presentation.refill_price : '';
-    presentationForm.store_price = presentation.store_price !== null ? presentation.store_price : '';
-    presentationForm.new_bottle_price = presentation.new_bottle_price !== null ? presentation.new_bottle_price : '';
-    presentationForm.image_path = presentation.image_path || '';
-    presentationForm.image = null;
-    imagePreview.value = presentation.image_url || presentation.image_path || null;
-    presentationForm.is_available_for_delivery = Boolean(presentation.is_available_for_delivery);
-    presentationForm.is_active = presentation.is_active;
-    if (fileInputRef.value) fileInputRef.value.value = '';
-    isPresentationModalOpen.value = true;
-};
-
-const closePresentationModal = () => {
-    isPresentationModalOpen.value = false;
-    editingPresentation.value = null;
-    presentationForm.reset();
-    presentationForm.clearErrors();
-    imagePreview.value = null;
-    if (fileInputRef.value) fileInputRef.value.value = '';
-};
-
-const submitPresentationForm = () => {
-    if (editingPresentation.value) {
-        if (presentationForm.image) {
-            presentationForm.transform(data => ({ ...data, _method: 'PUT' })).post(route('admin.settings.bottle-presentations.update', editingPresentation.value.id), {
-                preserveScroll: true,
-                onSuccess: () => closePresentationModal(),
-            });
-        } else {
-            presentationForm.put(route('admin.settings.bottle-presentations.update', editingPresentation.value.id), {
-                preserveScroll: true,
-                onSuccess: () => closePresentationModal(),
-            });
-        }
-    } else {
-        presentationForm.post(route('admin.settings.bottle-presentations.store'), {
+const submitBottleForm = () => {
+    if (bottleForm.image) {
+        bottleForm.transform(data => ({ ...data, _method: 'PUT' })).post(route('admin.settings.bottle-presentations.update', currentBottle.value.id), {
             preserveScroll: true,
-            onSuccess: () => closePresentationModal(),
+        });
+    } else {
+        bottleForm.put(route('admin.settings.bottle-presentations.update', currentBottle.value.id), {
+            preserveScroll: true,
         });
     }
 };
 
-// Modal de confirmación para activar/desactivar
-const isToggleStatusModalOpen = ref(false);
-const presentationToToggle = ref(null);
-const isTogglingStatus = ref(false);
+/* =========================================================================
+   SECCIÓN 3: LÍMITE DE BOTELLONES PENDIENTES DE PAGO
+   ========================================================================= */
+const debtLimitForm = useForm({
+    max_pending_payment_bottles: props.max_pending_payment_bottles ?? 5,
+});
 
-const openToggleStatusModal = (presentation) => {
-    presentationToToggle.value = presentation;
-    isToggleStatusModalOpen.value = true;
-};
-
-const closeToggleStatusModal = () => {
-    isToggleStatusModalOpen.value = false;
-    presentationToToggle.value = null;
-    isTogglingStatus.value = false;
-};
-
-const confirmToggleStatus = () => {
-    if (!presentationToToggle.value) return;
-
-    isTogglingStatus.value = true;
-    router.patch(
-        route('admin.settings.bottle-presentations.toggle-status', presentationToToggle.value.id),
-        {},
-        {
-            preserveScroll: true,
-            onFinish: () => closeToggleStatusModal(),
-        }
-    );
+const submitDebtLimit = () => {
+    debtLimitForm.put(route('admin.settings.debt-limit.update'), {
+        preserveScroll: true,
+    });
 };
 
 // Formato de moneda mexicana MXN
@@ -297,18 +247,6 @@ const formatCurrency = (val) => {
                             <i class="fa-solid fa-gear text-slate-700 text-xl"></i>
                             Configuración General
                         </h1>
-                    </div>
-
-                    <!-- Botón de acción contextual según pestaña -->
-                    <div v-if="activeTab === 'bottles'" class="shrink-0">
-                        <button
-                            type="button"
-                            @click="openCreatePresentationModal"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl shadow-xs transition cursor-pointer active:scale-[0.98]"
-                        >
-                            <i class="fa-solid fa-plus text-xs"></i>
-                            <span>Agregar envase</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -348,7 +286,7 @@ const formatCurrency = (val) => {
             <!-- Pestañas de Navegación de la Configuración -->
             <div class="border-b border-slate-200">
                 <nav class="flex gap-4 sm:gap-8" aria-label="Secciones de configuración">
-                    <!-- Tab: Envases y Precios -->
+                    <!-- Tab: Botellón de 20 Litros -->
                     <button
                         type="button"
                         @click="activeTab = 'bottles'"
@@ -360,13 +298,7 @@ const formatCurrency = (val) => {
                         ]"
                     >
                         <i class="fa-solid fa-bottle-water text-base"></i>
-                        <span>Envases y Precios</span>
-                        <span
-                            class="ml-1.5 py-0.5 px-2 rounded-full text-xs font-bold"
-                            :class="activeTab === 'bottles' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'"
-                        >
-                            {{ bottlePresentations.length }}
-                        </span>
+                        <span>Botellón de 20 Litros y Precios</span>
                     </button>
 
                     <!-- Tab: Horario de la Sucursal -->
@@ -387,320 +319,351 @@ const formatCurrency = (val) => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- PESTAÑA 1: CATÁLOGO DE ENVASES Y PRECIOS -->
+            <!-- PESTAÑA 1: CONFIGURACIÓN DEL BOTELLÓN DE 20 LITROS Y PRECIOS -->
             <!-- ========================================================================= -->
             <div v-if="activeTab === 'bottles'" class="space-y-6">
 
-                <!-- Tabla de Presentaciones -->
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-                    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                            <h2 class="text-base font-bold text-slate-900">Catálogo de Presentaciones</h2>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Lista de envases registrados y sus tarifas de rellenado y venta de envase nuevo.
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <!-- Formulario de Configuración de 20 Litros (7 Columnas en LG) -->
+                    <div class="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-6">
+                        <div class="border-b border-slate-100 pb-4">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-bottle-water text-blue-600 text-lg"></i>
+                                    <span>Configuración del Botellón de 20 Litros</span>
+                                </h2>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Capacidad única: 20L
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">
+                                Puritronic opera exclusivamente con botellones de 20 litros. Configura aquí los precios oficiales y la disponibilidad del servicio a domicilio.
                             </p>
                         </div>
-                    </div>
 
-                    <!-- Estado Vacío -->
-                    <div v-if="bottlePresentations.length === 0" class="py-16 px-4 text-center">
-                        <div class="w-16 h-16 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
-                            <i class="fa-solid fa-bottle-water text-2xl"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-slate-900">No hay presentaciones registradas</h3>
-                        <p class="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                            Aún no se ha configurado ninguna presentación de envase. Comienza agregando la primera para definir sus tarifas de rellenado y envase nuevo.
-                        </p>
-                        <button
-                            type="button"
-                            @click="openCreatePresentationModal"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-xs transition cursor-pointer"
-                        >
-                            <i class="fa-solid fa-plus text-xs"></i>
-                            <span>Agregar primer envase</span>
-                        </button>
-                    </div>
+                        <form @submit.prevent="submitBottleForm" class="space-y-5">
+                            <!-- Precios Principales (2 Columnas) -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- Precio de Llenado en Planta -->
+                                <div class="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-1.5">
+                                    <InputLabel for="store_price" value="Precio de llenado en Planta / Sucursal" class="text-xs font-bold text-slate-800" />
+                                    <div class="relative mt-1">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-sm">
+                                            $
+                                        </div>
+                                        <TextInput
+                                            id="store_price"
+                                            v-model="bottleForm.store_price"
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            class="w-full text-sm pl-7 pr-12 font-mono font-bold text-slate-900 bg-white"
+                                            placeholder="10.00"
+                                            required
+                                        />
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
+                                            MXN
+                                        </div>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 leading-tight">
+                                        Tarifa de llenado directo en la planta física para botellones de 20L.
+                                    </p>
+                                    <InputError :message="bottleForm.errors.store_price" class="mt-1" />
+                                </div>
 
-                    <!-- Tabla o Tarjetas de Datos -->
-                    <div v-else>
-                        <!-- VISTA MÓVIL (PANTALLAS < MD): TARJETAS DE ENVASES -->
-                        <div class="md:hidden divide-y divide-slate-100">
+                                <!-- Precio del Servicio a Domicilio -->
+                                <div class="p-3.5 rounded-xl border border-blue-200/90 bg-blue-50/40 space-y-1.5">
+                                    <InputLabel for="refill_price" value="Precio del servicio a domicilio" class="text-xs font-bold text-blue-950" />
+                                    <div class="relative mt-1">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-600 font-bold text-sm">
+                                            $
+                                        </div>
+                                        <TextInput
+                                            id="refill_price"
+                                            v-model="bottleForm.refill_price"
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            class="w-full text-sm pl-7 pr-12 font-mono font-bold text-blue-950 bg-white border-blue-300"
+                                            placeholder="15.00"
+                                            required
+                                        />
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-blue-500 text-xs font-semibold">
+                                            MXN
+                                        </div>
+                                    </div>
+                                    <p class="text-[11px] text-blue-700/80 leading-tight">
+                                        Tarifa por botellón de 20L entregado en ruta (fijo o de cambio).
+                                    </p>
+                                    <InputError :message="bottleForm.errors.refill_price" class="mt-1" />
+                                </div>
+                            </div>
+
+                            <!-- Precio de Envase Nuevo (Opcional) -->
+                            <div class="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <InputLabel for="new_bottle_price" value="Precio de venta de envase nuevo completo (opcional)" class="text-xs font-semibold text-slate-700" />
+                                    <span class="text-[10px] text-slate-400 font-medium">Con envase incluido</span>
+                                </div>
+                                <div class="relative mt-1 max-w-xs">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-sm">
+                                        $
+                                    </div>
+                                    <TextInput
+                                        id="new_bottle_price"
+                                        v-model="bottleForm.new_bottle_price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        class="w-full text-sm pl-7 pr-12 font-mono text-slate-800"
+                                        placeholder="95.00"
+                                    />
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
+                                        MXN
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-slate-500">
+                                    Tarifa aplicable cuando el cliente no cuenta con envase de intercambio y compra uno nuevo de 20L.
+                                </p>
+                                <InputError :message="bottleForm.errors.new_bottle_price" class="mt-1" />
+                            </div>
+
+                            <!-- Interruptor Comercial: Servicio a Domicilio Habilitado -->
                             <div
-                                v-for="item in bottlePresentations"
-                                :key="item.id"
-                                class="p-4 space-y-3"
+                                class="p-4 rounded-xl border transition-colors cursor-pointer"
+                                :class="bottleForm.is_available_for_delivery ? 'bg-blue-50/70 border-blue-200' : 'bg-slate-50 border-slate-200'"
                             >
-                                <div class="flex items-start justify-between gap-3">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                                            <img
-                                                v-if="item.image_url"
-                                                :src="item.image_url"
-                                                :alt="item.name"
-                                                class="max-h-full max-w-full object-contain"
-                                            />
-                                            <i v-else class="fa-solid fa-bottle-water text-slate-400 text-xl"></i>
+                                <label class="inline-flex items-start gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        v-model="bottleForm.is_available_for_delivery"
+                                        class="rounded border-slate-300 text-blue-600 shadow-xs focus:ring-blue-500 mt-1 h-4 w-4"
+                                    />
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs sm:text-sm font-bold text-slate-900">
+                                                Servicio a domicilio habilitado
+                                            </span>
+                                            <span
+                                                class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                                                :class="bottleForm.is_available_for_delivery ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'"
+                                            >
+                                                {{ bottleForm.is_available_for_delivery ? 'Activo' : 'Suspendido' }}
+                                            </span>
                                         </div>
-                                        <div>
-                                            <span class="font-bold text-sm text-slate-900 block leading-tight">{{ item.name }}</span>
-                                            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold">
-                                                    {{ item.formatted_capacity }}
-                                                </span>
-                                                <span
-                                                    v-if="item.is_available_for_delivery"
-                                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
-                                                >
-                                                    <i class="fa-solid fa-truck-fast text-[9px]"></i>
-                                                    A domicilio
-                                                </span>
-                                                <span
-                                                    v-else
-                                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200"
-                                                >
-                                                    <i class="fa-solid fa-store text-[9px]"></i>
-                                                    Solo sucursal
-                                                </span>
-                                            </div>
-                                        </div>
+                                        <p class="text-xs text-slate-600 leading-relaxed">
+                                            Permite a los clientes registrar y recibir pedidos de botellones de 20L en sus domicilios. Si se suspende, la recepción de pedidos en ruta se desactiva temporalmente como decisión de negocio sin alterar las cuentas ni los envases de los clientes.
+                                        </p>
                                     </div>
+                                </label>
+                                <InputError :message="bottleForm.errors.is_available_for_delivery" class="mt-2" />
+                            </div>
 
-                                    <span
-                                        v-if="item.is_active"
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 shrink-0"
-                                    >
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                        Activo
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 shrink-0"
-                                    >
-                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                        Inactivo
+                            <!-- Imagen Oficial del Botellón -->
+                            <div class="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-3">
+                                <InputLabel value="Imagen oficial del botellón de 20 litros" class="text-xs font-semibold text-slate-700" />
+                                
+                                <div class="flex items-center gap-4">
+                                    <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                        <img :src="imagePreview" alt="Vista previa del botellón" class="max-h-full max-w-full object-contain" />
+                                    </div>
+                                    <div class="space-y-2 flex-1">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <button
+                                                v-for="preset in presetImages"
+                                                :key="preset.path"
+                                                type="button"
+                                                @click="selectPresetImage(preset.path)"
+                                                :class="[
+                                                    'px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5',
+                                                    bottleForm.image_path === preset.path
+                                                        ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-300'
+                                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                                ]"
+                                            >
+                                                <i class="fa-solid fa-bottle-water text-xs text-blue-500"></i>
+                                                <span>{{ preset.label }}</span>
+                                            </button>
+
+                                            <label class="px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer flex items-center gap-1.5 transition">
+                                                <i class="fa-solid fa-cloud-arrow-up text-xs text-slate-500"></i>
+                                                <span>Subir imagen personalizada</span>
+                                                <input
+                                                    ref="fileInputRef"
+                                                    type="file"
+                                                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                                    @change="handleImageUpload"
+                                                    class="hidden"
+                                                />
+                                            </label>
+
+                                            <button
+                                                v-if="bottleForm.image || bottleForm.image_path !== '/images/garrafon-20l.png'"
+                                                type="button"
+                                                @click="removeImage"
+                                                class="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                            >
+                                                Restablecer por defecto
+                                            </button>
+                                        </div>
+                                        <p class="text-[11px] text-slate-500">Formatos recomendados: PNG o WEBP con fondo transparente.</p>
+                                    </div>
+                                </div>
+                                <InputError :message="bottleForm.errors.image || bottleForm.errors.image_path" class="mt-1" />
+                            </div>
+
+                            <!-- Botón Guardar -->
+                            <div class="pt-4 border-t border-slate-100 flex items-center justify-end">
+                                <PrimaryButton
+                                    type="submit"
+                                    :disabled="bottleForm.processing"
+                                    class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+                                >
+                                    <i v-if="bottleForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                                    <i v-else class="fa-solid fa-floppy-disk text-xs"></i>
+                                    <span>Guardar Precios y Botellón</span>
+                                </PrimaryButton>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Vista Previa Reactiva y Resumen Operativo (5 Columnas en LG) -->
+                    <div class="lg:col-span-5 space-y-6">
+                        <!-- Tarjeta de Vista Previa del Botellón -->
+                        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-5">
+                            <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-eye text-blue-600 text-sm"></i>
+                                    <span>Vista Previa del Botellón</span>
+                                </h3>
+                                <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                    En vivo
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-4 p-4 bg-slate-50/70 border border-slate-200/70 rounded-2xl">
+                                <div class="w-20 h-20 rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                    <img :src="imagePreview" alt="Botellón 20L" class="max-h-full max-w-full object-contain" />
+                                </div>
+                                <div class="space-y-1">
+                                    <span class="font-extrabold text-slate-900 text-base block">Botellón de 20 Litros</span>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-800 font-mono text-[11px] font-bold">
+                                            20 Litros
+                                        </span>
+                                        <span
+                                            v-if="bottleForm.is_available_for_delivery"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-100 text-blue-800"
+                                        >
+                                            <i class="fa-solid fa-truck-fast text-[9px]"></i>
+                                            A domicilio y planta
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800"
+                                        >
+                                            <i class="fa-solid fa-store text-[9px]"></i>
+                                            Solo en planta
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tarifas Vigentes Calculadas -->
+                            <div class="space-y-2 text-xs">
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-slate-600 font-medium">Precio de llenado en Planta:</span>
+                                    <span class="font-bold text-slate-900 font-mono text-sm">
+                                        {{ formatCurrency(bottleForm.store_price) || 'Sin configurar' }}
                                     </span>
                                 </div>
-
-                                <!-- Precios en Grid Móvil -->
-                                <div class="grid grid-cols-3 gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-100 text-xs text-center">
-                                    <div>
-                                        <span class="block text-[10px] uppercase font-bold text-slate-400">A Domicilio</span>
-                                        <span v-if="item.is_available_for_delivery && item.has_refill_price" class="text-blue-900 font-bold font-mono">
-                                            {{ formatCurrency(item.refill_price) }}
-                                        </span>
-                                        <span v-else class="text-slate-400 text-[10px]">N/A</span>
-                                    </div>
-                                    <div>
-                                        <span class="block text-[10px] uppercase font-bold text-slate-400">Sucursal</span>
-                                        <span v-if="item.has_store_price" class="text-emerald-700 font-bold font-mono">
-                                            {{ formatCurrency(item.store_price) }}
-                                        </span>
-                                        <span v-else class="text-slate-400 text-[10px]">--</span>
-                                    </div>
-                                    <div>
-                                        <span class="block text-[10px] uppercase font-bold text-slate-400">Envase Nuevo</span>
-                                        <span v-if="item.has_new_bottle_price" class="text-slate-800 font-bold font-mono">
-                                            {{ formatCurrency(item.new_bottle_price) }}
-                                        </span>
-                                        <span v-else class="text-slate-400 text-[10px]">--</span>
-                                    </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-blue-900 font-medium">Precio del servicio a domicilio:</span>
+                                    <span class="font-bold text-blue-900 font-mono text-sm">
+                                        {{ formatCurrency(bottleForm.refill_price) || 'Sin configurar' }}
+                                    </span>
                                 </div>
-
-                                <!-- Acciones Móvil -->
-                                <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-                                    <button
-                                        type="button"
-                                        @click="openEditPresentationModal(item)"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
-                                    >
-                                        <i class="fa-solid fa-pen-to-square text-[11px]"></i>
-                                        <span>Editar</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        @click="openToggleStatusModal(item)"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition"
-                                        :class="item.is_active ? 'text-rose-700 bg-rose-50 hover:bg-rose-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
-                                    >
-                                        <i :class="item.is_active ? 'fa-solid fa-toggle-on text-rose-600' : 'fa-solid fa-toggle-off text-emerald-600'" class="text-xs"></i>
-                                        <span>{{ item.is_active ? 'Desactivar' : 'Activar' }}</span>
-                                    </button>
+                                <div class="flex justify-between items-center py-2">
+                                    <span class="text-slate-500 font-medium">Precio de envase nuevo completo:</span>
+                                    <span class="font-semibold text-slate-700 font-mono">
+                                        {{ formatCurrency(bottleForm.new_bottle_price) || 'Sin configurar' }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- VISTA ESCRITORIO (PANTALLAS >= MD): TABLA -->
-                        <div class="hidden md:block overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr class="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                                    <th class="py-3 px-4 sm:px-6">Envase</th>
-                                    <th class="py-3 px-4">Capacidad</th>
-                                    <th class="py-3 px-4">A Domicilio</th>
-                                    <th class="py-3 px-4">En Sucursal</th>
-                                    <th class="py-3 px-4">Envase Nuevo</th>
-                                    <th class="py-3 px-4">Estado</th>
-                                    <th class="py-3 px-4 sm:px-6 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                <tr
-                                    v-for="item in bottlePresentations"
-                                    :key="item.id"
-                                    class="hover:bg-slate-50/60 transition-colors"
-                                >
-                                    <!-- Nombre e Imagen -->
-                                    <td class="py-3.5 px-4 sm:px-6">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                                                <img
-                                                    v-if="item.image_url"
-                                                    :src="item.image_url"
-                                                    :alt="item.name"
-                                                    class="max-h-full max-w-full object-contain"
-                                                />
-                                                <i v-else class="fa-solid fa-bottle-water text-slate-400 text-lg"></i>
-                                            </div>
-                                            <div>
-                                                <span class="font-semibold text-slate-900 block">{{ item.name }}</span>
-                                                <div class="flex items-center gap-2 mt-0.5">
-                                                    <span class="text-[11px] text-slate-400">ID: #{{ item.id }}</span>
-                                                    <span
-                                                        v-if="item.is_available_for_delivery"
-                                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
-                                                    >
-                                                        <i class="fa-solid fa-truck-fast text-[9px]"></i>
-                                                        A domicilio
-                                                    </span>
-                                                    <span
-                                                        v-else
-                                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200"
-                                                    >
-                                                        <i class="fa-solid fa-store text-[9px]"></i>
-                                                        Solo sucursal
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
+                        <!-- Tarjeta de Reglas Operativas del Botellón de 20 Litros -->
+                        <div class="bg-gradient-to-br from-slate-50 to-blue-50/30 border border-slate-200/90 rounded-2xl p-5 space-y-3.5 text-xs">
+                            <div class="flex items-center gap-2 font-bold text-slate-900">
+                                <i class="fa-solid fa-circle-info text-blue-600 text-sm"></i>
+                                <span>Modalidades del Botellón de 20L</span>
+                            </div>
+                            <p class="text-slate-600 leading-relaxed">
+                                Puritronic opera con un solo tamaño de envase. Fijos y de cambio son modalidades operativas y de propiedad, no capacidades distintas:
+                            </p>
+                            <div class="space-y-2.5">
+                                <div class="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                                    <div class="flex items-center gap-1.5 font-bold text-slate-900">
+                                        <i class="fa-solid fa-tag text-blue-600 text-xs"></i>
+                                        <span>Botellones Fijos (20L)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600 leading-normal">
+                                        Propiedad exclusiva del cliente. Se recogen vacíos en su domicilio, se lavan y llenan en planta, y se devuelven al mismo cliente.
+                                    </p>
+                                </div>
+                                <div class="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                                    <div class="flex items-center gap-1.5 font-bold text-slate-900">
+                                        <i class="fa-solid fa-repeat text-emerald-600 text-xs"></i>
+                                        <span>Botellones de Cambio (20L)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600 leading-normal">
+                                        Intercambio genérico e inmediato. El cliente entrega un botellón de 20L vacío y recibe uno lleno en la misma visita.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
 
-                                    <!-- Capacidad -->
-                                    <td class="py-3.5 px-4 text-slate-600 font-mono text-xs">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
-                                            {{ item.formatted_capacity }}
-                                        </span>
-                                    </td>
-
-                                    <!-- Precio a Domicilio -->
-                                    <td class="py-3.5 px-4 font-medium">
-                                        <template v-if="item.is_available_for_delivery">
-                                            <span
-                                                v-if="item.has_refill_price"
-                                                class="text-blue-700 font-mono font-semibold"
-                                            >
-                                                {{ formatCurrency(item.refill_price) }}
-                                            </span>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
-                                            >
-                                                Sin configurar
-                                            </span>
-                                        </template>
-                                        <template v-else>
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500">
-                                                No aplica (solo sucursal)
-                                            </span>
-                                        </template>
-                                    </td>
-
-                                    <!-- Precio en Sucursal -->
-                                    <td class="py-3.5 px-4 font-medium">
-                                        <span
-                                            v-if="item.has_store_price"
-                                            class="text-emerald-700 font-mono font-semibold"
-                                        >
-                                            {{ formatCurrency(item.store_price) }}
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500"
-                                        >
-                                            Sin configurar
-                                        </span>
-                                    </td>
-
-                                    <!-- Precio de Envase Nuevo -->
-                                    <td class="py-3.5 px-4 font-medium">
-                                        <span
-                                            v-if="item.has_new_bottle_price"
-                                            class="text-slate-800 font-mono font-semibold"
-                                        >
-                                            {{ formatCurrency(item.new_bottle_price) }}
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500"
-                                        >
-                                            Sin configurar
-                                        </span>
-                                    </td>
-
-                                    <!-- Estado -->
-                                    <td class="py-3.5 px-4">
-                                        <span
-                                            v-if="item.is_active"
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800"
-                                        >
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                            Activo
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600"
-                                        >
-                                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                            Inactivo
-                                        </span>
-                                    </td>
-
-                                    <!-- Acciones -->
-                                    <td class="py-3.5 px-4 sm:px-6 text-right">
-                                        <div class="inline-flex items-center gap-1">
-                                            <!-- Botón Editar -->
-                                            <button
-                                                type="button"
-                                                @click="openEditPresentationModal(item)"
-                                                class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-                                                title="Editar presentación"
-                                            >
-                                                <i class="fa-solid fa-pen-to-square text-xs"></i>
-                                            </button>
-
-                                            <!-- Botón Activar / Desactivar -->
-                                            <button
-                                                type="button"
-                                                @click="openToggleStatusModal(item)"
-                                                :class="[
-                                                    'h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer',
-                                                    item.is_active
-                                                        ? 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
-                                                        : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                                                ]"
-                                                :title="item.is_active ? 'Desactivar presentación' : 'Activar presentación'"
-                                            >
-                                                <i :class="item.is_active ? 'fa-solid fa-toggle-on text-emerald-600 text-sm' : 'fa-solid fa-toggle-off text-slate-400 text-sm'"></i>
-                                                <span>{{ item.is_active ? 'Desactivar' : 'Activar' }}</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                        <!-- Tarjeta de Límite de Botellones Pendientes de Pago -->
+                        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-hand-holding-dollar text-slate-500"></i>
+                                    <span>Límite de Envases Pendientes</span>
+                                </h3>
+                            </div>
+                            <form @submit.prevent="submitDebtLimit" class="space-y-3">
+                                <div>
+                                    <InputLabel for="debt_limit" value="Límite máximo general de botellones pendientes por cliente" class="text-xs font-medium text-slate-600" />
+                                    <div class="relative mt-1 max-w-[160px]">
+                                        <TextInput
+                                            id="debt_limit"
+                                            v-model="debtLimitForm.max_pending_payment_bottles"
+                                            type="number"
+                                            min="0"
+                                            class="w-full text-sm font-bold text-slate-900"
+                                            required
+                                        />
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 mt-1">
+                                        Bloquea nuevos pedidos si el cliente excede este número de botellones sin liquidar.
+                                    </p>
+                                    <InputError :message="debtLimitForm.errors.max_pending_payment_bottles" class="mt-1" />
+                                </div>
+                                <div class="flex justify-end">
+                                    <SecondaryButton
+                                        type="submit"
+                                        :disabled="debtLimitForm.processing"
+                                        class="text-xs font-semibold py-1.5 px-3"
+                                    >
+                                        <i v-if="debtLimitForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs mr-1"></i>
+                                        <span>Actualizar límite</span>
+                                    </SecondaryButton>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
+
             </div>
 
             <!-- ========================================================================= -->
@@ -790,13 +753,12 @@ const formatCurrency = (val) => {
                                     value="Anticipación para cerrar pedidos (minutos antes del cierre)"
                                     class="text-xs font-semibold"
                                 />
-                                <div class="mt-1 relative rounded-xl shadow-xs">
+                                <div class="relative mt-1 max-w-xs">
                                     <TextInput
                                         id="order_cutoff_advance_minutes"
                                         v-model="scheduleForm.order_cutoff_advance_minutes"
                                         type="number"
                                         min="0"
-                                        max="1440"
                                         class="w-full text-sm pl-4 pr-16"
                                         required
                                     />
@@ -931,311 +893,8 @@ const formatCurrency = (val) => {
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
-
-        <!-- ========================================================================= -->
-        <!-- MODAL: AGREGAR / EDITAR PRESENTACIÓN DE ENVASE -->
-        <!-- ========================================================================= -->
-        <Modal :show="isPresentationModalOpen" @close="closePresentationModal" max-width="lg">
-            <div class="p-6">
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <i class="fa-solid fa-bottle-water text-blue-600"></i>
-                        <span>{{ editingPresentation ? 'Editar Presentación' : 'Agregar Presentación' }}</span>
-                    </h3>
-                    <button
-                        type="button"
-                        @click="closePresentationModal"
-                        class="text-slate-400 hover:text-slate-600 transition"
-                        title="Cerrar"
-                    >
-                        <i class="fa-solid fa-xmark text-base"></i>
-                    </button>
-                </div>
-
-                <form @submit.prevent="submitPresentationForm" class="mt-5 space-y-4">
-                    <!-- Nombre del Envase -->
-                    <div>
-                        <InputLabel for="pres_name" value="Nombre del Envase" class="text-xs font-semibold" />
-                        <TextInput
-                            id="pres_name"
-                            v-model="presentationForm.name"
-                            type="text"
-                            class="w-full mt-1 text-sm"
-                            placeholder="Ej. Garrafón Estándar"
-                            required
-                            maxlength="100"
-                        />
-                        <InputError :message="presentationForm.errors.name" class="mt-1" />
-                    </div>
-
-                    <!-- Capacidad y Unidad de Medida -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <InputLabel for="pres_capacity" value="Capacidad" class="text-xs font-semibold" />
-                            <TextInput
-                                id="pres_capacity"
-                                v-model="presentationForm.capacity"
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                class="w-full mt-1 text-sm"
-                                placeholder="Ej. 20"
-                                required
-                            />
-                            <InputError :message="presentationForm.errors.capacity" class="mt-1" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="pres_unit" value="Unidad de Medida" class="text-xs font-semibold" />
-                            <TextInput
-                                id="pres_unit"
-                                v-model="presentationForm.unit"
-                                type="text"
-                                class="w-full mt-1 text-sm"
-                                placeholder="Ej. Litros"
-                                required
-                                maxlength="20"
-                            />
-                            <InputError :message="presentationForm.errors.unit" class="mt-1" />
-                        </div>
-                    </div>
-
-                    <!-- Imagen del Envase -->
-                    <div>
-                        <InputLabel value="Imagen del Envase" class="text-xs font-semibold mb-1.5" />
-                        
-                        <!-- Preview si hay imagen -->
-                        <div v-if="imagePreview" class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl mb-2.5">
-                            <div class="w-14 h-14 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                                <img :src="imagePreview" alt="Vista previa" class="max-h-full max-w-full object-contain" />
-                            </div>
-                            <div class="flex-1 min-w-0 text-xs">
-                                <p class="font-bold text-slate-800 truncate">
-                                    {{ presentationForm.image ? presentationForm.image.name : presentationForm.image_path }}
-                                </p>
-                                <p class="text-slate-400 text-[11px]">Imagen vinculada para la presentación</p>
-                            </div>
-                            <button
-                                type="button"
-                                @click="removeImage"
-                                class="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2.5 py-1 rounded-lg hover:bg-rose-50 transition"
-                            >
-                                Quitar
-                            </button>
-                        </div>
-
-                        <!-- Selector de presets o subir archivo -->
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-[11px] text-slate-500 font-medium">Asignar imagen:</span>
-                            <button
-                                v-for="preset in presetImages"
-                                :key="preset.path"
-                                type="button"
-                                @click="selectPresetImage(preset.path)"
-                                :class="[
-                                    'px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5',
-                                    presentationForm.image_path === preset.path
-                                        ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-300'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                                ]"
-                            >
-                                <i class="fa-solid fa-bottle-water text-xs text-blue-500"></i>
-                                <span>{{ preset.label }}</span>
-                            </button>
-
-                            <label
-                                class="px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer flex items-center gap-1.5 transition"
-                            >
-                                <i class="fa-solid fa-cloud-arrow-up text-xs text-slate-500"></i>
-                                <span>Subir archivo...</span>
-                                <input
-                                    ref="fileInputRef"
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                                    @change="handleImageUpload"
-                                    class="hidden"
-                                />
-                            </label>
-                        </div>
-                        <InputError :message="presentationForm.errors.image || presentationForm.errors.image_path" class="mt-1" />
-                    </div>
-
-                    <!-- Precios (3 columnas con etiquetas claras) -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                        <div>
-                            <InputLabel for="pres_refill_price" value="A Domicilio (MXN)" class="text-xs font-semibold" />
-                            <div class="relative mt-1">
-                                <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">
-                                    $
-                                </div>
-                                <TextInput
-                                    id="pres_refill_price"
-                                    v-model="presentationForm.refill_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    class="w-full text-xs pl-6"
-                                    placeholder="Ej. 15.00"
-                                />
-                            </div>
-                            <p class="text-[10px] text-slate-400 mt-0.5">Fijo o de cambio</p>
-                            <InputError :message="presentationForm.errors.refill_price" class="mt-1" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="pres_store_price" value="En Sucursal (MXN)" class="text-xs font-semibold" />
-                            <div class="relative mt-1">
-                                <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">
-                                    $
-                                </div>
-                                <TextInput
-                                    id="pres_store_price"
-                                    v-model="presentationForm.store_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    class="w-full text-xs pl-6"
-                                    placeholder="Ej. 10.00"
-                                />
-                            </div>
-                            <p class="text-[10px] text-slate-400 mt-0.5">Relleno en planta</p>
-                            <InputError :message="presentationForm.errors.store_price" class="mt-1" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="pres_new_bottle_price" value="Envase Nuevo (MXN)" class="text-xs font-semibold" />
-                            <div class="relative mt-1">
-                                <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">
-                                    $
-                                </div>
-                                <TextInput
-                                    id="pres_new_bottle_price"
-                                    v-model="presentationForm.new_bottle_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    class="w-full text-xs pl-6"
-                                    placeholder="Ej. 95.00"
-                                />
-                            </div>
-                            <p class="text-[10px] text-slate-400 mt-0.5">Envase completo</p>
-                            <InputError :message="presentationForm.errors.new_bottle_price" class="mt-1" />
-                        </div>
-                    </div>
-
-                    <!-- Disponible a Domicilio -->
-                    <div class="p-3.5 rounded-xl border" :class="presentationForm.is_available_for_delivery ? 'bg-blue-50/70 border-blue-200' : 'bg-slate-50 border-slate-200'">
-                        <label class="inline-flex items-start gap-2.5 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                v-model="presentationForm.is_available_for_delivery"
-                                class="rounded border-slate-300 text-blue-600 shadow-xs focus:ring-blue-500 mt-0.5"
-                            />
-                            <div>
-                                <span class="text-xs font-bold text-slate-900 block">Disponible para pedidos a domicilio</span>
-                                <p class="text-[11px] text-slate-500 mt-0.5">
-                                    Los pedidos a domicilio son exclusivamente para botellones de 20 litros. Las presentaciones de 10 litros u otras capacidades son exclusivas para rellenado o venta en sucursal.
-                                </p>
-                            </div>
-                        </label>
-                        <InputError :message="presentationForm.errors.is_available_for_delivery" class="mt-1.5" />
-                    </div>
-
-                    <!-- Estado Inicial / Actual -->
-                    <div class="pt-1">
-                        <label class="inline-flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                v-model="presentationForm.is_active"
-                                class="rounded border-slate-300 text-blue-600 shadow-xs focus:ring-blue-500"
-                            />
-                            <span class="text-xs font-medium text-slate-700">Presentación activa para consultas del sistema</span>
-                        </label>
-                    </div>
-
-                    <!-- Acciones del Modal -->
-                    <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                        <SecondaryButton
-                            type="button"
-                            @click="closePresentationModal"
-                            :disabled="presentationForm.processing"
-                        >
-                            Cancelar
-                        </SecondaryButton>
-                        <PrimaryButton
-                            type="submit"
-                            :disabled="presentationForm.processing"
-                            class="flex items-center gap-2"
-                        >
-                            <i v-if="presentationForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                            <span>{{ editingPresentation ? 'Guardar Cambios' : 'Registrar Envase' }}</span>
-                        </PrimaryButton>
-                    </div>
-                </form>
-            </div>
-        </Modal>
-
-        <!-- ========================================================================= -->
-        <!-- MODAL: CONFIRMACIÓN DE ACTIVAR / DESACTIVAR PRESENTACIÓN -->
-        <!-- ========================================================================= -->
-        <Modal :show="isToggleStatusModalOpen" @close="closeToggleStatusModal" max-width="md">
-            <div class="p-6 space-y-4">
-                <div class="flex items-center gap-3">
-                    <div
-                        class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        :class="presentationToToggle?.is_active ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'"
-                    >
-                        <i :class="presentationToToggle?.is_active ? 'fa-solid fa-power-off' : 'fa-solid fa-check'"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900">
-                            {{ presentationToToggle?.is_active ? '¿Desactivar presentación?' : '¿Activar presentación?' }}
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            {{ presentationToToggle?.name }} ({{ presentationToToggle?.formatted_capacity }})
-                        </p>
-                    </div>
-                </div>
-
-                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    {{
-                        presentationToToggle?.is_active
-                            ? 'Al desactivar esta presentación, no se ofrecerá para nuevos pedidos ni consultas activas. Los registros e historiales previos se conservarán intactos sin eliminación física.'
-                            : 'Al activar esta presentación, volverá a estar disponible en el catálogo activo para consultas y asignaciones futuras.'
-                    }}
-                </p>
-
-                <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                    <SecondaryButton
-                        type="button"
-                        @click="closeToggleStatusModal"
-                        :disabled="isTogglingStatus"
-                    >
-                        Cancelar
-                    </SecondaryButton>
-                    <PrimaryButton
-                        v-if="!presentationToToggle?.is_active"
-                        type="button"
-                        @click="confirmToggleStatus"
-                        :disabled="isTogglingStatus"
-                        class="bg-emerald-600 hover:bg-emerald-700"
-                    >
-                        <i v-if="isTogglingStatus" class="fa-solid fa-circle-notch fa-spin text-xs mr-1"></i>
-                        <span>Confirmar Activación</span>
-                    </PrimaryButton>
-                    <DangerButton
-                        v-else
-                        type="button"
-                        @click="confirmToggleStatus"
-                        :disabled="isTogglingStatus"
-                    >
-                        <i v-if="isTogglingStatus" class="fa-solid fa-circle-notch fa-spin text-xs mr-1"></i>
-                        <span>Confirmar Desactivación</span>
-                    </DangerButton>
-                </div>
-            </div>
-        </Modal>
     </AuthenticatedLayout>
 </template>

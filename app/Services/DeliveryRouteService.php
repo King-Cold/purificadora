@@ -492,14 +492,14 @@ class DeliveryRouteService
                         ->where('bottle_type', OrderItem::TYPE_FIXED)
                         ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_LOAD_FIXED)
                         ->where('destination', 'truck')
-                        ->where('status', BottleCustodyMovement::STATUS_ACCEPTED)
+                        ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
                         ->sum('quantity');
 
                     $alreadyDeliveredFixed = (int) BottleCustodyMovement::where('customer_id', $customer->id)
                         ->where('bottle_type', OrderItem::TYPE_FIXED)
                         ->where('movement_type', BottleCustodyMovement::TYPE_DELIVERY_REFILL_TO_CUSTOMER)
                         ->where('origin', 'truck')
-                        ->where('status', BottleCustodyMovement::STATUS_ACCEPTED)
+                        ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
                         ->sum('quantity');
 
                     $availableFixedOnTruck = max(0, $loadedFixed - $alreadyDeliveredFixed);
@@ -512,10 +512,12 @@ class DeliveryRouteService
                         );
                     }
 
+                    $newDelivered = $fixedItem->delivered_quantity + $fixedDelivered;
+                    $isLineCompleted = ($newDelivered + $fixedItem->cancelled_quantity) >= $fixedItem->quantity;
                     $fixedItem->update([
-                        'delivered_quantity' => $fixedItem->delivered_quantity + $fixedDelivered,
+                        'delivered_quantity' => $newDelivered,
                         'unit_price' => $refillPrice,
-                        'status' => OrderItem::STATUS_DELIVERED,
+                        'status' => $isLineCompleted ? OrderItem::STATUS_DELIVERED : OrderItem::STATUS_OUT_FOR_DELIVERY,
                     ]);
 
                     BottleCustodyMovement::create([
@@ -587,7 +589,7 @@ class DeliveryRouteService
                         'created_at' => now(),
                     ]);
                 }
-            } elseif ($order->hasCollectedFixedCustody()) {
+            } elseif ($order->hasCollectedFixedCustody() || !$allUnitsResolved) {
                 $order->update(['status' => Order::STATUS_IN_PROCESS]);
             }
 

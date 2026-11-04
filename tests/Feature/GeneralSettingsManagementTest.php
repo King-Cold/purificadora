@@ -10,6 +10,7 @@ use App\Services\StoreScheduleService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use LogicException;
 use Tests\TestCase;
 
 class GeneralSettingsManagementTest extends TestCase
@@ -151,145 +152,138 @@ class GeneralSettingsManagementTest extends TestCase
             '2026-11-01 10:00:00', // Domingo
         ];
 
-        foreach ($days as $dateStr) {
-            $dt = Carbon::parse($dateStr, StoreScheduleService::TIMEZONE);
-            $this->assertTrue(
-                $this->scheduleService->canReceiveOrdersAt($dt),
-                "Falló la recepción de pedidos para el día: {$dt->format('l')}"
-            );
+        foreach ($days as $dateTimeStr) {
+            Carbon::setTestNow(Carbon::parse($dateTimeStr, StoreScheduleService::TIMEZONE));
+            $res = $this->scheduleService->checkOrderReception();
+            $this->assertTrue($res['can_receive'], "Falló en día: {$dateTimeStr}");
+            $this->assertEquals('allowed', $res['reason']);
         }
+
+        Carbon::setTestNow();
     }
 
     /**
-     * 3. El administrador puede actualizar el horario y anticipación, actualizando los cálculos.
+     * 3. Actualización de horario por el Administrador y recálculo automático de la hora límite.
      */
     public function test_admin_can_update_schedule_and_calculations_change(): void
     {
-        $response = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
+        $payload = [
             'opening_time' => '07:30',
             'break_start_time' => '12:30',
-            'break_end_time' => '14:30',
+            'break_end_time' => '14:00',
             'closing_time' => '20:00',
-            'order_cutoff_advance_minutes' => 90, // Límite: 20:00 - 90 min = 18:30
-        ]);
+            'order_cutoff_advance_minutes' => 90,
+        ];
 
-        $response->assertSessionHasNoErrors();
+        $response = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), $payload);
         $response->assertRedirect();
+        $response->assertSessionHas('success');
 
         $schedule = BranchSchedule::current();
         $this->assertEquals('07:30', substr($schedule->opening_time, 0, 5));
         $this->assertEquals('12:30', substr($schedule->break_start_time, 0, 5));
-        $this->assertEquals('14:30', substr($schedule->break_end_time, 0, 5));
+        $this->assertEquals('14:00', substr($schedule->break_end_time, 0, 5));
         $this->assertEquals('20:00', substr($schedule->closing_time, 0, 5));
         $this->assertEquals(90, $schedule->order_cutoff_advance_minutes);
         $this->assertEquals('18:30', $this->scheduleService->getCutoffTime($schedule));
 
-        // 18:29 debe estar permitido ahora
-        $this->assertTrue($this->scheduleService->canReceiveOrdersAt('18:29', $schedule));
-        // 18:30 debe estar bloqueado por corte de pedidos
-        $this->assertFalse($this->scheduleService->canReceiveOrdersAt('18:30', $schedule));
+        // 18:29: permitido (antes de 18:30)
+        $res1829 = $this->scheduleService->checkOrderReception('18:29', $schedule);
+        $this->assertTrue($res1829['can_receive']);
+
+        // 18:30: bloqueado por hora límite
+        $res1830 = $this->scheduleService->checkOrderReception('18:30', $schedule);
+        $this->assertFalse($res1830['can_receive']);
+        $this->assertEquals('orders_closed_for_today', $res1830['reason']);
     }
 
     /**
-     * 4. Se rechazan horarios incoherentes (apertura >= descanso, descanso fin <= inicio, etc.).
+     * 4. Validación de coherencia en el horario: descansos invertidos, anticipación desfasada.
      */
     public function test_incoherent_schedules_are_rejected(): void
     {
-        // Apertura mayor que inicio de descanso
-        $res1 = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
-            'opening_time' => '14:00',
-            'break_start_time' => '13:00',
-            'break_end_time' => '15:00',
+        // Caso A: Descanso antes de apertura
+        $resA = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
+            'opening_time' => '10:00',
+            'break_start_time' => '09:00',
+            'break_end_time' => '11:00',
             'closing_time' => '19:00',
             'order_cutoff_advance_minutes' => 60,
         ]);
-        $res1->assertSessionHasErrors(['break_start_time']);
+        $resA->assertSessionHasErrors(['break_start_time']);
 
-        // Fin de descanso anterior al inicio
-        $res2 = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
+        // Caso B: Fin de descanso anterior a inicio de descanso
+        $resB = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
             'opening_time' => '08:00',
             'break_start_time' => '14:00',
             'break_end_time' => '13:00',
             'closing_time' => '19:00',
             'order_cutoff_advance_minutes' => 60,
         ]);
-        $res2->assertSessionHasErrors(['break_end_time']);
+        $resB->assertSessionHasErrors(['break_end_time']);
 
-        // Cierre anterior al fin del descanso
-        $res3 = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
+        // Caso C: Cierre anterior o igual a fin de descanso
+        $resC = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
             'opening_time' => '08:00',
             'break_start_time' => '13:00',
             'break_end_time' => '15:00',
-            'closing_time' => '14:00',
+            'closing_time' => '15:00',
             'order_cutoff_advance_minutes' => 60,
         ]);
-        $res3->assertSessionHasErrors(['closing_time']);
+        $resC->assertSessionHasErrors(['closing_time']);
 
-        // Hora límite de pedidos (cierre - anticipación) cae antes o igual al fin del descanso
-        // Cierre 19:00 - anticipación 300 min = 14:00 <= break_end (15:00)
-        $res4 = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
+        // Caso D: Anticipación invade el periodo de descanso (cierre 19:00 - 300 min = 14:00 <= 15:00)
+        $resD = $this->actingAs($this->adminUser)->put(route('admin.settings.schedule.update'), [
             'opening_time' => '08:00',
             'break_start_time' => '13:00',
             'break_end_time' => '15:00',
             'closing_time' => '19:00',
             'order_cutoff_advance_minutes' => 300,
         ]);
-        $res4->assertSessionHasErrors(['order_cutoff_advance_minutes']);
+        $resD->assertSessionHasErrors(['order_cutoff_advance_minutes']);
     }
 
     /**
-     * 5. Catálogo de envases: el catálogo comienza vacío (no se inventan registros iniciales).
+     * 5. Configuración de botellón: la vista de configuración provee el botellón único de 20 litros.
      */
-    public function test_catalog_starts_empty_and_can_save_schedule_with_empty_catalog(): void
+    public function test_settings_index_provides_single_twenty_liters_presentation(): void
     {
-        $this->assertEquals(0, BottlePresentation::count());
-
-        // Se puede consultar y guardar el horario con catálogo vacío
         $response = $this->actingAs($this->adminUser)->get(route('admin.settings.index'));
         $response->assertOk();
+
+        $bottle = BottlePresentation::getTwentyLiters();
+        $this->assertEquals(20.00, (float) $bottle->capacity);
+        $this->assertEquals('Litros', $bottle->unit);
+        $this->assertTrue($bottle->is_active);
     }
 
     /**
-     * 6. Registro y edición de presentaciones con precios opcionales y precisión decimal.
+     * 6. Edición de precios y tarifas del botellón de 20 litros.
      */
-    public function test_create_and_update_bottle_presentation(): void
+    public function test_updating_twenty_liters_bottle_prices(): void
     {
-        // 1. Crear presentación con precios
-        $createRes = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Garrafón Estándar 20L',
-            'capacity' => 20,
-            'unit' => 'Litros',
-            'refill_price' => '18.50',
-            'new_bottle_price' => '85.00',
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
 
-        $createRes->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('bottle_presentations', [
-            'name' => 'Garrafón Estándar 20L',
-            'capacity' => 20.00,
-            'unit' => 'Litros',
-            'refill_price' => 18.50,
-            'new_bottle_price' => 85.00,
-            'is_active' => true,
-        ]);
-
-        $presentation = BottlePresentation::first();
-
-        // 2. Modificar presentación
-        $updateRes = $this->actingAs($this->adminUser)->put(route('admin.settings.bottle-presentations.update', $presentation->id), [
-            'name' => 'Garrafón Familiar 20L',
-            'capacity' => 20,
-            'unit' => 'Litros',
-            'refill_price' => '20.00',
-            'new_bottle_price' => '90.00',
-            'is_active' => true,
-        ]);
+        $updateRes = $this->actingAs($this->adminUser)->put(
+            route('admin.settings.bottle-presentations.update', $bottle->id),
+            [
+                'name' => 'Botellón 20 Litros Oficial',
+                'capacity' => 20,
+                'unit' => 'Litros',
+                'store_price' => '12.50',
+                'refill_price' => '18.00',
+                'new_bottle_price' => '95.00',
+                'is_available_for_delivery' => true,
+            ]
+        );
 
         $updateRes->assertSessionHasNoErrors();
-        $this->assertEquals('Garrafón Familiar 20L', $presentation->fresh()->name);
-        $this->assertEquals('20.00', $presentation->fresh()->refill_price);
-        $this->assertEquals('90.00', $presentation->fresh()->new_bottle_price);
+        $fresh = $bottle->fresh();
+        $this->assertEquals('Botellón 20 Litros Oficial', $fresh->name);
+        $this->assertEquals('12.50', $fresh->store_price);
+        $this->assertEquals('18.00', $fresh->refill_price);
+        $this->assertEquals('95.00', $fresh->new_bottle_price);
+        $this->assertTrue($fresh->is_available_for_delivery);
     }
 
     /**
@@ -297,125 +291,81 @@ class GeneralSettingsManagementTest extends TestCase
      */
     public function test_presentation_allows_unconfigured_prices_without_substituting_with_zero(): void
     {
-        $response = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Botellón Especial 15L',
-            'capacity' => 15,
-            'unit' => 'Litros',
-            'refill_price' => '', // Sin configurar
-            'new_bottle_price' => null, // Sin configurar
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
+
+        $response = $this->actingAs($this->adminUser)->put(
+            route('admin.settings.bottle-presentations.update', $bottle->id),
+            [
+                'name' => 'Botellón 20 Litros',
+                'capacity' => 20,
+                'unit' => 'Litros',
+                'refill_price' => null, // Sin configurar
+                'store_price' => null, // Sin configurar
+                'new_bottle_price' => null, // Sin configurar
+            ]
+        );
 
         $response->assertSessionHasNoErrors();
 
-        $presentation = BottlePresentation::where('name', 'Botellón Especial 15L')->first();
-        $this->assertNotNull($presentation);
-        $this->assertNull($presentation->refill_price);
-        $this->assertNull($presentation->new_bottle_price);
-        $this->assertFalse($presentation->has_refill_price);
-        $this->assertFalse($presentation->has_new_bottle_price);
+        $fresh = $bottle->fresh();
+        $this->assertNull($fresh->refill_price);
+        $this->assertNull($fresh->store_price);
+        $this->assertNull($fresh->new_bottle_price);
+        $this->assertFalse($fresh->has_refill_price);
+        $this->assertFalse($fresh->has_store_price);
 
         // La consulta centralizada debe devolver null explícito
         $activeList = $this->scheduleService->getActivePresentations();
-        $item = $activeList->firstWhere('id', $presentation->id);
+        $item = $activeList->firstWhere('id', $bottle->id);
         $this->assertNull($item['refill_price']);
+        $this->assertNull($item['store_price']);
         $this->assertNull($item['new_bottle_price']);
     }
 
     /**
-     * 8. Rechazo de presentaciones duplicadas (por nombre insensible a mayúsculas/espacios, o misma capacidad y unidad).
+     * 8. Rechazo al intentar agregar nuevas presentaciones: el sistema opera exclusivamente con 20L.
      */
-    public function test_rejects_duplicate_bottle_presentations(): void
+    public function test_rejects_creating_additional_presentations(): void
     {
-        BottlePresentation::create([
-            'name' => 'Garrafón 20L',
-            'capacity' => 20,
+        $res = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
+            'name' => 'Garrafón Extra 10L',
+            'capacity' => 10,
             'unit' => 'Litros',
-            'refill_price' => 18.00,
-            'is_active' => true,
+            'refill_price' => 10.00,
         ]);
 
-        // Intento 1: Mismo nombre con diferentes mayúsculas y espacios
-        $dupNameRes = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => '   garrafón 20l   ',
-            'capacity' => 19,
-            'unit' => 'L',
-        ]);
-        $dupNameRes->assertSessionHasErrors(['name']);
-
-        // Intento 2: Nombre distinto pero misma capacidad y unidad
-        $dupCapRes = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Bidón Azul 20L',
-            'capacity' => 20,
-            'unit' => '  litros  ',
-        ]);
-        $dupCapRes->assertSessionHasErrors(['capacity']);
+        $res->assertSessionHasErrors(['presentation']);
     }
 
     /**
-     * 9. Validación de capacidad y precios inválidos.
+     * 9. Validación de precios inválidos (precios negativos o más de 2 decimales).
      */
-    public function test_validates_capacity_and_prices_invalid_values(): void
+    public function test_validates_prices_invalid_values(): void
     {
-        // Capacidad <= 0
-        $res1 = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Envase Cero',
-            'capacity' => 0,
-            'unit' => 'Litros',
-        ]);
-        $res1->assertSessionHasErrors(['capacity']);
+        $bottle = BottlePresentation::getTwentyLiters();
 
         // Precio <= 0
-        $res2 = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Envase Precio Cero',
-            'capacity' => 10,
-            'unit' => 'Litros',
+        $res1 = $this->actingAs($this->adminUser)->put(route('admin.settings.bottle-presentations.update', $bottle->id), [
             'refill_price' => '0',
         ]);
-        $res2->assertSessionHasErrors(['refill_price']);
+        $res1->assertSessionHasErrors(['refill_price']);
 
         // Precio con más de 2 decimales
-        $res3 = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Envase Decimales',
-            'capacity' => 10,
-            'unit' => 'Litros',
-            'refill_price' => '18.555',
+        $res2 = $this->actingAs($this->adminUser)->put(route('admin.settings.bottle-presentations.update', $bottle->id), [
+            'store_price' => '12.555',
         ]);
-        $res3->assertSessionHasErrors(['refill_price']);
+        $res2->assertSessionHasErrors(['store_price']);
     }
 
     /**
-     * 10. Activación y desactivación: no se elimina físicamente y se excluye de la consulta activa.
+     * 10. Protección de permanencia: el botellón de 20 litros no puede ser eliminado del sistema.
      */
-    public function test_toggle_presentation_status_and_active_consultation_exclusion(): void
+    public function test_twenty_liters_bottle_cannot_be_deleted(): void
     {
-        $presentation = BottlePresentation::create([
-            'name' => 'Garrafón 10L',
-            'capacity' => 10,
-            'unit' => 'Litros',
-            'refill_price' => 12.00,
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
 
-        $this->assertCount(1, $this->scheduleService->getActivePresentations());
-
-        // Desactivar
-        $toggleRes = $this->actingAs($this->adminUser)->patch(
-            route('admin.settings.bottle-presentations.toggle-status', $presentation->id)
-        );
-        $toggleRes->assertRedirect();
-        $this->assertFalse($presentation->fresh()->is_active);
-
-        // Se conserva en base de datos pero se excluye de getActivePresentations
-        $this->assertDatabaseHas('bottle_presentations', ['id' => $presentation->id]);
-        $this->assertCount(0, $this->scheduleService->getActivePresentations());
-
-        // Reactivar
-        $this->actingAs($this->adminUser)->patch(
-            route('admin.settings.bottle-presentations.toggle-status', $presentation->id)
-        );
-        $this->assertTrue($presentation->fresh()->is_active);
-        $this->assertCount(1, $this->scheduleService->getActivePresentations());
+        $this->expectException(LogicException::class);
+        $bottle->delete();
     }
 
     /**
@@ -428,6 +378,8 @@ class GeneralSettingsManagementTest extends TestCase
             $this->repartidorUser,
             $this->plantaUser,
         ];
+
+        $bottle = BottlePresentation::getTwentyLiters();
 
         foreach ($unauthorizedUsers as $user) {
             // GET settings
@@ -444,13 +396,11 @@ class GeneralSettingsManagementTest extends TestCase
             ]);
             $resPut->assertForbidden();
 
-            // POST presentation
-            $resPost = $this->actingAs($user)->post(route('admin.settings.bottle-presentations.store'), [
-                'name' => 'Hack Envase',
-                'capacity' => 20,
-                'unit' => 'Litros',
+            // PUT bottle presentation
+            $resUpdate = $this->actingAs($user)->put(route('admin.settings.bottle-presentations.update', $bottle->id), [
+                'refill_price' => 20.00,
             ]);
-            $resPost->assertForbidden();
+            $resUpdate->assertForbidden();
         }
 
         // Usuario no autenticado es bloqueado (403 Forbidden por middleware de roles)
@@ -459,9 +409,9 @@ class GeneralSettingsManagementTest extends TestCase
     }
 
     /**
-     * 12. Independencia: editar catálogo no altera horario y viceversa; no se modifican botellones de clientes.
+     * 12. Independencia: editar precios de botellón no altera horario y preserva conteos de clientes.
      */
-    public function test_catalog_and_schedule_operations_are_independent_and_preserve_customers(): void
+    public function test_bottle_and_schedule_operations_are_independent_and_preserve_customers(): void
     {
         $customerUser = User::factory()->create([
             'name' => 'Juan Dzib',
@@ -478,13 +428,12 @@ class GeneralSettingsManagementTest extends TestCase
         ]);
 
         $initialSchedule = BranchSchedule::current()->toArray();
+        $bottle = BottlePresentation::getTwentyLiters();
 
-        // 1. Agregar presentación
-        $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Garrafón 20L Test',
-            'capacity' => 20,
-            'unit' => 'Litros',
-            'refill_price' => '18.00',
+        // 1. Modificar precios de botellón
+        $this->actingAs($this->adminUser)->put(route('admin.settings.bottle-presentations.update', $bottle->id), [
+            'store_price' => '11.00',
+            'refill_price' => '16.50',
         ]);
 
         // Verificar que el horario sigue idéntico
@@ -501,12 +450,10 @@ class GeneralSettingsManagementTest extends TestCase
             'order_cutoff_advance_minutes' => 45,
         ]);
 
-        // Verificar que el catálogo sigue teniendo la presentación intacta
-        $this->assertDatabaseHas('bottle_presentations', [
-            'name' => 'Garrafón 20L Test',
-            'capacity' => 20.00,
-            'refill_price' => 18.00,
-        ]);
+        // Verificar que el botellón sigue teniendo sus precios
+        $freshBottle = $bottle->fresh();
+        $this->assertEquals('11.00', $freshBottle->store_price);
+        $this->assertEquals('16.50', $freshBottle->refill_price);
 
         // Verificar que los conteos de botellones del cliente siguen inalterados
         $freshCustomer = $customer->fresh();
@@ -515,82 +462,58 @@ class GeneralSettingsManagementTest extends TestCase
     }
 
     /**
-     * 13. Habilitar a domicilio está permitido exclusivamente para presentaciones equivalentes a 20 litros.
+     * 13. Habilitar y suspender servicio a domicilio como interruptor comercial de negocio.
      */
-    public function test_available_for_delivery_can_be_enabled_for_twenty_liters_presentation(): void
+    public function test_toggle_delivery_service_as_business_switch(): void
     {
-        $response = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Garrafón 20L A Domicilio',
-            'capacity' => 20,
-            'unit' => 'Litros',
-            'refill_price' => '15.00',
-            'store_price' => '10.00',
-            'new_bottle_price' => '95.00',
-            'is_available_for_delivery' => true,
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
+        $bottle->update(['is_available_for_delivery' => true]);
 
-        $response->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('bottle_presentations', [
-            'name' => 'Garrafón 20L A Domicilio',
-            'is_available_for_delivery' => true,
-        ]);
+        // Alternar a suspendido
+        $response = $this->actingAs($this->adminUser)->patch(
+            route('admin.settings.bottle-presentations.toggle-status', $bottle->id)
+        );
+        $response->assertRedirect();
+        $this->assertFalse($bottle->fresh()->is_available_for_delivery);
+
+        // Alternar a habilitado
+        $this->actingAs($this->adminUser)->patch(
+            route('admin.settings.bottle-presentations.toggle-status', $bottle->id)
+        );
+        $this->assertTrue($bottle->fresh()->is_available_for_delivery);
     }
 
     /**
-     * 14. Se rechaza habilitar a domicilio presentaciones cuya capacidad no equivalga a 20 litros.
+     * 14. Se rechaza alterar la capacidad a un valor distinto de 20 litros.
      */
-    public function test_rejects_available_for_delivery_for_presentations_not_equivalent_to_twenty_liters(): void
+    public function test_rejects_updating_capacity_to_different_than_twenty_liters(): void
     {
-        // Intentar registrar una presentación de 10L con disponible a domicilio = true
-        $response = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Garrafón 10L No Domicilio',
-            'capacity' => 10,
-            'unit' => 'Litros',
-            'store_price' => '5.00',
-            'is_available_for_delivery' => true,
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
 
-        $response->assertSessionHasErrors(['is_available_for_delivery']);
+        $response = $this->actingAs($this->adminUser)->put(
+            route('admin.settings.bottle-presentations.update', $bottle->id),
+            [
+                'capacity' => 10,
+                'unit' => 'Litros',
+            ]
+        );
 
-        // Intentar registrar una presentación de 15L con disponible a domicilio = true
-        $response15 = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Garrafón 15L Inválido',
-            'capacity' => 15,
-            'unit' => 'Litros',
-            'store_price' => '7.00',
-            'is_available_for_delivery' => true,
-            'is_active' => true,
-        ]);
-
-        $response15->assertSessionHasErrors(['is_available_for_delivery']);
+        $response->assertSessionHasErrors(['capacity']);
     }
 
     /**
-     * 15. Las presentaciones exclusivas de sucursal permiten tener el precio a domicilio sin configurar (null).
+     * 15. Consulta centralizada: getActivePresentations devuelve el botellón único de 20 litros.
      */
-    public function test_exclusive_branch_presentations_allow_unconfigured_delivery_price(): void
+    public function test_active_presentations_returns_twenty_liters_bottle(): void
     {
-        $response = $this->actingAs($this->adminUser)->post(route('admin.settings.bottle-presentations.store'), [
-            'name' => 'Envase 10L Solo Sucursal',
-            'capacity' => 10,
-            'unit' => 'Litros',
-            'refill_price' => '', // Sin configurar a domicilio
-            'store_price' => '5.00',
-            'new_bottle_price' => '65.00',
-            'is_available_for_delivery' => false,
-            'is_active' => true,
-        ]);
+        $bottle = BottlePresentation::getTwentyLiters();
+        $active = $this->scheduleService->getActivePresentations();
 
-        $response->assertSessionHasNoErrors();
-
-        $presentation = BottlePresentation::where('name', 'Envase 10L Solo Sucursal')->first();
-        $this->assertNotNull($presentation);
-        $this->assertFalse($presentation->is_available_for_delivery);
-        $this->assertNull($presentation->refill_price);
-        $this->assertFalse($presentation->has_refill_price);
-        $this->assertEquals(5.00, (float) $presentation->store_price);
+        $this->assertCount(1, $active);
+        $item = $active->first();
+        $this->assertEquals($bottle->id, $item['id']);
+        $this->assertEquals(20.00, $item['capacity']);
+        $this->assertEquals('Litros', $item['unit']);
     }
 
     /**
@@ -598,22 +521,13 @@ class GeneralSettingsManagementTest extends TestCase
      */
     public function test_seeder_does_not_overwrite_edited_presentation_prices(): void
     {
-        // Modificar precios de la presentación de 20L
-        $presentation20 = BottlePresentation::firstOrCreate(
-            ['name' => 'Garrafón 20 Litros'],
-            [
-                'capacity' => 20.00,
-                'unit' => 'Litros',
-                'refill_price' => 15.00,
-                'store_price' => 10.00,
-                'new_bottle_price' => 95.00,
-            ]
-        );
-
-        $presentation20->update([
+        // Obtener o configurar botellón de 20L con precios personalizados
+        $bottle = BottlePresentation::getTwentyLiters();
+        $bottle->update([
             'refill_price' => 19.50,
             'store_price' => 13.00,
             'new_bottle_price' => 110.00,
+            'is_available_for_delivery' => true,
         ]);
 
         // Ejecutar el Seeder
@@ -621,11 +535,10 @@ class GeneralSettingsManagementTest extends TestCase
         $seeder->run();
 
         // Verificar que los precios editados se mantuvieron exactamente iguales
-        $fresh20 = $presentation20->fresh();
-        $this->assertEquals('19.50', $fresh20->refill_price);
-        $this->assertEquals('13.00', $fresh20->store_price);
-        $this->assertEquals('110.00', $fresh20->new_bottle_price);
-        $this->assertTrue($fresh20->is_available_for_delivery);
+        $fresh = $bottle->fresh();
+        $this->assertEquals('19.50', $fresh->refill_price);
+        $this->assertEquals('13.00', $fresh->store_price);
+        $this->assertEquals('110.00', $fresh->new_bottle_price);
+        $this->assertTrue($fresh->is_available_for_delivery);
     }
 }
-

@@ -12,10 +12,16 @@ class BottleIncident extends Model
 
     // Stages
     public const STAGE_RECEPTION = 'recepcion';
+    public const STAGE_EMPTY_STORAGE = 'almacen_vacio';
     public const STAGE_WASHING = 'lavado';
     public const STAGE_FILLING = 'llenado';
     public const STAGE_STORAGE = 'almacen';
+    public const STAGE_PLANT_STORAGE = 'almacen_planta';
+    public const STAGE_PREPARED = 'preparado';
     public const STAGE_LOADING = 'carga';
+    public const STAGE_TRUCK_LOADING = 'carga_camion';
+    public const STAGE_ON_TRUCK = 'en_camion';
+    public const STAGE_ROUTE = 'ruta';
 
     // Damage types
     public const DAMAGE_BROKEN = 'rotura';

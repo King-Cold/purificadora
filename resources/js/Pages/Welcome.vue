@@ -230,41 +230,26 @@ const formatPrice = (val, fallback = null) => {
 };
 
 const bottleProducts = computed(() => {
-    const db20L = props.presentations?.find(p => p.capacity === 20 || p.name?.includes('20'));
-    const db10L = props.presentations?.find(p => p.capacity === 10 || p.name?.includes('10'));
+    const db20L = props.presentations?.find(p => p.capacity === 20 || p.name?.includes('20')) || props.presentations?.[0];
 
-    // Exclusividad de servicio a domicilio para 20 litros
+    // Disponibilidad de servicio a domicilio para el botellón de 20 litros
     const is20Available = db20L ? Boolean(db20L.is_available_for_delivery) : true;
 
     const p20Home = db20L ? formatPrice(db20L.refill_price) : '15';
     const p20Store = db20L ? formatPrice(db20L.store_price) : '10';
     const p20New = db20L ? formatPrice(db20L.new_bottle_price) : '95';
 
-    const p10Store = db10L ? formatPrice(db10L.store_price) : '5';
-    const p10New = db10L ? formatPrice(db10L.new_bottle_price) : '65';
-
     return [
         {
             id: 'garrafon-20l',
-            name: db20L?.name ? (db20L.name.includes('20') ? db20L.name : `${db20L.name} 20L`) : 'Garrafón 20 Litros',
+            name: db20L?.name ? (db20L.name.includes('20') ? db20L.name : `${db20L.name} 20L`) : 'Botellón de 20 Litros',
             isAvailableForDelivery: is20Available,
-            availabilityLabel: 'A domicilio y sucursal',
+            availabilityLabel: is20Available ? 'A domicilio y en planta' : 'Disponible en planta',
             image: db20L?.image_url || '/images/garrafon-20l.png',
-            imageAlt: 'Garrafón Puritronic de 20 Litros',
+            imageAlt: 'Botellón Puritronic de 20 Litros',
             homePrice: p20Home,
             storePrice: p20Store,
             newBottlePrice: p20New,
-        },
-        {
-            id: 'garrafon-10l',
-            name: db10L?.name ? (db10L.name.includes('10') ? db10L.name : `${db10L.name} 10L`) : 'Garrafón 10 Litros',
-            isAvailableForDelivery: false,
-            availabilityLabel: 'Solo sucursal',
-            image: db10L?.image_url || '/images/garrafon-10l.png',
-            imageAlt: 'Garrafón Puritronic de 10 Litros',
-            homePrice: null,
-            storePrice: p10Store,
-            newBottlePrice: p10New,
         },
     ];
 });
@@ -513,7 +498,7 @@ const bottleProducts = computed(() => {
                     </p>
                 </div>
 
-                <!-- Grid de Presentaciones: dos columnas en escritorio y una en móvil -->
+                <!-- Grid de Presentación Oficial y Modalidades Operativas de 20 Litros -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto items-stretch">
                     
                     <div
@@ -522,7 +507,7 @@ const bottleProducts = computed(() => {
                         class="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 transition-all"
                     >
                         <div>
-                            <!-- Imagen reducida (130-160px de alto, sin recuadros grandes, object-fit contain) -->
+                            <!-- Imagen reducida -->
                             <div class="flex items-center justify-center py-2 mb-3">
                                 <img
                                     :src="product.image"
@@ -534,9 +519,12 @@ const bottleProducts = computed(() => {
 
                             <!-- Nombre con capacidad y disponibilidad -->
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <h3 class="text-base sm:text-lg font-bold text-[#0e1c2e] tracking-tight">
-                                    {{ product.name }}
-                                </h3>
+                                <div>
+                                    <h3 class="text-base sm:text-lg font-bold text-[#0e1c2e] tracking-tight">
+                                        {{ product.name }}
+                                    </h3>
+                                    <span class="text-xs text-blue-600 font-semibold block">Capacidad única: 20 Litros</span>
+                                </div>
                                 <span
                                     v-if="product.isAvailableForDelivery"
                                     class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100"
@@ -553,40 +541,39 @@ const bottleProducts = computed(() => {
                                 </span>
                             </div>
 
-                            <!-- Filas simples de precios (sin tarjetas anidadas) -->
+                            <!-- Filas simples de precios -->
                             <div class="border-t border-slate-100 pt-3 pb-1 space-y-2 text-sm">
-                                <!-- Rellenado a domicilio (exclusivo para 20L cuando está disponible) -->
+                                <!-- Precio del servicio a domicilio -->
                                 <div
                                     v-if="product.isAvailableForDelivery && product.homePrice"
                                     class="flex items-center justify-between gap-2 text-slate-700"
                                 >
-                                    <span class="text-slate-600">Rellenado a domicilio</span>
-                                    <span class="font-bold text-slate-900 shrink-0">${{ product.homePrice }}</span>
+                                    <span class="text-slate-600">Servicio a domicilio</span>
+                                    <span class="font-bold text-slate-900 shrink-0">${{ product.homePrice }} MXN</span>
                                 </div>
 
-                                <!-- Rellenado en sucursal -->
+                                <!-- Precio de llenado en planta -->
                                 <div
                                     v-if="product.storePrice"
                                     class="flex items-center justify-between gap-2 text-slate-700"
                                 >
-                                    <span class="text-slate-600">Rellenado en sucursal</span>
-                                    <span class="font-bold text-slate-900 shrink-0">${{ product.storePrice }}</span>
+                                    <span class="text-slate-600">Llenado en planta / sucursal</span>
+                                    <span class="font-bold text-slate-900 shrink-0">${{ product.storePrice }} MXN</span>
                                 </div>
 
-                                <!-- Envase nuevo (fila secundaria claramente diferenciada) -->
+                                <!-- Envase nuevo -->
                                 <div
                                     v-if="product.newBottlePrice"
                                     class="flex items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100"
                                 >
-                                    <span class="text-slate-500">Envase nuevo</span>
-                                    <span class="font-semibold text-slate-700 shrink-0">${{ product.newBottlePrice }}</span>
+                                    <span class="text-slate-500">Envase nuevo (opcional)</span>
+                                    <span class="font-semibold text-slate-700 shrink-0">${{ product.newBottlePrice }} MXN</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Acciones correspondientes -->
                         <div class="pt-4 mt-auto border-t border-slate-100">
-                            <!-- Para 20 litros: botón principal "Pedir a domicilio" y enlace secundario "Ver sucursal" -->
                             <div v-if="product.isAvailableForDelivery" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                                 <Link
                                     :href="route('auth.portal')"
@@ -606,7 +593,6 @@ const bottleProducts = computed(() => {
                                 </a>
                             </div>
 
-                            <!-- Para presentaciones exclusivas de sucursal: botón "Ver sucursal" -->
                             <div v-else>
                                 <a
                                     href="#sucursal"
@@ -618,7 +604,55 @@ const bottleProducts = computed(() => {
                                 </a>
                             </div>
                         </div>
+                    </div>
 
+                    <!-- Tarjeta Informativa de Modalidades (Fijos vs Cambio) -->
+                    <div class="bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl border border-slate-200/90 p-5 sm:p-6 flex flex-col justify-between shadow-xs">
+                        <div class="space-y-4">
+                            <div>
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/70 px-2.5 py-1 rounded-md inline-block mb-1.5">
+                                    Mismo Botellón de 20 Litros
+                                </span>
+                                <h3 class="text-base sm:text-lg font-bold text-slate-900">
+                                    Modalidades de Servicio
+                                </h3>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    Puritronic opera exclusivamente con garrafones de 20L bajo dos modalidades según tu preferencia:
+                                </p>
+                            </div>
+
+                            <div class="space-y-3 text-xs">
+                                <!-- Botellón Fijo -->
+                                <div class="p-3 bg-white rounded-xl border border-slate-200/70 shadow-2xs space-y-1">
+                                    <div class="flex items-center gap-2 font-bold text-slate-900">
+                                        <i class="fa-solid fa-tag text-blue-600 text-sm"></i>
+                                        <span>Botellones Fijos (Propiedad del Cliente)</span>
+                                    </div>
+                                    <p class="text-slate-600 leading-relaxed">
+                                        Envases etiquetados a tu nombre. El repartidor los recoge en tu domicilio, se lavan y llenan en planta, y se te entregan tus mismos envases.
+                                    </p>
+                                </div>
+
+                                <!-- Botellón de Cambio -->
+                                <div class="p-3 bg-white rounded-xl border border-slate-200/70 shadow-2xs space-y-1">
+                                    <div class="flex items-center gap-2 font-bold text-slate-900">
+                                        <i class="fa-solid fa-repeat text-emerald-600 text-sm"></i>
+                                        <span>Botellones de Cambio (Intercambio Inmediato)</span>
+                                    </div>
+                                    <p class="text-slate-600 leading-relaxed">
+                                        Entrega inmediata en tu puerta. Entregas tu botellón de 20L vacío en buen estado y recibes uno lleno y precintado en la misma visita.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 mt-4 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
+                            <span class="flex items-center gap-1.5 font-medium">
+                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                Tarifa idéntica por rellenado
+                            </span>
+                            <span class="font-bold text-slate-700">20L Estándar</span>
+                        </div>
                     </div>
 
                 </div>

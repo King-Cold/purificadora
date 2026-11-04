@@ -534,14 +534,14 @@ class RouteExecutionController extends Controller
             ->where('bottle_type', OrderItem::TYPE_FIXED)
             ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_LOAD_FIXED)
             ->where('destination', 'truck')
-            ->where('status', BottleCustodyMovement::STATUS_ACCEPTED)
+            ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
             ->sum('quantity');
 
         $deliveredFixed = (int) BottleCustodyMovement::where('customer_id', $customer->id)
             ->where('bottle_type', OrderItem::TYPE_FIXED)
             ->where('movement_type', BottleCustodyMovement::TYPE_DELIVERY_REFILL_TO_CUSTOMER)
             ->where('origin', 'truck')
-            ->where('status', BottleCustodyMovement::STATUS_ACCEPTED)
+            ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
             ->sum('quantity');
 
         $availableFixedOnTruck = max(0, $loadedFixed - $deliveredFixed);
@@ -1031,14 +1031,16 @@ class RouteExecutionController extends Controller
             $isBlocked = false;
             $blockReason = null;
 
+            $fixedInTruck = $fixedItem ? $fixedItem->getInTruckQuantity() : 0;
+
             if ($exchangeQty > 0 && $exchangeAvailable < $exchangeQty) {
                 $isBlocked = true;
                 $blockReason = "Falta carga en camión: Requiere {$exchangeQty} garrafón(es) de cambio, pero hay {$exchangeAvailable} disponibles.";
             }
 
-            if ($fixedQty > 0 && $fixedPrepared < $fixedQty) {
+            if ($fixedQty > 0 && $fixedInTruck === 0) {
                 $isBlocked = true;
-                $blockReason = "En preparación en Planta: {$fixedQty} garrafón(es) fijos se encuentran en proceso de lavado/rellenado y aún no han sido autorizados para devolución.";
+                $blockReason = "Pendiente de cargar en camión: {$fixedQty} fijos del cliente aún no han sido cargados y aceptados en 'Mi Carga'.";
             }
 
             $activeStop = $activeRouteStopsByOrderId->get($order->id);
@@ -1062,6 +1064,7 @@ class RouteExecutionController extends Controller
                 'exchange_quantity' => $exchangeQty,
                 'fixed_quantity' => $fixedQty,
                 'fixed_prepared' => $fixedPrepared,
+                'fixed_in_truck' => $fixedInTruck,
                 'total_bottles_to_deliver' => $exchangeQty + $fixedQty,
                 'address_summary' => $addressSummary,
                 'delivery_zone' => $zoneLabel,

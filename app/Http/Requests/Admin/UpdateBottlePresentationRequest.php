@@ -22,13 +22,13 @@ class UpdateBottlePresentationRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'name' => is_string($this->name) ? trim($this->name) : $this->name,
-            'unit' => is_string($this->unit) ? trim($this->unit) : $this->unit,
+            'name' => is_string($this->name) && trim($this->name) !== '' ? trim($this->name) : 'Botellón 20 Litros',
+            'unit' => 'Litros',
             'refill_price' => ($this->refill_price === '' || $this->refill_price === null) ? null : $this->refill_price,
             'store_price' => ($this->store_price === '' || $this->store_price === null) ? null : $this->store_price,
             'new_bottle_price' => ($this->new_bottle_price === '' || $this->new_bottle_price === null) ? null : $this->new_bottle_price,
             'image_path' => is_string($this->image_path) ? trim($this->image_path) : null,
-            'is_available_for_delivery' => $this->boolean('is_available_for_delivery', false),
+            'is_available_for_delivery' => $this->boolean('is_available_for_delivery', true),
             'is_active' => $this->boolean('is_active', true),
         ]);
     }
@@ -41,9 +41,9 @@ class UpdateBottlePresentationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:100'],
-            'capacity' => ['required', 'numeric', 'gt:0', 'max:9999.99'],
-            'unit' => ['required', 'string', 'max:20'],
+            'name' => ['nullable', 'string', 'max:100'],
+            'capacity' => ['nullable', 'numeric'],
+            'unit' => ['nullable', 'string', 'max:20'],
             'refill_price' => ['nullable', 'numeric', 'gt:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'store_price' => ['nullable', 'numeric', 'gt:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'new_bottle_price' => ['nullable', 'numeric', 'gt:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
@@ -60,32 +60,12 @@ class UpdateBottlePresentationRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v) {
-            if ($v->errors()->isNotEmpty()) {
-                return;
-            }
-
-            // REGLA: Rechazar habilitar a domicilio presentaciones cuya capacidad no equivalga a 20 litros
-            if ($this->boolean('is_available_for_delivery')) {
-                if (!BottlePresentation::isEquivalentToTwentyLiters($this->input('capacity'), (string) $this->input('unit'))) {
-                    $v->errors()->add('is_available_for_delivery', 'El servicio a domicilio únicamente está disponible para presentaciones de 20 litros.');
-                    $v->errors()->add('capacity', 'Solo los envases de 20 litros pueden estar disponibles para entrega a domicilio.');
+            // Si el cliente intentó enviar una capacidad distinta de 20 litros, rechazar
+            if ($this->has('capacity') && !is_null($this->input('capacity'))) {
+                $rawCapacity = (float) $this->input('capacity');
+                if (abs($rawCapacity - 20.0) >= 0.001) {
+                    $v->errors()->add('capacity', 'El sistema opera exclusivamente con botellones de 20 litros.');
                 }
-            }
-
-            $param = $this->route('bottlePresentation');
-            $currentId = $param instanceof BottlePresentation ? $param->id : (int) $param;
-
-            $duplicateType = BottlePresentation::checkDuplicate(
-                (string) $this->input('name'),
-                $this->input('capacity'),
-                (string) $this->input('unit'),
-                $currentId
-            );
-
-            if ($duplicateType === 'name') {
-                $v->errors()->add('name', 'Ya existe otra presentación con este nombre (sin considerar mayúsculas o espacios adicionales).');
-            } elseif ($duplicateType === 'capacity_unit') {
-                $v->errors()->add('capacity', 'Ya existe otra presentación con esta misma capacidad y unidad de medida.');
             }
         });
     }
@@ -96,13 +76,13 @@ class UpdateBottlePresentationRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'name' => 'nombre del envase',
+            'name' => 'nombre del botellón',
             'capacity' => 'capacidad',
-            'unit' => 'unidad de medida',
-            'refill_price' => 'precio de rellenado',
+            'refill_price' => 'precio del servicio a domicilio',
+            'store_price' => 'precio de llenado en planta',
             'new_bottle_price' => 'precio del envase nuevo',
-            'is_available_for_delivery' => 'disponible a domicilio',
-            'is_active' => 'estado',
+            'is_available_for_delivery' => 'disponible para entrega a domicilio',
+            'is_active' => 'estado activo',
         ];
     }
 
