@@ -248,6 +248,26 @@ const getStopStatusBadge = (status) => {
 
         <div class="py-6 sm:py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
 
+            <!-- Redirección / Aviso a vista unificada Reparto -->
+            <div class="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-blue-900 text-white flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-truck"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-black text-slate-900">Operación disponible en Reparto</h3>
+                        <p class="text-xs text-slate-600">Ahora puedes atender cualquier pedido, filtrar por zonas y gestionar tu jornada desde Reparto sin orden obligatorio.</p>
+                    </div>
+                </div>
+                <Link
+                    :href="route('repartidor.reparto')"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-95 transition shadow-2xs shrink-0 min-h-[44px]"
+                >
+                    <span>Ir a Reparto</span>
+                    <i class="fa-solid fa-arrow-right text-sky-400"></i>
+                </Link>
+            </div>
+
             <!-- Mensajes Flash -->
             <div
                 v-if="flashSuccess"

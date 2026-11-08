@@ -47,6 +47,14 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'warning' => fn () => $request->session()->get('warning'),
             ],
+            'plant' => [
+                'pending_fixed_count' => fn () => $user && ($user->hasRole(['Operador Planta', 'Administrador', 'Super Admin']))
+                    ? \App\Models\OrderItem::where('type', \App\Models\OrderItem::TYPE_FIXED)
+                        ->where('collected_quantity', '>', 0)
+                        ->whereColumn('collected_quantity', '>', 'received_at_plant_quantity')
+                        ->count()
+                    : 0,
+            ],
         ];
     }
 }

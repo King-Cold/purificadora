@@ -383,7 +383,17 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
 
 // Panel 4: Operador Planta & Supervisión de Planta
 Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])->prefix('planta')->name('planta.')->group(function () {
-    Route::get('/dashboard', [\App\Http\Controllers\Planta\PlantDashboardController::class, 'index'])->name('dashboard');
+    // Vista Principal: Llenado rápido de mostrador (Abre al entrar)
+    Route::get('/dashboard', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'index'])->name('dashboard');
+    Route::get('/llenado-rapido', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'index'])->name('quick-refill.index');
+    Route::post('/llenado-rapido', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'store'])->name('quick-refill.store');
+
+    // Módulo Fijos unificado (Por recibir, Por llenar, Listos para enviar)
+    Route::get('/fijos', [\App\Http\Controllers\Planta\PlantFixedBottlesController::class, 'index'])->name('fijos.index');
+
+    // Módulo Cambios (Recibir vacíos, Enviar llenos, Preparar cambios)
+    Route::get('/cambios', [\App\Http\Controllers\Planta\PlantCambiosController::class, 'index'])->name('cambios.index');
+
     Route::get('/recepcion', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'index'])->name('reception.index');
     Route::post('/recepcion/fijos', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmFixed'])->name('reception.confirm-fixed');
     Route::post('/recepcion/cambios', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmExchange'])->name('reception.confirm-exchange');

@@ -70,7 +70,15 @@ const currentSectionTitle = computed(() => {
         if (route().current('admin.customers.*')) return 'Clientes';
         if (route().current('admin.orders.*')) return 'Pedidos';
         if (route().current('admin.settings.*')) return 'Configuración';
-        if (route().current('repartidor.*')) return 'Reparto';
+
+        // Rutas de Repartidor
+        if (route().current('repartidor.truck-load.*')) return 'Mi carga';
+        if (route().current('repartidor.debt.*')) return 'Cobros';
+        if (route().current('repartidor.customers.*')) return 'Clientes';
+        if (route().current('repartidor.direct-service.*')) return 'Pedido al paso';
+        if (route().current('repartidor.stops.*')) return 'Atender pedido';
+        if (route().current('repartidor.reparto') || route().current('repartidor.dashboard') || route().current('repartidor.*')) return 'Reparto';
+
         if (route().current('planta.*')) return 'Planta';
     } catch (e) {
         // fallback

@@ -232,185 +232,92 @@ const getMovementLabel = (type) => {
     };
     return labels[type] || type;
 };
+
+// Mapeo amigable para origen y destino (Camión, Planta, Cliente)
+const getLocationLabel = (loc) => {
+    const map = {
+        'truck': 'Camión',
+        'plant': 'Planta',
+        'customer': 'Cliente',
+        'storage': 'Planta',
+    };
+    return map[loc] || loc;
+};
 </script>
 
 <template>
-    <Head title="Mi Carga - Existencias del Camión" />
+    <Head title="Mi Carga - Puritronic" />
 
-    <AuthenticatedLayout>
-        <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h2 class="text-xl font-bold leading-tight text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-truck text-blue-900"></i> Mi Carga y Existencias de Camión
-                    </h2>
-                    <p class="text-xs sm:text-sm text-slate-500">
-                        Chofer asignado: <span class="font-semibold text-slate-700">{{ driver.name }}</span>
-                    </p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        v-if="canManage"
-                        @click="openUnloadModal"
-                        type="button"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 shadow-2xs active:scale-95 transition"
-                    >
-                        <i class="fa-solid fa-arrow-down"></i> Entregar botellones a planta
-                    </button>
-                    <Link
-                        :href="route('repartidor.dashboard')"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
-                    >
-                        Volver
-                    </Link>
-                </div>
-            </div>
-        </template>
-
-        <div class="py-6 sm:py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-24 md:pb-8">
+    <AuthenticatedLayout wide>
+        <div class="py-4 sm:py-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-4 pb-28 md:pb-16">
 
             <!-- Mensajes Flash de Éxito / Error -->
             <div
                 v-if="flashSuccess"
-                class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-3 shadow-2xs"
+                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
-                <i class="fa-solid fa-circle-check text-lg text-emerald-600 mt-0.5"></i>
-                <div class="flex-1 font-medium">{{ flashSuccess }}</div>
+                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
+                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
             </div>
 
             <div
                 v-if="flashError"
-                class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3 shadow-2xs"
+                class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
-                <i class="fa-solid fa-triangle-exclamation text-lg text-rose-600 mt-0.5"></i>
-                <div class="flex-1 font-medium">{{ flashError }}</div>
+                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
+                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 1. RESUMEN DE EXISTENCIAS CONTINUAS DEL CAMIÓN                            -->
+            <!-- 1. CARGAS POR CONFIRMAR (PRIMER LUGAR CUANDO EXISTAN)                     -->
             <!-- ========================================================================= -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <!-- 1. Cambios Llenos Disponibles -->
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-blue-100 shadow-2xs relative overflow-hidden">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Cambios Llenos</span>
-                        <i class="fa-solid fa-bottle-water text-blue-600 text-xl"></i>
-                    </div>
-                    <div class="text-3xl sm:text-4xl font-extrabold text-blue-900">
-                        {{ truckInventory.exchange_full_available }}
-                    </div>
-                    <p class="text-[11px] sm:text-xs text-blue-700 mt-1 font-medium">
-                        Disponibles para entrega en ruta
-                    </p>
-                </div>
-
-                <!-- 2. Cambios Vacíos Recogidos -->
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-amber-100 shadow-2xs relative overflow-hidden">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Cambios Vacíos</span>
-                        <i class="fa-solid fa-arrows-rotate text-amber-600 text-xl"></i>
-                    </div>
-                    <div class="text-3xl sm:text-4xl font-extrabold text-amber-900">
-                        {{ truckInventory.exchange_empty_collected }}
-                    </div>
-                    <p class="text-[11px] sm:text-xs text-amber-700 mt-1 font-medium">
-                        Recogidos listos para planta
-                    </p>
-                </div>
-
-                <!-- 3. Fijos Vacíos en Custodia -->
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-indigo-100 shadow-2xs relative overflow-hidden">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Fijos Vacíos</span>
-                        <i class="fa-solid fa-boxes-stacked text-indigo-600 text-xl"></i>
-                    </div>
-                    <div class="text-3xl sm:text-4xl font-extrabold text-indigo-900">
-                        {{ truckInventory.fixed_empty_collected_total }}
-                    </div>
-                    <p class="text-[11px] sm:text-xs text-indigo-700 mt-1 font-medium">
-                        Llevando a planta (por cliente)
-                    </p>
-                </div>
-
-                <!-- 4. Fijos Llenos para Entregar -->
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-emerald-100 shadow-2xs relative overflow-hidden">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-600">Fijos Llenos</span>
-                        <i class="fa-solid fa-circle-check text-emerald-600 text-xl"></i>
-                    </div>
-                    <div class="text-3xl sm:text-4xl font-extrabold text-emerald-900">
-                        {{ truckInventory.fixed_full_to_deliver_total }}
-                    </div>
-                    <p class="text-[11px] sm:text-xs text-emerald-700 mt-1 font-medium">
-                        Preparados para devolver al cliente
-                    </p>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- 2. TRANSFERENCIAS PENDIENTES DE ACEPTAR DESDE PLANTA                       -->
-            <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
-                            <i class="fa-solid fa-inbox text-blue-900"></i> Transferencias Pendientes de Planta
-                            <span
-                                v-if="pendingTransfers.length > 0"
-                                class="px-2 py-0.5 rounded-full text-xs font-extrabold bg-blue-100 text-blue-700"
-                            >
-                                {{ pendingTransfers.length }}
-                            </span>
+            <div
+                v-if="pendingTransfers.length > 0"
+                class="bg-amber-50/70 rounded-3xl border border-amber-200 shadow-2xs overflow-hidden"
+            >
+                <div class="px-4 sm:px-5 py-3.5 bg-amber-100/60 border-b border-amber-200/80 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                        <h3 class="font-black text-amber-950 text-sm sm:text-base">
+                            Cargas por confirmar ({{ pendingTransfers.length }})
                         </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Cargas propuestas por planta. Deben confirmarse físicamente antes de sumarse a tu carga.
-                        </p>
                     </div>
+                    <span class="text-xs font-semibold text-amber-800">
+                        Confirmación física requerida
+                    </span>
                 </div>
 
-                <div v-if="pendingTransfers.length === 0" class="p-6 text-center">
-                    <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl mb-2">
-                        <i class="fa-regular fa-clipboard text-slate-400 text-xl"></i>
-                    </div>
-                    <p class="text-sm font-medium text-slate-700">No hay transferencias pendientes de planta</p>
-                    <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                        Cuando el Operador de Planta autorice y prepare una carga, aparecerá aquí para tu confirmación física (Módulo de Planta - Sprint 4).
-                    </p>
-                </div>
-
-                <div v-else class="divide-y divide-slate-100">
+                <div class="divide-y divide-amber-200/60">
                     <div
                         v-for="transfer in pendingTransfers"
                         :key="transfer.id"
-                        class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition"
+                        class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-amber-50/30 transition"
                     >
                         <div class="space-y-1">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-                                    {{ transfer.bottle_type === 'cambio' ? 'Cambio Lleno' : 'Fijo de Cliente' }}
+                                <span class="px-2.5 py-0.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
+                                    {{ transfer.bottle_type === 'cambio' ? 'Cambio lleno' : 'Fijo de cliente' }}
                                 </span>
-                                <span class="text-xs text-slate-400">
-                                    Fecha: {{ formatDateTime(transfer.created_at) }}
+                                <span class="text-xs text-slate-500">
+                                    {{ formatDateTime(transfer.created_at) }}
                                 </span>
                                 <span v-if="transfer.user" class="text-xs text-slate-500">
-                                    Autorizó: {{ transfer.user.name }}
+                                    · Autorizó: {{ transfer.user.name }}
                                 </span>
                             </div>
 
                             <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-extrabold text-slate-800">
-                                    {{ transfer.quantity }} u.
+                                <span class="text-xl sm:text-2xl font-black text-slate-900">
+                                    {{ transfer.proposed_quantity || transfer.quantity }} u. de 20L
                                 </span>
-                                <span class="text-xs font-medium text-slate-500">
-                                    propuestas para cargar al camión
+                                <span class="text-xs font-semibold text-slate-500">
+                                    propuestas por Planta
                                 </span>
                             </div>
 
-                            <!-- Si es fijo, mostrar cliente -->
-                            <div v-if="transfer.customer" class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1 inline-block">
-                                <span class="font-bold text-slate-800">Propietario:</span>
-                                {{ transfer.customer.nickname ? `"${transfer.customer.nickname}" - ` : '' }}
-                                {{ transfer.customer.name }} ({{ transfer.customer.code }})
+                            <div v-if="transfer.customer" class="text-xs text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200 mt-1 inline-block">
+                                <span class="font-bold text-slate-900">Propietario:</span>
+                                {{ transfer.customer.nickname ? `"${transfer.customer.nickname}" · ` : '' }}{{ transfer.customer.name }} ({{ transfer.customer.code }})
                             </div>
 
                             <p v-if="transfer.notes" class="text-xs text-slate-500 italic">
@@ -418,18 +325,19 @@ const getMovementLabel = (type) => {
                             </p>
                         </div>
 
-                        <div v-if="canManage" class="flex items-center gap-2 shrink-0">
+                        <div v-if="canManage" class="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
                             <button
                                 @click="openAcceptModal(transfer)"
                                 type="button"
-                                class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-blue-900 text-white hover:bg-blue-800 active:scale-95 transition shadow-2xs inline-flex items-center gap-1.5"
+                                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-95 transition shadow-2xs min-h-[44px]"
                             >
-                                <i class="fa-solid fa-check"></i> Confirmar y Aceptar
+                                <i class="fa-solid fa-boxes-stacked text-sky-400"></i>
+                                <span>Revisar carga</span>
                             </button>
                             <button
                                 @click="openRejectModal(transfer)"
                                 type="button"
-                                class="w-full sm:w-auto px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition"
+                                class="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition min-h-[44px]"
                             >
                                 Rechazar
                             </button>
@@ -438,66 +346,135 @@ const getMovementLabel = (type) => {
                 </div>
             </div>
 
-            <!-- ========================================================================= -->
-            <!-- 3. DESGLOSE DE BOTELLONES FIJOS POR CLIENTE PROPIETARIO                   -->
-            <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-100">
-                    <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
-                        <i class="fa-solid fa-tag text-purple-900"></i> Custodia de Envases Fijos por Cliente
-                    </h3>
-                    <p class="text-xs text-slate-500 mt-0.5">
-                        Los fijos se transportan y devuelven estrictamente a su propietario identificado.
-                    </p>
+            <!-- Estado breve si no hay cargas por confirmar -->
+            <div
+                v-else
+                class="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs flex items-center justify-between text-xs text-slate-500"
+            >
+                <div class="flex items-center gap-2 font-medium">
+                    <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+                    <span>No hay cargas por confirmar</span>
                 </div>
+                <span class="text-[11px] text-slate-400">Planta al día</span>
+            </div>
 
-                <div v-if="fixedByCustomer.length === 0" class="p-6 text-center">
-                    <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl mb-2">
-                        <i class="fa-solid fa-box text-slate-400 text-xl"></i>
+            <!-- ========================================================================= -->
+            <!-- 2. RESUMEN DE CARGA (DOS BLOQUES: CAMBIOS Y FIJOS + ACCIÓN PLANTA)        -->
+            <!-- ========================================================================= -->
+            <div class="space-y-3">
+                <!-- Cabecera de Resumen con Acción Directa: Entregar botellones a Planta -->
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-base sm:text-lg font-black text-slate-900">
+                            Resumen de carga en camión
+                        </h3>
+                        <p class="text-xs text-slate-500">
+                            Inventario continuo de botellones de 20L
+                        </p>
                     </div>
-                    <p class="text-sm font-medium text-slate-700">No hay envases fijos en el camión</p>
-                    <p class="text-xs text-slate-400 mt-1">
-                        Aparecerán aquí cuando recojas envases en ruta o cargues garrafones preparados en planta.
-                    </p>
+
+                    <!-- Acción accesible junto al resumen -->
+                    <button
+                        v-if="canManage"
+                        @click="openUnloadModal"
+                        type="button"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-white border border-slate-300 hover:border-slate-400 text-slate-800 hover:bg-slate-50 shadow-2xs active:scale-95 transition min-h-[44px]"
+                    >
+                        <i class="fa-solid fa-arrow-down text-blue-900"></i>
+                        <span>Entregar botellones a Planta</span>
+                    </button>
                 </div>
 
-                <div v-else class="divide-y divide-slate-100">
-                    <div
-                        v-for="item in fixedByCustomer"
-                        :key="item.customer_id"
-                        class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition"
-                    >
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <span class="font-bold text-slate-900 text-base">
-                                    {{ item.customer_nickname ? `"${item.customer_nickname}"` : item.customer_name }}
-                                </span>
-                                <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600">
-                                    {{ item.customer_code }}
-                                </span>
+                <!-- Cuadrícula de 2 Bloques: Cambios y Fijos -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- BLOQUE 1: CAMBIOS -->
+                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <div class="h-8 w-8 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center text-sm font-black">
+                                    <i class="fa-solid fa-bottle-water"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-base font-black text-slate-900 leading-tight">Cambios</h4>
+                                    <span class="text-xs text-slate-500 font-medium">Fondo genérico de 20L</span>
+                                </div>
                             </div>
-                            <p v-if="item.customer_nickname && item.customer_name" class="text-xs text-slate-500">
-                                Nombre registrado: {{ item.customer_name }}
-                            </p>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-900">
+                                {{ truckInventory.exchange_full_available + truckInventory.exchange_empty_collected }} total
+                            </span>
                         </div>
 
-                        <div class="flex items-center gap-3">
-                            <div
-                                v-if="item.fixed_empty_collected > 0"
-                                class="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-semibold flex items-center gap-1.5"
-                            >
-                                <i class="fa-solid fa-arrow-down text-indigo-600"></i>
-                                <span>Vacíos:</span>
-                                <span class="text-sm font-extrabold">{{ item.fixed_empty_collected }} u.</span>
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <!-- Llenos Disponibles -->
+                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                                    Llenos disponibles
+                                </span>
+                                <div class="text-2xl sm:text-3xl font-black text-blue-900">
+                                    {{ truckInventory.exchange_full_available }}
+                                </div>
+                                <span class="text-[11px] font-semibold text-slate-600 block">
+                                    Para entregar
+                                </span>
                             </div>
 
-                            <div
-                                v-if="item.fixed_full_to_deliver > 0"
-                                class="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1.5"
-                            >
-                                <i class="fa-solid fa-check text-emerald-600"></i>
-                                <span>Llenos:</span>
-                                <span class="text-sm font-extrabold">{{ item.fixed_full_to_deliver }} u.</span>
+                            <!-- Vacíos Recogidos -->
+                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                                    Vacíos recogidos
+                                </span>
+                                <div class="text-2xl sm:text-3xl font-black text-slate-800">
+                                    {{ truckInventory.exchange_empty_collected }}
+                                </div>
+                                <span class="text-[11px] font-semibold text-slate-600 block">
+                                    Listos para Planta
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BLOQUE 2: FIJOS -->
+                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <div class="h-8 w-8 rounded-xl bg-purple-50 text-purple-900 flex items-center justify-center text-sm font-black">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-base font-black text-slate-900 leading-tight">Fijos</h4>
+                                    <span class="text-xs text-slate-500 font-medium">Propiedad de clientes</span>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-900">
+                                {{ truckInventory.fixed_full_to_deliver_total + truckInventory.fixed_empty_collected_total }} total
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <!-- Llenos Para Devolver -->
+                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                                    Llenos preparados
+                                </span>
+                                <div class="text-2xl sm:text-3xl font-black text-emerald-900">
+                                    {{ truckInventory.fixed_full_to_deliver_total }}
+                                </div>
+                                <span class="text-[11px] font-semibold text-emerald-700 block">
+                                    Para devolver
+                                </span>
+                            </div>
+
+                            <!-- Vacíos Para Planta -->
+                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                                    Vacíos recogidos
+                                </span>
+                                <div class="text-2xl sm:text-3xl font-black text-slate-800">
+                                    {{ truckInventory.fixed_empty_collected_total }}
+                                </div>
+                                <span class="text-[11px] font-semibold text-slate-600 block">
+                                    Llevando a Planta
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -505,79 +482,131 @@ const getMovementLabel = (type) => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 4. HISTORIAL RECIENTE DE MOVIMIENTOS                                      -->
+            <!-- 3. FIJOS POR CLIENTE (LISTA COMPACTA)                                     -->
             <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div class="px-4 sm:px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                     <div>
-                        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-slate-700"></i> Historial Reciente de Movimientos
+                        <h3 class="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                            <i class="fa-solid fa-users text-blue-900"></i> Fijos por cliente en camión
                         </h3>
                         <p class="text-xs text-slate-500 mt-0.5">
-                            Registro auditable de cargas, entregas, recolecciones y entregas a planta.
+                            Identificación de envases asignados en custodia
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        @click="showHistoryMobile = !showHistoryMobile"
-                        class="sm:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-                    >
-                        <span>{{ showHistoryMobile ? 'Ocultar' : 'Ver' }}</span>
-                        <i :class="showHistoryMobile ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'" class="text-[10px]"></i>
-                    </button>
                 </div>
 
-                <!-- Contenido colapsable en móvil -->
-                <div :class="showHistoryMobile ? 'block' : 'hidden sm:block'">
-                    <div v-if="recentMovements.length === 0" class="p-6 text-center text-sm text-slate-400">
-                        No se registran movimientos recientes de custodia.
-                    </div>
+                <div v-if="fixedByCustomer.length === 0" class="p-4 sm:p-5 text-center">
+                    <p class="text-xs font-semibold text-slate-500">No hay envases fijos en el camión</p>
+                </div>
 
-                    <div v-else class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-                        <div
-                            v-for="mov in recentMovements"
-                            :key="mov.id"
-                            class="p-3.5 sm:p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition"
-                        >
-                            <div class="space-y-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span
-                                        class="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] border"
-                                        :class="getMovementBadgeClass(mov.movement_type)"
-                                    >
-                                        {{ getMovementLabel(mov.movement_type) }}
-                                    </span>
-                                    <span class="font-bold text-slate-800 text-sm">
-                                        {{ mov.quantity }} u.
-                                    </span>
-                                    <span class="text-slate-400">
-                                        ({{ mov.bottle_type }} {{ mov.bottle_condition === 'full' ? 'lleno' : 'vacío' }})
-                                    </span>
-                                    <span
-                                        v-if="mov.status !== 'accepted'"
-                                        class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
-                                    >
-                                        {{ mov.status }}
-                                    </span>
-                                </div>
+                <div v-else class="divide-y divide-slate-100">
+                    <div
+                        v-for="item in fixedByCustomer"
+                        :key="item.customer_id"
+                        class="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50/50 transition"
+                    >
+                        <div class="space-y-0.5">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-black text-slate-900 text-sm sm:text-base">
+                                    {{ item.customer_nickname || item.customer_name }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-slate-100 text-slate-600">
+                                    {{ item.customer_code }}
+                                </span>
+                            </div>
+                            <p v-if="item.customer_nickname && item.customer_name && item.customer_name !== item.customer_nickname" class="text-xs text-slate-500">
+                                {{ item.customer_name }}
+                            </p>
+                        </div>
 
-                                <p class="text-slate-600">
-                                    <span class="font-medium text-slate-500">Ruta:</span> {{ mov.origin }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 text-slate-400"></i> {{ mov.destination }}
-                                    <template v-if="mov.customer">
-                                        • <span class="font-medium text-slate-500">Cliente:</span> {{ mov.customer.nickname || mov.customer.name }} ({{ mov.customer.code }})
-                                    </template>
-                                </p>
-
-                                <p v-if="mov.difference_reason" class="text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Motivo de diferencia: {{ mov.difference_reason }}
-                                </p>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <div
+                                v-if="item.fixed_full_to_deliver > 0"
+                                class="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-1.5"
+                            >
+                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                <span>Llenos para devolver:</span>
+                                <span class="text-sm font-black">{{ item.fixed_full_to_deliver }}</span>
                             </div>
 
-                            <div class="text-right text-slate-400 shrink-0">
-                                <div>{{ formatDateTime(mov.created_at) }}</div>
-                                <div v-if="mov.confirmed_by_user" class="text-[11px] text-slate-500">
-                                    Conf: {{ mov.confirmed_by_user.name }}
-                                </div>
+                            <div
+                                v-if="item.fixed_empty_collected > 0"
+                                class="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5"
+                            >
+                                <i class="fa-solid fa-arrow-down text-slate-500"></i>
+                                <span>Vacíos para Planta:</span>
+                                <span class="text-sm font-black">{{ item.fixed_empty_collected }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- 4. MOVIMIENTOS RECIENTES (CON ETIQUETAS CAMIÓN → PLANTA, CLIENTE → CAMIÓN)-->
+            <!-- ========================================================================= -->
+            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div class="px-4 sm:px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-slate-700"></i> Movimientos recientes
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Historial continuo de custodia en el camión
+                        </p>
+                    </div>
+                </div>
+
+                <div v-if="recentMovements.length === 0" class="p-4 sm:p-5 text-center text-xs font-semibold text-slate-400">
+                    No se registran movimientos recientes de custodia.
+                </div>
+
+                <div v-else class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    <div
+                        v-for="mov in recentMovements"
+                        :key="mov.id"
+                        class="p-3.5 sm:p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition"
+                    >
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span
+                                    class="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] border"
+                                    :class="getMovementBadgeClass(mov.movement_type)"
+                                >
+                                    {{ getMovementLabel(mov.movement_type) }}
+                                </span>
+                                <span class="font-black text-slate-900 text-sm">
+                                    {{ mov.quantity }} u.
+                                </span>
+                                <span class="text-slate-500 font-medium">
+                                    ({{ mov.bottle_type }} {{ mov.bottle_condition === 'full' ? 'lleno' : 'vacío' }})
+                                </span>
+                                <span
+                                    v-if="mov.status !== 'accepted'"
+                                    class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
+                                >
+                                    {{ mov.status }}
+                                </span>
+                            </div>
+
+                            <p class="text-slate-700 font-medium">
+                                <span class="text-slate-400 font-normal">Flujo:</span>
+                                <span class="font-bold text-slate-900 mx-1">{{ getLocationLabel(mov.origin) }} → {{ getLocationLabel(mov.destination) }}</span>
+                                <template v-if="mov.customer">
+                                    · <span class="text-slate-500">Cliente: {{ mov.customer.nickname || mov.customer.name }} ({{ mov.customer.code }})</span>
+                                </template>
+                            </p>
+
+                            <p v-if="mov.difference_reason" class="text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 flex items-center gap-1.5 font-medium">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Motivo: {{ mov.difference_reason }}
+                            </p>
+                        </div>
+
+                        <div class="text-right text-slate-400 shrink-0">
+                            <div class="font-medium text-slate-600">{{ formatDateTime(mov.created_at) }}</div>
+                            <div v-if="mov.confirmed_by_user" class="text-[11px] text-slate-500">
+                                Conf: {{ mov.confirmed_by_user.name }}
                             </div>
                         </div>
                     </div>

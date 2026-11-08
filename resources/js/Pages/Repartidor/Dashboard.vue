@@ -139,7 +139,7 @@ const getRouteStatusBadge = (status) => {
                 <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <!-- 1. POR RECOGER -->
                     <Link
-                        :href="route('repartidor.collections.index')"
+                        :href="route('repartidor.reparto', { tab: 'por_recoger' })"
                         class="p-4 sm:p-5 rounded-2xl bg-white border border-amber-200/80 hover:border-amber-300 hover:shadow-xs active:scale-98 transition flex flex-col justify-between gap-3 group min-h-[44px]"
                     >
                         <div class="flex items-start justify-between">
@@ -162,7 +162,7 @@ const getRouteStatusBadge = (status) => {
 
                     <!-- 2. POR ENTREGAR -->
                     <Link
-                        :href="route('repartidor.deliveries.index')"
+                        :href="route('repartidor.reparto', { tab: 'por_entregar' })"
                         class="p-4 sm:p-5 rounded-2xl bg-white border border-blue-200/80 hover:border-blue-300 hover:shadow-xs active:scale-98 transition flex flex-col justify-between gap-3 group min-h-[44px]"
                     >
                         <div class="flex items-start justify-between">
@@ -383,14 +383,14 @@ const getRouteStatusBadge = (status) => {
                         </div>
 
                         <Link
-                            :href="route('repartidor.route.index')"
+                            :href="route('repartidor.reparto')"
                             class="min-h-[44px] px-6 py-2.5 rounded-xl text-xs sm:text-sm font-black transition active:scale-98 shadow-2xs inline-flex items-center justify-center gap-2"
                             :class="activeRoute.is_in_progress
                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                 : (activeRoute.is_incident ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-blue-900 hover:bg-blue-800 text-white')"
                         >
-                            <i :class="activeRoute.is_in_progress ? 'fa-solid fa-play' : 'fa-solid fa-route'"></i>
-                            <span>{{ activeRoute.is_in_progress ? 'Continuar mi ruta' : (activeRoute.is_incident ? 'Reanudar recorrido en Mi Ruta' : 'Ver mi ruta') }}</span>
+                            <i :class="activeRoute.is_in_progress ? 'fa-solid fa-play' : 'fa-solid fa-truck'"></i>
+                            <span>{{ activeRoute.is_in_progress ? 'Continuar en Reparto' : (activeRoute.is_incident ? 'Reanudar en Reparto' : 'Abrir Reparto') }}</span>
                         </Link>
                     </div>
                 </div>

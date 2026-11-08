@@ -40,6 +40,14 @@ const props = defineProps({
         type: Number,
         default: 15.00,
     },
+    return_tab: {
+        type: String,
+        default: 'pendientes',
+    },
+    return_zone: {
+        type: String,
+        default: 'all',
+    },
 });
 
 const page = usePage();
@@ -193,6 +201,8 @@ const serveForm = useForm({
     fixed_delivered: 0,
     units_paid_cash: 0,
     cash_tendered: 0,
+    return_tab: props.return_tab,
+    return_zone: props.return_zone,
 });
 
 const submitServe = () => {
@@ -216,6 +226,8 @@ const submitServe = () => {
 
     serveForm.units_paid_cash = unitsPaidCash.value;
     serveForm.cash_tendered = cashTendered.value;
+    serveForm.return_tab = props.return_tab;
+    serveForm.return_zone = props.return_zone;
 
     serveForm.post(route('repartidor.stops.process-serve', props.stop.id), {
         preserveScroll: true,
@@ -231,7 +243,7 @@ const getTrafficLightColor = (tl) => {
 </script>
 
 <template>
-    <Head :title="`Atender Parada #${stop.stop_number} · ${customer.nickname}`" />
+    <Head :title="`Atender Pedido ${order.folio} · ${customer.nickname}`" />
 
     <AuthenticatedLayout>
         <div class="max-w-2xl mx-auto space-y-4 pb-16">
@@ -241,15 +253,15 @@ const getTrafficLightColor = (tl) => {
             <!-- ========================================================================= -->
             <div class="flex items-center justify-between gap-3">
                 <Link
-                    :href="route('repartidor.route.index')"
-                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs hover:bg-slate-50 active:scale-95 transition"
+                    :href="route('repartidor.reparto', { tab: return_tab, zone: return_zone })"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs hover:bg-slate-50 active:scale-95 transition min-h-[44px]"
                 >
-                    <i class="fa-solid fa-arrow-left"></i> Volver a Mi Ruta
+                    <i class="fa-solid fa-arrow-left"></i> Volver a Reparto
                 </Link>
 
                 <div class="text-right">
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Ruta {{ route.folio }}</span>
-                    <span class="text-xs font-extrabold text-blue-900">Parada #{{ stop.stop_number }}</span>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">{{ order.folio }}</span>
+                    <span class="text-xs font-extrabold text-blue-900">{{ order.delivery_zone }}</span>
                 </div>
             </div>
 

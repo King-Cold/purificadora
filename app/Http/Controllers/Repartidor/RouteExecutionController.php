@@ -608,6 +608,8 @@ class RouteExecutionController extends Controller
                 'fixed_available_for_customer' => $availableFixedOnTruck,
             ],
             'unit_price' => $this->settingService->getCurrentRefillPrice(),
+            'return_tab' => $request->query('return_tab', 'pendientes'),
+            'return_zone' => $request->query('return_zone', 'all'),
         ]);
     }
 
@@ -630,6 +632,14 @@ class RouteExecutionController extends Controller
 
         try {
             $this->routeService->recordStopCompleted($stop, $validated, $request->user());
+
+            if ($request->filled('return_tab') || $request->filled('return_zone')) {
+                return redirect()->route('repartidor.reparto', [
+                    'tab' => $request->input('return_tab', 'pendientes'),
+                    'zone' => $request->input('return_zone', 'all'),
+                ])->with('success', 'Parada atendida y registrada exitosamente.');
+            }
+
             return redirect()->route('repartidor.route.index')->with('success', 'Parada atendida y registrada exitosamente.');
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['serve' => $e->getMessage()]);
@@ -1288,25 +1298,57 @@ class RouteExecutionController extends Controller
 
         // 2. Inventario del camión
         $truckState = $this->truckInventoryService->getTruckInventoryState($driver);
-        $exchangeAvailable = (int) ($truckState['exchange_full_available'] ?? 0);
-        $exchangeEmpty = (int) ($truckState['exchange_empty_collected'] ?? 0);
-        $fixedTransporting = (int) ($truckState['fixed_transporting_to_plant'] ?? 0);
+        $exchangeAvailable = (int) ($truckState['truck_inventory']['exchange_full_available'] ?? $truckState['exchange_full_available'] ?? 0);
+        $exchangeEmpty = (int) ($truckState['truck_inventory']['exchange_empty_collected'] ?? $truckState['exchange_empty_collected'] ?? 0);
+        $fixedTransporting = (int) ($truckState['truck_inventory']['fixed_empty_collected_total'] ?? $truckState['fixed_transporting_to_plant'] ?? 0);
 
-        // 3. Obtener pedidos disponibles (no asignados a rutas activas)
-        $activeRouteIds = DeliveryRoute::whereIn('status', [
-            DeliveryRoute::STATUS_ASSIGNED,
-            DeliveryRoute::STATUS_IN_PROGRESS,
-            DeliveryRoute::STATUS_INCIDENT,
-        ])->pluck('id');
+        // 3. Obtener paradas e identificar pedidos gestionados
+        $pendingStopMap = $activeRoute ? $activeRoute->stops->where('status', RouteStop::STATUS_PENDING)->keyBy('order_id') : collect();
+        $handledOrderIds = $activeRoute ? $activeRoute->stops->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED])->pluck('order_id')->all() : [];
+        if ($completedTodayRoute) {
+            $handledOrderIds = array_merge($handledOrderIds, $completedTodayRoute->stops->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED])->pluck('order_id')->all());
+        }
+        $handledOrderIds = array_unique($handledOrderIds);
 
+        // Pedidos activos disponibles para atender
         $allOrders = Order::with(['customer', 'items', 'charges'])
-            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS])
-            ->where(function ($q) use ($activeRouteIds) {
-                $q->whereNull('delivery_route_id')
-                  ->orWhereNotIn('delivery_route_id', $activeRouteIds);
-            })
+            ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS, Order::STATUS_IN_ROUTE])
+            ->whereNotIn('id', $handledOrderIds)
             ->orderBy('id', 'asc')
             ->get();
+
+        // Precargar movimientos de custodia de fijos por cliente (evitar N+1)
+        $customerIds = $allOrders->pluck('customer_id')->filter()->unique()->values()->all();
+
+        $loadedFixedByCustomer = BottleCustodyMovement::where('bottle_type', OrderItem::TYPE_FIXED)
+            ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_LOAD_FIXED)
+            ->where('destination', 'truck')
+            ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
+            ->whereIn('customer_id', $customerIds)
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, SUM(quantity) as total')
+            ->pluck('total', 'customer_id')
+            ->all();
+
+        $deliveredFixedByCustomer = BottleCustodyMovement::where('bottle_type', OrderItem::TYPE_FIXED)
+            ->where('movement_type', BottleCustodyMovement::TYPE_DELIVERY_REFILL_TO_CUSTOMER)
+            ->where('origin', 'truck')
+            ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, BottleCustodyMovement::STATUS_ACCEPTED_WITH_DISCREPANCY])
+            ->whereIn('customer_id', $customerIds)
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, SUM(quantity) as total')
+            ->pluck('total', 'customer_id')
+            ->all();
+
+        $proposedFixedByCustomer = BottleCustodyMovement::where('bottle_type', OrderItem::TYPE_FIXED)
+            ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_LOAD_FIXED)
+            ->where('destination', 'truck')
+            ->where('status', BottleCustodyMovement::STATUS_PROPOSED)
+            ->whereIn('customer_id', $customerIds)
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, SUM(quantity) as total')
+            ->pluck('total', 'customer_id')
+            ->all();
 
         // Mapeo canónico de zona
         $mapOrderZone = function ($order) {
@@ -1319,7 +1361,7 @@ class RouteExecutionController extends Controller
         };
 
         // Formateador de tarjeta
-        $formatOrderCard = function ($order) use ($mapOrderZone) {
+        $formatOrderCard = function ($order, $stop = null) use ($mapOrderZone, $exchangeAvailable, $loadedFixedByCustomer, $deliveredFixedByCustomer, $proposedFixedByCustomer) {
             $customer = $order->customer;
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
@@ -1333,20 +1375,134 @@ class RouteExecutionController extends Controller
             $fixedPrepared = (int) ($fixedItem?->prepared_quantity ?? 0);
             $fixedDelivered = (int) ($fixedItem?->delivered_quantity ?? 0);
             $fixedToCollect = max(0, $fixedQty - $fixedCollected);
-            $fixedToDeliver = max(0, $fixedPrepared - $fixedDelivered);
+            $fixedToDeliver = max(0, min($fixedQty, $fixedPrepared) - $fixedDelivered);
 
-            $opType = 'intercambio';
-            $opLabel = 'Cambio de botellones';
+            $customerId = $order->customer_id;
+            $custLoaded = (int) ($loadedFixedByCustomer[$customerId] ?? 0);
+            $custDelivered = (int) ($deliveredFixedByCustomer[$customerId] ?? 0);
+            $fixedAvailableOnTruck = max(0, $custLoaded - $custDelivered);
+            $fixedProposedOnTruck = (int) ($proposedFixedByCustomer[$customerId] ?? 0);
+
+            $hasExchange = ($exchangePending > 0);
+            $hasFixedCollect = ($fixedToCollect > 0);
+            $hasFixedDeliver = ($fixedToDeliver > 0);
+
+            $canDeliverExchange = ($hasExchange && $exchangeAvailable > 0);
+            $canDeliverFixed = ($hasFixedDeliver && $fixedAvailableOnTruck > 0);
+            $hasFixedPendingAcceptance = ($hasFixedDeliver && $fixedAvailableOnTruck == 0 && $fixedProposedOnTruck > 0);
+            $fixedInPlant = ($hasFixedDeliver && $fixedAvailableOnTruck == 0 && $fixedProposedOnTruck == 0);
+
+            $actionType = 'serve_order';
+            $actionLabel = 'Atender pedido';
+            $canExecute = true;
+            $blockedReason = null;
+            $situationLabel = '';
+            $isPartial = false;
+            $breakdown = [];
+
             if ($exchangeQty > 0 && $fixedQty > 0) {
                 $opType = 'mixto';
                 $opLabel = 'Mixto (Cambio + Fijos)';
-            } elseif ($fixedQty > 0) {
-                if ($fixedPrepared > 0) {
-                    $opType = 'devolucion_fijos';
-                    $opLabel = 'Devolución de fijos';
+
+                if ($hasExchange) {
+                    if ($canDeliverExchange) {
+                        $breakdown[] = "Entregar {$exchangePending} de cambio";
+                    } else {
+                        $breakdown[] = "Sin botellones de cambio en camión ({$exchangePending} sol.)";
+                    }
+                }
+                if ($hasFixedCollect) {
+                    $breakdown[] = "Recoger {$fixedToCollect} fijos";
+                }
+                if ($hasFixedDeliver) {
+                    if ($canDeliverFixed) {
+                        $deliverable = min($fixedToDeliver, $fixedAvailableOnTruck);
+                        $breakdown[] = "Entregar {$deliverable} fijos";
+                    } elseif ($hasFixedPendingAcceptance) {
+                        $breakdown[] = "Fijos por aceptar en Mi Carga ({$fixedToDeliver} u.)";
+                    } else {
+                        $breakdown[] = "Fijos en preparación en Planta ({$fixedToDeliver} u.)";
+                    }
+                }
+
+                $hasAnyAction = $canDeliverExchange || $hasFixedCollect || $canDeliverFixed;
+                if ($hasAnyAction) {
+                    $actionType = 'serve_mixed';
+                    $actionLabel = 'Atender pedido';
+                    $canExecute = true;
+                } elseif ($hasFixedPendingAcceptance) {
+                    $actionType = 'review_load';
+                    $actionLabel = 'Revisar carga';
+                    $situationLabel = 'Fijos pendientes de aceptar en Mi Carga';
+                    $canExecute = true;
                 } else {
+                    $actionType = 'blocked';
+                    $canExecute = false;
+                    if ($exchangeAvailable == 0 && $fixedInPlant) {
+                        $blockedReason = 'Sin existencias de cambio y fijos en Planta';
+                    } elseif ($exchangeAvailable == 0) {
+                        $blockedReason = 'Sin botellones de cambio en camión';
+                    } else {
+                        $blockedReason = 'En preparación en Planta';
+                    }
+                }
+            } elseif ($fixedQty > 0) {
+                if ($hasFixedCollect) {
                     $opType = 'recoleccion_fijos';
                     $opLabel = 'Recolección de fijos';
+                    $actionType = 'collect_fixed';
+                    $actionLabel = "Recoger {$fixedToCollect} fijos";
+                    $canExecute = true;
+                } elseif ($hasFixedDeliver) {
+                    $opType = 'devolucion_fijos';
+                    $opLabel = 'Devolución de fijos';
+                    if ($canDeliverFixed) {
+                        $deliverable = min($fixedToDeliver, $fixedAvailableOnTruck);
+                        $actionType = 'deliver_fixed';
+                        $actionLabel = "Entregar {$deliverable} fijos";
+                        $canExecute = true;
+                        if ($fixedAvailableOnTruck < $fixedToDeliver) {
+                            $isPartial = true;
+                        }
+                    } elseif ($hasFixedPendingAcceptance) {
+                        $actionType = 'review_load';
+                        $actionLabel = 'Revisar carga';
+                        $situationLabel = 'Fijos pendientes de aceptar en Mi Carga';
+                        $canExecute = true;
+                    } else {
+                        $actionType = 'blocked';
+                        $canExecute = false;
+                        $blockedReason = 'En preparación en Planta';
+                    }
+                } else {
+                    $opType = 'recoleccion_fijos';
+                    $opLabel = 'Fijos procesados';
+                    $actionType = 'completed';
+                    $actionLabel = 'Completado';
+                    $canExecute = false;
+                }
+            } else {
+                $opType = 'intercambio';
+                $opLabel = 'Cambio de botellones';
+                if ($hasExchange) {
+                    if ($exchangeAvailable >= $exchangePending) {
+                        $actionType = 'deliver_exchange';
+                        $actionLabel = "Entregar {$exchangePending} de cambio";
+                        $canExecute = true;
+                    } elseif ($exchangeAvailable > 0) {
+                        $actionType = 'deliver_exchange';
+                        $actionLabel = "Entregar {$exchangeAvailable} de cambio";
+                        $canExecute = true;
+                        $isPartial = true;
+                    } else {
+                        $actionType = 'blocked';
+                        $canExecute = false;
+                        $blockedReason = 'Sin botellones de cambio en camión';
+                    }
+                } else {
+                    $actionType = 'completed';
+                    $actionLabel = 'Completado';
+                    $canExecute = false;
                 }
             }
 
@@ -1354,8 +1510,17 @@ class RouteExecutionController extends Controller
             $debtAmount = $customer ? $this->debtService->getPendingDebtAmount($customer) : 0;
             $debtBottles = $customer ? $this->debtService->getPendingDebtBottles($customer) : 0;
 
-            $address = $order->delivery_street 
-                ? ($order->delivery_street . ($order->delivery_exterior_number ? ' #' . $order->delivery_exterior_number : '') . ($order->delivery_neighborhood ? ', ' . $order->delivery_neighborhood : ''))
+            $street = trim((string) ($order->delivery_street ?? ''));
+            $ext = trim((string) ($order->delivery_exterior_number ?? ''));
+            $col = trim((string) ($order->delivery_neighborhood ?? ''));
+            $cp = trim((string) ($order->delivery_postal_code ?? ''));
+
+            $addressShort = $street !== ''
+                ? ($street . ($ext !== '' ? ' #' . $ext : ''))
+                : 'Sin ubicación registrada';
+
+            $addressFull = $street !== ''
+                ? ($street . ($ext !== '' ? ' #' . $ext : '') . ($col !== '' ? ', Col. ' . $col : '') . ($cp !== '' ? ', C.P. ' . $cp : ''))
                 : 'Sin ubicación registrada';
 
             return [
@@ -1368,6 +1533,10 @@ class RouteExecutionController extends Controller
                 'customer_name' => $customer?->name,
                 'customer_nickname' => $customer?->nickname ?? 'Cliente',
                 'customer_phone' => $order->recipient_phone ?: $customer?->phone,
+                'notes' => $order->notes,
+                'address_short' => $addressShort,
+                'address_summary' => $addressFull,
+                'address_reference' => $order->address_snapshot['delivery_reference'] ?? $order->delivery_notes ?? null,
                 'zone_key' => $mapOrderZone($order),
                 'zone_label' => match ($mapOrderZone($order)) {
                     'north' => 'Norte',
@@ -1376,7 +1545,6 @@ class RouteExecutionController extends Controller
                     'west' => 'Oeste',
                     default => 'Sin zona',
                 },
-                'address_summary' => $address,
                 'operation_type' => $opType,
                 'operation_label' => $opLabel,
                 'exchange_quantity' => $exchangeQty,
@@ -1388,17 +1556,36 @@ class RouteExecutionController extends Controller
                 'traffic_light' => $tl,
                 'pending_debt_amount' => $debtAmount,
                 'pending_debt_bottles' => $debtBottles,
+                'action_type' => $actionType,
+                'action_label' => $actionLabel,
+                'can_execute' => $canExecute,
+                'blocked_reason' => $blockedReason,
+                'situation_label' => $situationLabel,
+                'is_partial' => $isPartial,
+                'breakdown' => $breakdown,
+                'fixed_available_on_truck' => $fixedAvailableOnTruck,
                 'created_at' => $order->created_at?->format('d/m H:i'),
+                'stop_id' => $stop?->id,
+                'stop_number' => $stop?->stop_number,
+                'stop_status' => $stop?->status,
+                'failure_reason' => $stop?->failure_reason,
+                'completed_at' => $stop?->completed_at?->format('H:i'),
             ];
         };
 
         // Listados por pestaña
-        $pendientesList = $allOrders->map($formatOrderCard);
+        $pendientesList = $allOrders->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
+            $stop = $pendingStopMap->get($order->id);
+            return $formatOrderCard($order, $stop);
+        });
 
         $porRecogerList = $allOrders->filter(function ($order) {
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
             return $fixedItem && ($fixedItem->quantity > $fixedItem->collected_quantity);
-        })->map($formatOrderCard)->values();
+        })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
+            $stop = $pendingStopMap->get($order->id);
+            return $formatOrderCard($order, $stop);
+        })->values();
 
         $porEntregarList = $allOrders->filter(function ($order) {
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
@@ -1406,7 +1593,10 @@ class RouteExecutionController extends Controller
             $hasExchange = $exchangeItem && ($exchangeItem->quantity > $exchangeItem->delivered_quantity);
             $hasFixedToDeliver = $fixedItem && ($fixedItem->prepared_quantity > $fixedItem->delivered_quantity);
             return $hasExchange || $hasFixedToDeliver;
-        })->map($formatOrderCard)->values();
+        })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
+            $stop = $pendingStopMap->get($order->id);
+            return $formatOrderCard($order, $stop);
+        })->values();
 
         $enProcesoList = collect();
         $atendidosList = collect();
@@ -1414,32 +1604,16 @@ class RouteExecutionController extends Controller
         if ($activeRoute) {
             $pendingStops = $activeRoute->stops->where('status', RouteStop::STATUS_PENDING);
             $enProcesoList = $pendingStops->map(function ($stop) use ($formatOrderCard) {
-                $card = $formatOrderCard($stop->order);
-                $card['stop_id'] = $stop->id;
-                $card['stop_number'] = $stop->stop_number;
-                $card['stop_status'] = $stop->status;
-                return $card;
+                return $formatOrderCard($stop->order, $stop);
             })->values();
 
             $handledStops = $activeRoute->stops->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED]);
             $atendidosList = $handledStops->map(function ($stop) use ($formatOrderCard) {
-                $card = $formatOrderCard($stop->order);
-                $card['stop_id'] = $stop->id;
-                $card['stop_number'] = $stop->stop_number;
-                $card['stop_status'] = $stop->status;
-                $card['failure_reason'] = $stop->failure_reason;
-                $card['completed_at'] = $stop->completed_at?->format('H:i');
-                return $card;
+                return $formatOrderCard($stop->order, $stop);
             })->values();
         } elseif ($completedTodayRoute) {
             $atendidosList = $completedTodayRoute->stops->map(function ($stop) use ($formatOrderCard) {
-                $card = $formatOrderCard($stop->order);
-                $card['stop_id'] = $stop->id;
-                $card['stop_number'] = $stop->stop_number;
-                $card['stop_status'] = $stop->status;
-                $card['failure_reason'] = $stop->failure_reason;
-                $card['completed_at'] = $stop->completed_at?->format('H:i');
-                return $card;
+                return $formatOrderCard($stop->order, $stop);
             })->values();
         }
 
@@ -1568,7 +1742,14 @@ class RouteExecutionController extends Controller
 
         try {
             $stop = $this->routeService->addOrderToActiveRoute($activeRoute, $order, $user);
-            return redirect()->route('repartidor.stops.serve', $stop->id);
+            $redirectParams = ['stop' => $stop->id];
+            if ($request->filled('tab')) {
+                $redirectParams['return_tab'] = $request->input('tab');
+            }
+            if ($request->filled('zone')) {
+                $redirectParams['return_zone'] = $request->input('zone');
+            }
+            return redirect()->route('repartidor.stops.serve', $redirectParams);
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['stop' => $e->getMessage()]);
         }

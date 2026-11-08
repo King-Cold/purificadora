@@ -23,6 +23,7 @@ const isAdministrador = computed(() => userRoles.value.includes('Administrador')
 const isCliente = computed(() => userRoles.value.includes('Cliente'));
 const isRepartidor = computed(() => userRoles.value.includes('Repartidor'));
 const isPlanta = computed(() => userRoles.value.includes('Operador Planta'));
+const pendingFixedCount = computed(() => page.props.plant?.pending_fixed_count || 0);
 
 const isRouteActive = (pattern) => {
     try {
@@ -113,17 +114,17 @@ onUnmounted(() => {
             class="h-16 flex items-center border-b border-slate-200/80 shrink-0 bg-[#f8fafc]"
             :class="collapsed ? 'justify-center px-3' : 'justify-between px-5'"
         >
-            <!-- MODO CONTRAÍDO: Icono de logo o botón para expandir -->
-            <button
+            <!-- MODO CONTRAÍDO: Isotipo / Marca compacta de Puritronic (elimina el doble botón de menú) -->
+            <Link
                 v-if="collapsed"
-                @click="$emit('toggle')"
-                type="button"
-                class="hidden lg:flex w-10 h-10 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-900 items-center justify-center transition shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-900/20 cursor-pointer"
-                title="Expandir menú"
-                aria-label="Expandir menú"
+                :href="route('dashboard')"
+                @click="handleLinkClick"
+                class="hidden lg:flex w-10 h-10 rounded-2xl bg-blue-900 text-white items-center justify-center transition shadow-2xs hover:bg-blue-800 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                title="Puritronic - Ir al inicio"
+                aria-label="Puritronic"
             >
-                <i class="fa-solid fa-bars text-base"></i>
-            </button>
+                <i class="fa-solid fa-droplet text-lg text-sky-400"></i>
+            </Link>
 
             <!-- MODO EXPANDIDO: Logotipo original sin deformar y botón móvil de cierre -->
             <template v-else>
@@ -324,7 +325,279 @@ onUnmounted(() => {
             </template>
 
             <!-- ============================================================= -->
-            <!-- NAVEGACIÓN PARA OTROS ROLES (ADMIN, REPARTIDOR, PLANTA)        -->
+            <!-- NAVEGACIÓN EXCLUSIVA PARA REPARTIDOR (4 DESTINOS EXACTOS)      -->
+            <!-- ============================================================= -->
+            <template v-else-if="isRepartidor && !isAdmin">
+                <nav class="space-y-2">
+                    <!-- 1. Reparto -->
+                    <Link
+                        :href="route('repartidor.reparto')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('repartidor.reparto') || isRouteActive('repartidor.dashboard') || isRouteActive('repartidor.stops.*') || isRouteActive('repartidor.direct-service.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Reparto"
+                        aria-label="Reparto"
+                    >
+                        <span
+                            v-if="!collapsed && (isRouteActive('repartidor.reparto') || isRouteActive('repartidor.dashboard') || isRouteActive('repartidor.stops.*') || isRouteActive('repartidor.direct-service.*'))"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-truck text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Reparto</span>
+                    </Link>
+
+                    <!-- 2. Mi Carga -->
+                    <Link
+                        :href="route('repartidor.truck-load.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('repartidor.truck-load.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Mi carga"
+                        aria-label="Mi carga"
+                    >
+                        <span
+                            v-if="!collapsed && isRouteActive('repartidor.truck-load.*')"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-boxes-stacked text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Mi carga</span>
+                    </Link>
+
+                    <!-- 3. Cobros -->
+                    <Link
+                        :href="route('repartidor.debt.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('repartidor.debt.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Cobros"
+                        aria-label="Cobros"
+                    >
+                        <span
+                            v-if="!collapsed && isRouteActive('repartidor.debt.*')"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-hand-holding-dollar text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Cobros</span>
+                    </Link>
+
+                    <!-- 4. Clientes -->
+                    <Link
+                        :href="route('repartidor.customers.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('repartidor.customers.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Clientes"
+                        aria-label="Clientes"
+                    >
+                        <span
+                            v-if="!collapsed && isRouteActive('repartidor.customers.*')"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-users text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Clientes</span>
+                    </Link>
+                </nav>
+            </template>
+
+            <!-- ============================================================= -->
+            <!-- NAVEGACIÓN EXCLUSIVA PARA OPERADOR DE PLANTA (TABLET-FIRST)   -->
+            <!-- ============================================================= -->
+            <template v-else-if="isPlanta && !isAdmin">
+                <nav class="space-y-2">
+                    <!-- 1. Llenado Rápido -->
+                    <Link
+                        :href="route('planta.quick-refill.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Llenado rápido"
+                        aria-label="Llenado rápido"
+                    >
+                        <span
+                            v-if="!collapsed && (isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard'))"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-bolt text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Llenado rápido</span>
+                    </Link>
+
+                    <!-- 2. Fijos (con badge de recepciones pendientes) -->
+                    <Link
+                        :href="route('planta.fijos.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('planta.fijos.*') || isRouteActive('planta.reception.*') || isRouteActive('planta.production.*') || isRouteActive('planta.loads.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Fijos"
+                        aria-label="Fijos"
+                    >
+                        <span
+                            v-if="!collapsed && (isRouteActive('planta.fijos.*') || isRouteActive('planta.reception.*') || isRouteActive('planta.production.*') || isRouteActive('planta.loads.*'))"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center relative" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-boxes-stacked text-base"></i>
+                            <span
+                                v-if="collapsed && pendingFixedCount > 0"
+                                class="absolute -top-1 -right-2 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black bg-amber-500 text-white"
+                            >
+                                {{ pendingFixedCount }}
+                            </span>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold flex-1'">Fijos</span>
+                        <span
+                            v-if="!collapsed && pendingFixedCount > 0"
+                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-black bg-amber-500 text-white shrink-0 ml-auto"
+                            title="Recepciones pendientes"
+                        >
+                            {{ pendingFixedCount }}
+                        </span>
+                    </Link>
+
+                    <!-- 3. Cambios -->
+                    <Link
+                        :href="route('planta.cambios.index')"
+                        @click="handleLinkClick"
+                        :class="[
+                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
+                            collapsed
+                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
+                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
+                            isRouteActive('planta.cambios.*')
+                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                        ]"
+                        title="Cambios"
+                        aria-label="Cambios"
+                    >
+                        <span
+                            v-if="!collapsed && isRouteActive('planta.cambios.*')"
+                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
+                        ></span>
+                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
+                            <i class="fa-solid fa-arrows-rotate text-base"></i>
+                        </div>
+                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Cambios</span>
+                    </Link>
+
+                    <!-- Grupo: Más (Existencias, Incidencias, Historial) -->
+                    <div class="pt-2 border-t border-slate-200/80">
+                        <div v-if="!collapsed" class="px-3 mb-1 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+                            Más
+                        </div>
+                        <div v-else class="w-6 mx-auto my-1.5 border-t border-slate-200" title="Más opciones"></div>
+
+                        <nav class="space-y-1">
+                            <!-- Existencias -->
+                            <Link
+                                :href="route('planta.inventory.index')"
+                                @click="handleLinkClick"
+                                :class="[
+                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
+                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
+                                    isRouteActive('planta.inventory.*')
+                                        ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                                ]"
+                                title="Existencias"
+                            >
+                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                    <i class="fa-solid fa-warehouse text-xs"></i>
+                                </div>
+                                <span v-if="!collapsed" class="truncate">Existencias</span>
+                            </Link>
+
+                            <!-- Incidencias -->
+                            <Link
+                                :href="route('planta.inventory.index', { tab: 'incidencias' })"
+                                @click="handleLinkClick"
+                                :class="[
+                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
+                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
+                                    'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                                ]"
+                                title="Incidencias"
+                            >
+                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                    <i class="fa-solid fa-triangle-exclamation text-xs text-amber-500"></i>
+                                </div>
+                                <span v-if="!collapsed" class="truncate">Incidencias</span>
+                            </Link>
+
+                            <!-- Historial -->
+                            <Link
+                                :href="route('planta.inventory.index', { tab: 'historial' })"
+                                @click="handleLinkClick"
+                                :class="[
+                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
+                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
+                                    'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                                ]"
+                                title="Historial"
+                            >
+                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                                </div>
+                                <span v-if="!collapsed" class="truncate">Historial</span>
+                            </Link>
+                        </nav>
+                    </div>
+                </nav>
+            </template>
+
+            <!-- ============================================================= -->
+            <!-- NAVEGACIÓN PARA OTROS ROLES (ADMIN, PLANTA)                    -->
             <!-- ============================================================= -->
             <template v-else>
                 <!-- Principal (Dashboard) -->
@@ -472,6 +745,7 @@ onUnmounted(() => {
                             <span v-if="!collapsed" class="truncate">Rutas</span>
                         </Link>
 
+                        <!-- 1. Reparto (Repartidor) -->
                         <Link
                             v-if="isAdmin || isRepartidor"
                             :href="getRouteUrl('repartidor.reparto')"
@@ -492,90 +766,7 @@ onUnmounted(() => {
                             <span v-if="!collapsed" class="truncate font-semibold">Reparto</span>
                         </Link>
 
-                        <!-- Mi Ruta (Repartidor) -->
-                        <Link
-                            v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.route.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.route.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Mi Ruta' : ''"
-                        >
-                            <span v-if="isRouteActive('repartidor.route.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-map-location-dot"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Mi Ruta</span>
-                        </Link>
-
-                        <!-- Por Recoger (Repartidor) -->
-                        <Link
-                            v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.collections.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.collections.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Por Recoger' : ''"
-                        >
-                            <span v-if="isRouteActive('repartidor.collections.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-hand-holding-hand"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Por Recoger</span>
-                        </Link>
-
-                        <!-- Por Entregar (Repartidor) -->
-                        <Link
-                            v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.deliveries.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.deliveries.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Por Entregar' : ''"
-                        >
-                            <span v-if="isRouteActive('repartidor.deliveries.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-truck-ramp-box"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Por Entregar</span>
-                        </Link>
-
-                        <!-- Cobrar Pendientes (Repartidor) -->
-                        <Link
-                            v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.debt.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.debt.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Cobrar Pendientes' : ''"
-                        >
-                            <span v-if="isRouteActive('repartidor.debt.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-hand-holding-dollar"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Cobrar Pendientes</span>
-                        </Link>
-
+                        <!-- 2. Mi Carga (Repartidor) -->
                         <Link
                             v-if="isAdmin || isRepartidor"
                             :href="getRouteUrl('repartidor.truck-load.index')"
@@ -596,29 +787,31 @@ onUnmounted(() => {
                             <span v-if="!collapsed" class="truncate">Mi Carga</span>
                         </Link>
 
+                        <!-- 3. Cobros (Repartidor) -->
                         <Link
                             v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.customers.index')"
+                            :href="getRouteUrl('repartidor.debt.index')"
                             @click="handleLinkClick"
                             :class="[
                                 'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
                                 collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('repartidor.customers.index')
+                                isRouteActive('repartidor.debt.*')
                                     ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                             ]"
-                            :title="collapsed ? 'Clientes' : ''"
+                            :title="collapsed ? 'Cobros' : ''"
                         >
-                            <span v-if="isRouteActive('repartidor.customers.index')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <span v-if="isRouteActive('repartidor.debt.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
                             <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-users"></i>
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
                             </div>
-                            <span v-if="!collapsed" class="truncate">Clientes</span>
+                            <span v-if="!collapsed" class="truncate">Cobros</span>
                         </Link>
 
+                        <!-- 4. Clientes (Repartidor) -->
                         <Link
                             v-if="isAdmin || isRepartidor"
-                            :href="getRouteUrl('repartidor.customers.create')"
+                            :href="getRouteUrl('repartidor.customers.index')"
                             @click="handleLinkClick"
                             :class="[
                                 'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
@@ -627,33 +820,76 @@ onUnmounted(() => {
                                     ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                             ]"
-                            :title="collapsed ? 'Agregar Cliente' : ''"
+                            :title="collapsed ? 'Clientes' : ''"
                         >
                             <span v-if="isRouteActive('repartidor.customers.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
                             <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-user-plus"></i>
+                                <i class="fa-solid fa-users"></i>
                             </div>
-                            <span v-if="!collapsed" class="truncate">Agregar Cliente</span>
+                            <span v-if="!collapsed" class="truncate">Clientes</span>
                         </Link>
 
+                        <!-- Llenado Rápido (Planta) -->
                         <Link
-                            v-if="isAdmin || isPlanta"
-                            :href="getRouteUrl('planta.dashboard')"
+                            v-if="isAdmin"
+                            :href="getRouteUrl('planta.quick-refill.index')"
                             @click="handleLinkClick"
                             :class="[
                                 'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
                                 collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('planta.dashboard')
+                                isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard')
                                     ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                             ]"
-                            :title="collapsed ? 'Planta y Llenado' : ''"
+                            :title="collapsed ? 'Llenado Rápido' : ''"
                         >
-                            <span v-if="isRouteActive('planta.dashboard')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <span v-if="isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
                             <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-industry"></i>
+                                <i class="fa-solid fa-bolt"></i>
                             </div>
-                            <span v-if="!collapsed" class="truncate">Planta y Llenado</span>
+                            <span v-if="!collapsed" class="truncate">Llenado Rápido</span>
+                        </Link>
+
+                        <!-- Fijos (Unificado) -->
+                        <Link
+                            v-if="isAdmin"
+                            :href="getRouteUrl('planta.fijos.index')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('planta.fijos.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Fijos' : ''"
+                        >
+                            <span v-if="isRouteActive('planta.fijos.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Fijos (Unificado)</span>
+                        </Link>
+
+                        <!-- Cambios (Unificado) -->
+                        <Link
+                            v-if="isAdmin"
+                            :href="getRouteUrl('planta.cambios.index')"
+                            @click="handleLinkClick"
+                            :class="[
+                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
+                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
+                                isRouteActive('planta.cambios.*')
+                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                            ]"
+                            :title="collapsed ? 'Cambios' : ''"
+                        >
+                            <span v-if="isRouteActive('planta.cambios.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
+                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </div>
+                            <span v-if="!collapsed" class="truncate">Cambios (Unificado)</span>
                         </Link>
 
                         <!-- Por Recibir (Planta) -->

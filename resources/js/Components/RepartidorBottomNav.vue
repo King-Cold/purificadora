@@ -32,7 +32,7 @@ const isCurrent = (name) => {
 <template>
     <nav
         aria-label="Navegación móvil del repartidor"
-        class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] md:hidden"
+        class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:hidden"
     >
         <div class="grid grid-cols-4 h-16 max-w-lg mx-auto px-1">
             <!-- 1. Reparto (Hub Principal) -->
@@ -51,23 +51,7 @@ const isCurrent = (name) => {
                 <span class="text-[11px] leading-tight truncate">Reparto</span>
             </Link>
 
-            <!-- 2. Cobros -->
-            <Link
-                :href="route('repartidor.debt.index')"
-                class="flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 transition-colors select-none"
-                :class="isCurrent('debt') ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'"
-            >
-                <div class="relative flex items-center justify-center h-6 w-6">
-                    <i class="fa-solid fa-hand-holding-dollar text-base"></i>
-                    <span
-                        v-if="isCurrent('debt')"
-                        class="absolute -bottom-1 h-1 w-4 bg-blue-900 rounded-full"
-                    ></span>
-                </div>
-                <span class="text-[11px] leading-tight truncate">Cobros</span>
-            </Link>
-
-            <!-- 3. Mi Carga -->
+            <!-- 2. Mi Carga -->
             <Link
                 :href="route('repartidor.truck-load.index')"
                 class="flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 transition-colors select-none"
@@ -81,6 +65,22 @@ const isCurrent = (name) => {
                     ></span>
                 </div>
                 <span class="text-[11px] leading-tight truncate">Mi Carga</span>
+            </Link>
+
+            <!-- 3. Cobros -->
+            <Link
+                :href="route('repartidor.debt.index')"
+                class="flex flex-col items-center justify-center gap-1 min-h-[48px] py-1 px-1 transition-colors select-none"
+                :class="isCurrent('debt') ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'"
+            >
+                <div class="relative flex items-center justify-center h-6 w-6">
+                    <i class="fa-solid fa-hand-holding-dollar text-base"></i>
+                    <span
+                        v-if="isCurrent('debt')"
+                        class="absolute -bottom-1 h-1 w-4 bg-blue-900 rounded-full"
+                    ></span>
+                </div>
+                <span class="text-[11px] leading-tight truncate">Cobros</span>
             </Link>
 
             <!-- 4. Clientes -->

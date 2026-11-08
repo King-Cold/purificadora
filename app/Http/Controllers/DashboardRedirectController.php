@@ -29,9 +29,9 @@ class DashboardRedirectController extends Controller
             return redirect()->route('cliente.dashboard');
         }
 
-        // 3. Repartidor accede a operaciones de reparto
+        // 3. Repartidor accede directamente a Reparto
         if ($user->hasRole('Repartidor')) {
-            return redirect()->route('repartidor.dashboard');
+            return redirect()->route('repartidor.reparto');
         }
 
         // 4. Operador Planta accede a producción y llenado
