@@ -432,5 +432,35 @@ class CustomerController extends Controller
             ->route('admin.customers.show', $customer->id)
             ->with('success', "Datos del cliente '{$displayName}' actualizados correctamente.");
     }
+
+    /**
+     * Da de baja / elimina al cliente del sistema.
+     */
+    public function destroy(Request $request, Customer $customer): RedirectResponse
+    {
+        $authUser = $request->user() ?: Auth::user();
+        if (!$authUser || (!$authUser->can('customers.delete') && !$authUser->hasRole(['Administrador', 'Super Admin']))) {
+            abort(403, 'No tiene autorización para eliminar clientes.');
+        }
+
+        $displayName = $customer->name ?: ($customer->nickname ? "Cliente conocido como '{$customer->nickname}'" : "Cliente {$customer->code}");
+
+        DB::transaction(function () use ($customer) {
+            // Desactivar cuenta de usuario vinculada si existe
+            if ($customer->user) {
+                $customer->user->update(['status' => 'inactive']);
+            }
+
+            // Eliminar domicilios asociados
+            $customer->addresses()->delete();
+
+            // Eliminar (soft delete) al cliente
+            $customer->delete();
+        });
+
+        return redirect()
+            ->route('admin.customers.index')
+            ->with('success', "El cliente '{$displayName}' ha sido eliminado exitosamente del catálogo.");
+    }
 }
 

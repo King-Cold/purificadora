@@ -97,14 +97,17 @@ class RouteCustomerController extends Controller
         $validated = $request->validate([
             'nickname' => ['required', 'string', 'max:100'],
             'name' => ['nullable', 'string', 'max:150'],
+            'delivery_zone' => ['nullable', 'string', 'in:north,south,east,west'],
         ], [
             'nickname.required' => 'El apodo del cliente es obligatorio.',
             'nickname.max' => 'El apodo no debe superar los 100 caracteres.',
             'name.max' => 'El nombre no debe superar los 150 caracteres.',
+            'delivery_zone.in' => 'La zona de reparto seleccionada no es válida.',
         ]);
 
         $nickname = trim($validated['nickname']);
         $name = !empty($validated['name']) ? trim($validated['name']) : null;
+        $deliveryZone = !empty($validated['delivery_zone']) ? $validated['delivery_zone'] : null;
 
         // Creación del cliente sin cuenta User (Customer independiente)
         $customer = Customer::create([
@@ -115,12 +118,28 @@ class RouteCustomerController extends Controller
             'exchange_bottles_count' => 0,
         ]);
 
+        $zoneLabel = null;
+        if ($deliveryZone) {
+            $addr = \App\Models\CustomerAddress::create([
+                'customer_id' => $customer->id,
+                'street' => 'Domicilio conocido',
+                'exterior_number' => 'S/N',
+                'neighborhood' => 'Centro',
+                'city' => 'Hocabá',
+                'state' => 'Yucatán',
+                'delivery_zone' => $deliveryZone,
+                'is_default' => true,
+            ]);
+            $zoneLabel = $addr->zone_label;
+        }
+
         return redirect()->route('repartidor.customers.create')
             ->with('createdCustomer', [
                 'id' => $customer->id,
                 'code' => $customer->code,
                 'nickname' => $customer->nickname,
                 'name' => $customer->name,
+                'zone' => $zoneLabel,
             ])
             ->with('success', "Cliente {$customer->code} (\"{$customer->nickname}\") guardado exitosamente.");
     }

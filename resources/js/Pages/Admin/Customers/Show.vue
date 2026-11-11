@@ -22,6 +22,13 @@ const deleteAddress = (address) => {
     }
 };
 
+const deleteCustomer = () => {
+    const displayName = props.customer.name || props.customer.nickname || props.customer.code;
+    if (confirm(`¿Estás seguro de que deseas eliminar al cliente "${displayName}"? Esta acción dará de baja al cliente del sistema.`)) {
+        router.delete(route('admin.customers.destroy', props.customer.id));
+    }
+};
+
 const getInitials = (name) => {
     const text = (name && name.trim()) || (props.customer.nickname && props.customer.nickname.trim()) || 'C';
     const parts = text.split(' ').filter(Boolean);
@@ -78,7 +85,17 @@ const getInitials = (name) => {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2.5 self-start sm:self-auto">
+                <div class="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                    <button
+                        type="button"
+                        @click="deleteCustomer"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition shadow-xs cursor-pointer"
+                        title="Borrar este cliente"
+                    >
+                        <i class="fa-solid fa-trash-can text-xs text-rose-600"></i>
+                        <span>Borrar cliente</span>
+                    </button>
+
                     <Link
                         v-if="canEdit"
                         :href="route('admin.customers.edit', customer.id)"

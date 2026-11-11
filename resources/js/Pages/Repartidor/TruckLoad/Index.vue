@@ -21,6 +21,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    pendingUnloads: {
+        type: Array,
+        default: () => [],
+    },
     recentMovements: {
         type: Array,
         default: () => [],
@@ -168,7 +172,8 @@ const unloadForm = useForm({
 const openUnloadModal = () => {
     unloadForm.bottle_type = 'cambio';
     unloadForm.bottle_condition = 'empty';
-    unloadForm.quantity = Math.max(1, props.truckInventory.exchange_empty_collected || 1);
+    const availableEmpty = props.truckInventory.exchange_empty_uncommitted ?? props.truckInventory.exchange_empty_collected ?? 1;
+    unloadForm.quantity = Math.max(1, availableEmpty);
     unloadForm.customer_id = null;
     unloadForm.notes = '';
     unloadForm.clearErrors();
@@ -184,6 +189,36 @@ const submitUnload = () => {
         preserveScroll: true,
         onSuccess: () => {
             closeUnloadModal();
+        },
+    });
+};
+
+// Modal para reportar inconveniente (botón ámbar)
+const showInconvenienceModal = ref(false);
+const inconvenienceForm = useForm({
+    quantity: 1,
+    origin_stage: 'truck_full',
+    reason: 'rotura',
+    location_status: 'separado',
+    notes: '',
+});
+
+const openInconvenienceModal = () => {
+    inconvenienceForm.quantity = 1;
+    inconvenienceForm.origin_stage = (props.truckInventory.exchange_full_available > 0) ? 'truck_full' : 'truck_empty';
+    inconvenienceForm.reason = 'rotura';
+    inconvenienceForm.location_status = 'separado';
+    inconvenienceForm.notes = '';
+    inconvenienceForm.clearErrors();
+    showInconvenienceModal.value = true;
+};
+
+const submitInconvenience = () => {
+    if (inconvenienceForm.processing) return;
+    inconvenienceForm.post(route('repartidor.truck-load.report-inconvenience'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showInconvenienceModal.value = false;
         },
     });
 };
@@ -373,16 +408,26 @@ const getLocationLabel = (loc) => {
                         </p>
                     </div>
 
-                    <!-- Acción accesible junto al resumen -->
-                    <button
-                        v-if="canManage"
-                        @click="openUnloadModal"
-                        type="button"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-white border border-slate-300 hover:border-slate-400 text-slate-800 hover:bg-slate-50 shadow-2xs active:scale-95 transition min-h-[44px]"
-                    >
-                        <i class="fa-solid fa-arrow-down text-blue-900"></i>
-                        <span>Entregar botellones a Planta</span>
-                    </button>
+                    <!-- Acciones accesibles junto al resumen -->
+                    <div v-if="canManage" class="flex flex-wrap items-center gap-2">
+                        <button
+                            @click="openInconvenienceModal"
+                            type="button"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs active:scale-95 transition min-h-[44px] cursor-pointer"
+                        >
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Reportar inconveniente</span>
+                        </button>
+
+                        <button
+                            @click="openUnloadModal"
+                            type="button"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0E1E42] hover:bg-blue-900 text-white shadow-2xs active:scale-95 transition min-h-[44px] cursor-pointer"
+                        >
+                            <i class="fa-solid fa-arrow-down text-sky-400"></i>
+                            <span>Entregar botellones a Planta</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Cuadrícula de 2 Bloques: Cambios y Fijos -->
@@ -400,7 +445,7 @@ const getLocationLabel = (loc) => {
                                 </div>
                             </div>
                             <span class="text-xs font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-900">
-                                {{ truckInventory.exchange_full_available + truckInventory.exchange_empty_collected }} total
+                                {{ truckInventory.exchange_full_available + truckInventory.exchange_empty_collected }} total en camión
                             </span>
                         </div>
 
@@ -414,7 +459,7 @@ const getLocationLabel = (loc) => {
                                     {{ truckInventory.exchange_full_available }}
                                 </div>
                                 <span class="text-[11px] font-semibold text-slate-600 block">
-                                    Para entregar
+                                    Para entregar en ruta
                                 </span>
                             </div>
 
@@ -426,7 +471,10 @@ const getLocationLabel = (loc) => {
                                 <div class="text-2xl sm:text-3xl font-black text-slate-800">
                                     {{ truckInventory.exchange_empty_collected }}
                                 </div>
-                                <span class="text-[11px] font-semibold text-slate-600 block">
+                                <span v-if="truckInventory.exchange_empty_committed_in_unload > 0" class="text-[11px] font-bold text-amber-800 block">
+                                    {{ truckInventory.exchange_empty_committed_in_unload }} pendientes de confirmar en Planta ({{ truckInventory.exchange_empty_uncommitted }} libres)
+                                </span>
+                                <span v-else class="text-[11px] font-semibold text-slate-600 block">
                                     Listos para Planta
                                 </span>
                             </div>
@@ -1005,6 +1053,109 @@ const getLocationLabel = (loc) => {
                             class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 active:scale-95 disabled:opacity-50 transition"
                         >
                             {{ unloadForm.processing ? 'Registrando...' : 'Registrar entrega a planta' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: REPORTAR INCONVENIENTE EN CAMIÓN (BOTÓN ÁMBAR)                     -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showInconvenienceModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">Reportar inconveniente</h3>
+                            <p class="text-xs text-slate-500">Botellón de cambio roto, dañado o sin localizar en camión</p>
+                        </div>
+                    </div>
+                    <button @click="showInconvenienceModal = false" type="button" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form @submit.prevent="submitInconvenience" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Cantidad *</label>
+                            <input
+                                v-model.number="inconvenienceForm.quantity"
+                                type="number"
+                                min="1"
+                                required
+                                class="w-full h-11 text-base font-bold text-slate-900 rounded-xl border-slate-300"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Existencia afectada *</label>
+                            <select
+                                v-model="inconvenienceForm.origin_stage"
+                                class="w-full h-11 text-xs font-semibold rounded-xl border-slate-300 text-slate-800"
+                            >
+                                <option value="truck_full">Llenos disponibles ({{ truckInventory.exchange_full_available }})</option>
+                                <option value="truck_empty">Vacíos recogidos ({{ truckInventory.exchange_empty_collected }})</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Motivo *</label>
+                        <select
+                            v-model="inconvenienceForm.reason"
+                            class="w-full h-11 text-xs font-semibold rounded-xl border-slate-300 text-slate-800"
+                        >
+                            <option value="rotura">Roto</option>
+                            <option value="fisura">Fisurado</option>
+                            <option value="tapa_cuello">Tapa o cuello dañado</option>
+                            <option value="contaminacion">Contaminado</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Ubicación física *</label>
+                        <select
+                            v-model="inconvenienceForm.location_status"
+                            class="w-full h-11 text-xs font-semibold rounded-xl border-slate-300 text-slate-800"
+                        >
+                            <option value="separado">Separado físicamente en el camión</option>
+                            <option value="sin_localizar">Pendiente de aclarar / Sin localizar</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Notas *</label>
+                        <input
+                            v-model="inconvenienceForm.notes"
+                            type="text"
+                            required
+                            placeholder="Ej: Se fisuró en traslado de ruta"
+                            class="w-full h-11 text-xs rounded-xl border-slate-300"
+                        />
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button
+                            @click="showInconvenienceModal = false"
+                            type="button"
+                            class="min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="inconvenienceForm.processing"
+                            class="min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer"
+                        >
+                            Guardar reporte
                         </button>
                     </div>
                 </form>

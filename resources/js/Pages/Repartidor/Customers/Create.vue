@@ -19,12 +19,27 @@ const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
 const newlyCreated = ref(props.createdCustomer || null);
 
+const availableZones = [
+    { id: 'north', label: 'Norte' },
+    { id: 'south', label: 'Sur' },
+    { id: 'east', label: 'Este' },
+    { id: 'west', label: 'Oeste' },
+];
+
 const form = useForm({
     nickname: '',
     name: '',
+    delivery_zone: '',
 });
 
 const submitCustomer = () => {
+    if (!form.nickname.trim()) {
+        return;
+    }
+    if (!form.delivery_zone) {
+        alert('Por favor especifica la zona de reparto (Norte, Sur, Este u Oeste).');
+        return;
+    }
     form.post(route('repartidor.customers.store-quick'), {
         preserveScroll: true,
         onSuccess: (pageRes) => {
@@ -99,9 +114,15 @@ const registerAnother = () => {
                 </div>
 
                 <div class="space-y-1">
-                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                        {{ newlyCreated.code }}
-                    </span>
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                            {{ newlyCreated.code }}
+                        </span>
+                        <span v-if="newlyCreated.zone" class="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                            <i class="fa-solid fa-location-dot text-blue-600 text-[10px]"></i>
+                            {{ newlyCreated.zone }}
+                        </span>
+                    </div>
                     <h3 class="text-2xl font-black text-slate-900 pt-2">
                         "{{ newlyCreated.nickname }}"
                     </h3>
@@ -192,6 +213,32 @@ const registerAnother = () => {
                         class="w-full rounded-2xl border-slate-300 text-sm focus:border-blue-900 focus:ring-blue-900 transition"
                     />
                     <InputError :message="form.errors.name" class="mt-1" />
+                </div>
+
+                <!-- Selector de Zona de Reparto -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Zona de reparto <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button
+                            v-for="zone in availableZones"
+                            :key="zone.id"
+                            type="button"
+                            @click="form.delivery_zone = zone.id"
+                            class="py-2.5 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 min-h-[44px] cursor-pointer"
+                            :class="form.delivery_zone === zone.id
+                                ? 'bg-blue-900 text-white border-blue-900 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+                        >
+                            <i class="fa-solid fa-location-dot text-xs" :class="form.delivery_zone === zone.id ? 'text-blue-300' : 'text-slate-400'"></i>
+                            <span>{{ zone.label }}</span>
+                        </button>
+                    </div>
+                    <InputError :message="form.errors.delivery_zone" class="mt-1" />
+                    <p v-if="!form.delivery_zone" class="text-[11px] text-amber-600 mt-1 flex items-center gap-1 font-medium">
+                        <i class="fa-solid fa-circle-info"></i> Selecciona la zona para ubicar al cliente en el listado de reparto.
+                    </p>
                 </div>
 
                 <!-- Aviso informativo de agilidad -->

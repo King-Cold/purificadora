@@ -92,6 +92,9 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::put('/customers/{customer}', [\App\Http\Controllers\Admin\CustomerController::class, 'update'])
         ->name('customers.update')
         ->middleware('permission:customers.update');
+    Route::delete('/customers/{customer}', [\App\Http\Controllers\Admin\CustomerController::class, 'destroy'])
+        ->name('customers.destroy')
+        ->middleware('permission:customers.delete');
 
     // Gestión del Domicilio de Entrega del Cliente
     Route::get('/customers/{customer}/addresses/create', [\App\Http\Controllers\Admin\CustomerAddressController::class, 'create'])
@@ -169,6 +172,20 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])->prefix('admin')->
     Route::post('/routes/{route}/resume', [\App\Http\Controllers\Admin\DeliveryRouteController::class, 'resume'])
         ->name('routes.resume')
         ->middleware('permission:routes.assign');
+
+    // Supervisión → Inventario de cambios (Control general de botellones de cambio 20L)
+    Route::get('/supervision/inventario-cambios', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'index'])
+        ->name('exchange-inventory.index');
+    Route::put('/supervision/inventario-cambios/meta', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'updateTarget'])
+        ->name('exchange-inventory.target.update');
+    Route::post('/supervision/inventario-cambios/altas', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'storeNewBottles'])
+        ->name('exchange-inventory.new-bottles.store');
+    Route::post('/supervision/inventario-cambios/incidencias/{incident}/resolver', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'resolveIncident'])
+        ->name('exchange-inventory.incidents.resolve');
+    Route::post('/supervision/inventario-cambios/sin-localizar/resolver', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'resolveUnlocated'])
+        ->name('exchange-inventory.unlocated.resolve');
+    Route::post('/supervision/inventario-cambios/inconvenientes', [\App\Http\Controllers\Admin\ExchangeInventoryController::class, 'reportInconvenience'])
+        ->name('exchange-inventory.inconveniences.store');
 });
 
 // Panel 2: Cliente
@@ -319,14 +336,28 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])->prefix
         ->name('truck-load.reject');
     Route::post('/mi-carga/descargar', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'proposeUnload'])
         ->name('truck-load.propose-unload');
+    Route::post('/mi-carga/inconveniente', [\App\Http\Controllers\Repartidor\TruckLoadController::class, 'reportInconvenience'])
+        ->name('truck-load.report-inconvenience');
 
-    // Accesos operativos dedicados: Por recoger, Por entregar, Cobrar pendientes
+    // Accesos operativos dedicados: Por recoger, Por entregar, Cobrar pendientes, Listos para cargar
     Route::get('/por-recoger', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'porRecoger'])
         ->name('collections.index');
     Route::post('/orders/{order}/collect-fixed', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'collectFixed'])
         ->name('orders.collect-fixed');
+    Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'cancelOrder'])
+        ->name('orders.cancel');
+    Route::get('/listos-para-cargar', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'listosParaCargar'])
+        ->name('ready-to-load.index');
+    Route::post('/listos-para-cargar/aceptar', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'acceptTruckLoadFixed'])
+        ->name('ready-to-load.accept');
+    Route::post('/listos-para-cargar/aceptar-todos', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'acceptAllTruckLoadFixed'])
+        ->name('ready-to-load.accept-all');
+    Route::post('/listos-para-cargar/incidencia', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'reportFixedLoadIncident'])
+        ->name('ready-to-load.incident');
     Route::get('/por-entregar', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'porEntregar'])
         ->name('deliveries.index');
+    Route::post('/orders/{order}/deliver-fixed', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'deliverFixed'])
+        ->name('orders.deliver-fixed');
     Route::get('/cobrar-pendientes', [\App\Http\Controllers\Repartidor\RouteExecutionController::class, 'cobrarPendientes'])
         ->name('debt.index');
 
@@ -387,15 +418,21 @@ Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])->p
     Route::get('/dashboard', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'index'])->name('dashboard');
     Route::get('/llenado-rapido', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'index'])->name('quick-refill.index');
     Route::post('/llenado-rapido', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'store'])->name('quick-refill.store');
+    Route::delete('/llenado-rapido/{refill}', [\App\Http\Controllers\Planta\PlantQuickRefillController::class, 'destroy'])->name('quick-refill.destroy');
 
     // Módulo Fijos unificado (Por recibir, Por llenar, Listos para enviar)
     Route::get('/fijos', [\App\Http\Controllers\Planta\PlantFixedBottlesController::class, 'index'])->name('fijos.index');
+    Route::post('/fijos/marcar-llenados', [\App\Http\Controllers\Planta\PlantFixedBottlesController::class, 'markFilled'])->name('fijos.mark-filled');
+    Route::post('/fijos/marcar-todos-llenados', [\App\Http\Controllers\Planta\PlantFixedBottlesController::class, 'markAllFilled'])->name('fijos.mark-all-filled');
+    Route::post('/fijos/incidencia', [\App\Http\Controllers\Planta\PlantFixedBottlesController::class, 'reportIncident'])->name('fijos.report-incident');
 
     // Módulo Cambios (Recibir vacíos, Enviar llenos, Preparar cambios)
     Route::get('/cambios', [\App\Http\Controllers\Planta\PlantCambiosController::class, 'index'])->name('cambios.index');
+    Route::post('/cambios/inconveniente', [\App\Http\Controllers\Planta\PlantCambiosController::class, 'reportInconvenience'])->name('cambios.report-inconvenience');
 
     Route::get('/recepcion', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'index'])->name('reception.index');
     Route::post('/recepcion/fijos', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmFixed'])->name('reception.confirm-fixed');
+    Route::post('/recepcion/fijos/aceptar-todos', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmAllFixed'])->name('reception.confirm-all-fixed');
     Route::post('/recepcion/cambios', [\App\Http\Controllers\Planta\PlantReceptionController::class, 'confirmExchange'])->name('reception.confirm-exchange');
     Route::get('/existencias', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'index'])->name('inventory.index');
     Route::post('/conteo-inicial', [\App\Http\Controllers\Planta\PlantInventoryController::class, 'storeInitialCount'])->name('inventory.initial-count');

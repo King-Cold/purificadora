@@ -541,4 +541,53 @@ class GeneralSettingsManagementTest extends TestCase
         $this->assertEquals('110.00', $fresh->new_bottle_price);
         $this->assertTrue($fresh->is_available_for_delivery);
     }
+
+    /**
+     * 17. Tanto Administrador como Super Admin tienen acceso y permisos para ver y modificar configuración.
+     */
+    public function test_both_administrator_and_super_admin_can_access_and_update_settings(): void
+    {
+        $superAdminUser = User::factory()->create([
+            'name' => 'Super Administrador',
+            'email' => 'superadmin@purificadora.com',
+            'status' => 'active',
+        ]);
+        $superAdminUser->assignRole('Super Admin');
+
+        $bottle = BottlePresentation::getTwentyLiters();
+
+        foreach ([$this->adminUser, $superAdminUser] as $admin) {
+            // Ver configuración
+            $resGet = $this->actingAs($admin)->get(route('admin.settings.index'));
+            $resGet->assertOk();
+            $resGet->assertInertia(fn ($page) => $page
+                ->component('Admin/Settings/Index')
+                ->has('schedule')
+                ->has('bottlePresentation')
+                ->where('bottlePresentation.capacity', 20)
+            );
+
+            // Modificar horario
+            $resSchedule = $this->actingAs($admin)->put(route('admin.settings.schedule.update'), [
+                'opening_time' => '07:30',
+                'break_start_time' => '13:00',
+                'break_end_time' => '15:00',
+                'closing_time' => '18:30',
+                'order_cutoff_advance_minutes' => 45,
+            ]);
+            $resSchedule->assertRedirect();
+            $resSchedule->assertSessionHas('success');
+
+            // Modificar precios del botellón de 20L
+            $resBottle = $this->actingAs($admin)->put(route('admin.settings.bottle-presentations.update', $bottle->id), [
+                'name' => 'Botellón 20 Litros',
+                'store_price' => 12.50,
+                'refill_price' => 18.00,
+                'new_bottle_price' => 100.00,
+                'is_available_for_delivery' => true,
+            ]);
+            $resBottle->assertRedirect();
+            $resBottle->assertSessionHas('success');
+        }
+    }
 }

@@ -513,9 +513,17 @@ class DeliveryRouteService
                     }
 
                     $newDelivered = $fixedItem->delivered_quantity + $fixedDelivered;
-                    $isLineCompleted = ($newDelivered + $fixedItem->cancelled_quantity) >= $fixedItem->quantity;
+                    $adjustedCancelled = (int) $fixedItem->cancelled_quantity;
+                    if ($fixedItem->collected_quantity > 0 && $newDelivered >= $fixedItem->collected_quantity && ($newDelivered + $adjustedCancelled) < $fixedItem->quantity) {
+                        $adjustedCancelled = max(0, (int) $fixedItem->quantity - $newDelivered);
+                    }
+                    $isLineCompleted = ($newDelivered + $adjustedCancelled) >= $fixedItem->quantity;
                     $fixedItem->update([
                         'delivered_quantity' => $newDelivered,
+                        'cancelled_quantity' => $adjustedCancelled,
+                        'cancellation_reason' => $adjustedCancelled > (int) $fixedItem->cancelled_quantity
+                            ? ($fixedItem->cancellation_reason ?: 'Ajuste de cantidad al recoger fijos')
+                            : $fixedItem->cancellation_reason,
                         'unit_price' => $refillPrice,
                         'status' => $isLineCompleted ? OrderItem::STATUS_DELIVERED : OrderItem::STATUS_OUT_FOR_DELIVERY,
                     ]);
@@ -909,16 +917,19 @@ class DeliveryRouteService
                 'notes' => !empty($data['notes']) ? trim((string)$data['notes']) : null,
             ]);
 
-            // Domicilio es estrictamente opcional. Solo se registra si el cliente proporciona calle real.
-            if (!empty($data['street']) && trim((string)$data['street']) !== '') {
+            // Domicilio es estrictamente opcional. Solo se registra si el cliente proporciona calle real o zona de reparto.
+            $hasStreet = !empty($data['street']) && trim((string)$data['street']) !== '';
+            $hasZone = !empty($data['delivery_zone']) && trim((string)$data['delivery_zone']) !== '';
+
+            if ($hasStreet || $hasZone) {
                 CustomerAddress::create([
                     'customer_id' => $customer->id,
-                    'street' => trim((string)$data['street']),
-                    'exterior_number' => !empty($data['exterior_number']) ? trim((string)$data['exterior_number']) : null,
-                    'neighborhood' => !empty($data['neighborhood']) ? trim((string)$data['neighborhood']) : null,
+                    'street' => $hasStreet ? trim((string)$data['street']) : 'Domicilio conocido',
+                    'exterior_number' => !empty($data['exterior_number']) ? trim((string)$data['exterior_number']) : 'S/N',
+                    'neighborhood' => !empty($data['neighborhood']) ? trim((string)$data['neighborhood']) : 'Centro',
                     'city' => !empty($data['city']) ? trim((string)$data['city']) : 'Hocabá',
                     'state' => 'Yucatán',
-                    'delivery_zone' => !empty($data['delivery_zone']) ? $data['delivery_zone'] : null,
+                    'delivery_zone' => $hasZone ? trim((string)$data['delivery_zone']) : null,
                     'between_streets' => !empty($data['between_streets']) ? trim((string)$data['between_streets']) : null,
                     'reference' => !empty($data['reference']) ? trim((string)$data['reference']) : null,
                     'is_default' => true,
@@ -971,6 +982,9 @@ class DeliveryRouteService
             $address = $customer->address;
             $recipientName = $customer->nickname ?: ($customer->name ?: 'Cliente en ruta');
             $recipientPhone = $customer->phone;
+            $requestedZone = !empty($orderData['delivery_zone']) ? trim((string)$orderData['delivery_zone']) : null;
+            $deliveryZone = $requestedZone ?: $address?->delivery_zone;
+            $zoneLabel = $deliveryZone ? (CustomerAddress::ZONES[$deliveryZone] ?? (str_starts_with($deliveryZone, 'Zona') ? $deliveryZone : "Zona {$deliveryZone}")) : 'Sin zona asignada';
 
             if ($address) {
                 $addressSnapshot = [
@@ -983,8 +997,8 @@ class DeliveryRouteService
                     'delivery_neighborhood' => $address->neighborhood,
                     'delivery_city' => $address->city ?: 'Hocabá',
                     'delivery_state' => 'Yucatán',
-                    'delivery_zone' => $address->delivery_zone,
-                    'delivery_zone_label' => $address->zone_label,
+                    'delivery_zone' => $deliveryZone,
+                    'delivery_zone_label' => $zoneLabel,
                 ];
                 $addressId = $address->id;
                 $deliveryStreet = $address->street;
@@ -992,7 +1006,6 @@ class DeliveryRouteService
                 $deliveryNeigh = $address->neighborhood;
                 $deliveryCity = $address->city ?: 'Hocabá';
                 $deliveryState = 'Yucatán';
-                $deliveryZone = $address->delivery_zone;
             } else {
                 $addressSnapshot = [
                     'customer_id' => $customer->id,
@@ -1004,8 +1017,8 @@ class DeliveryRouteService
                     'delivery_neighborhood' => null,
                     'delivery_city' => null,
                     'delivery_state' => null,
-                    'delivery_zone' => null,
-                    'delivery_zone_label' => 'Sin domicilio registrado (Servicio directo en ruta)',
+                    'delivery_zone' => $deliveryZone,
+                    'delivery_zone_label' => $deliveryZone ? $zoneLabel : 'Sin domicilio registrado (Servicio directo en ruta)',
                 ];
                 $addressId = null;
                 $deliveryStreet = null;
@@ -1013,7 +1026,6 @@ class DeliveryRouteService
                 $deliveryNeigh = null;
                 $deliveryCity = null;
                 $deliveryState = null;
-                $deliveryZone = null;
             }
 
             $folio = OrderFolioGenerator::generate();

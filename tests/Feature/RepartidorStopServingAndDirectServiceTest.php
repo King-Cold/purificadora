@@ -541,7 +541,7 @@ class RepartidorStopServingAndDirectServiceTest extends TestCase
                 'cash_tendered' => 30.00,
             ]);
 
-        $response->assertRedirect(route('repartidor.route.index'));
+        $response->assertRedirect(route('repartidor.reparto'));
 
         // Se creó el cliente con solo apodo sin cuenta de usuario
         $customer = Customer::where('nickname', 'Tiendita Doña Lupe')->first();

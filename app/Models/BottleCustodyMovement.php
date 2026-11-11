@@ -36,6 +36,11 @@ class BottleCustodyMovement extends Model
     public const TYPE_PLANT_INITIAL_COUNT = 'plant_initial_count';
     public const TYPE_PLANT_WASHING_STARTED = 'plant_washing_started';
     public const TYPE_PLANT_WASHING_FINISHED = 'plant_washing_finished';
+    public const TYPE_EXCHANGE_NEW_ENTRY = 'exchange_new_entry';
+    public const TYPE_EXCHANGE_WRITE_OFF = 'exchange_write_off';
+    public const TYPE_EXCHANGE_RECOVERY = 'exchange_recovery';
+    public const TYPE_EXCHANGE_TARGET_UPDATED = 'exchange_target_updated';
+    public const TYPE_EXCHANGE_INCONVENIENCE_REPORTED = 'exchange_inconvenience_reported';
     public const TYPE_BOTTLE_INCIDENT = 'bottle_incident';
 
     protected $table = 'bottle_custody_movements';

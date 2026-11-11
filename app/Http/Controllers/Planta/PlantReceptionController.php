@@ -75,6 +75,56 @@ class PlantReceptionController extends Controller
     }
 
     /**
+     * Confirmación masiva de botellones fijos aptos recibidos en Planta.
+     */
+    public function confirmAllFixed(Request $request): RedirectResponse
+    {
+        $items = OrderItem::with(['order.customer'])
+            ->where('type', OrderItem::TYPE_FIXED)
+            ->where('collected_quantity', '>', 0)
+            ->whereColumn('collected_quantity', '>', 'received_at_plant_quantity')
+            ->get();
+
+        $confirmedOrders = 0;
+        $confirmedBottles = 0;
+        $excludedCount = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($items, $request, &$confirmedOrders, &$confirmedBottles, &$excludedCount) {
+            foreach ($items as $item) {
+                $pending = max(0, (int)$item->collected_quantity - (int)$item->received_at_plant_quantity - (int)$item->damaged_quantity);
+                if ($pending <= 0) {
+                    continue;
+                }
+
+                if ($item->damaged_quantity > 0) {
+                    $excludedCount++;
+                    continue;
+                }
+
+                $this->plantInventoryService->confirmFixedReception(
+                    $request->user(),
+                    $item,
+                    $pending,
+                    null,
+                    false,
+                    0,
+                    null,
+                    null
+                );
+                $confirmedOrders++;
+                $confirmedBottles += $pending;
+            }
+        });
+
+        $msg = "{$confirmedBottles} fijos recibidos en Planta ({$confirmedOrders} pedidos).";
+        if ($excludedCount > 0) {
+            $msg .= " Se excluyeron {$excludedCount} pedidos con incidencias previas.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
      * Confirma la recepción física presencial de botellones de cambio descargados por el chofer.
      */
     public function confirmExchange(Request $request): RedirectResponse
@@ -85,6 +135,7 @@ class PlantReceptionController extends Controller
             'damaged_quantity' => ['nullable', 'integer', 'min:0'],
             'damage_type' => ['nullable', 'string', 'in:rotura,fisura,contaminacion,deformacion,otro'],
             'damage_notes' => ['nullable', 'string', 'max:500'],
+            'unlocated_quantity' => ['nullable', 'integer', 'min:0'],
             'difference_reason' => ['nullable', 'string', 'max:500'],
         ], [
             'movement_id.required' => 'La transferencia de descarga es obligatoria.',
@@ -104,7 +155,8 @@ class PlantReceptionController extends Controller
                 $validated['difference_reason'] ?? null,
                 (int) ($validated['damaged_quantity'] ?? 0),
                 $validated['damage_type'] ?? null,
-                $validated['damage_notes'] ?? null
+                $validated['damage_notes'] ?? null,
+                (int) ($validated['unlocated_quantity'] ?? 0)
             );
 
             return back()

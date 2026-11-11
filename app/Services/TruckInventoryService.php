@@ -99,6 +99,19 @@ class TruckInventoryService
             ->orderBy('id', 'desc')
             ->get();
 
+        // Descargas propuestas por el repartidor pendientes de confirmar en Planta (origen truck -> destino plant)
+        $pendingUnloads = BottleCustodyMovement::with(['customer', 'user'])
+            ->where('origin', 'truck')
+            ->where('destination', 'plant')
+            ->where('status', BottleCustodyMovement::STATUS_PROPOSED)
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $exchangeEmptyCommitted = (int) $pendingUnloads
+            ->where('bottle_type', OrderItem::TYPE_EXCHANGE)
+            ->where('bottle_condition', BottleCustodyMovement::CONDITION_EMPTY)
+            ->sum('quantity');
+
         // Historial reciente de movimientos (últimos 25)
         $recentMovements = BottleCustodyMovement::with(['customer', 'user', 'confirmedByUser'])
             ->where(function ($q) {
@@ -113,11 +126,14 @@ class TruckInventoryService
             'truck_inventory' => [
                 'exchange_full_available' => (int) $truckInv->exchange_full_available,
                 'exchange_empty_collected' => (int) $truckInv->exchange_empty_collected,
+                'exchange_empty_committed_in_unload' => $exchangeEmptyCommitted,
+                'exchange_empty_uncommitted' => max(0, (int) $truckInv->exchange_empty_collected - $exchangeEmptyCommitted),
                 'fixed_empty_collected_total' => $totalFixedEmpty,
                 'fixed_full_to_deliver_total' => $totalFixedFull,
             ],
             'fixed_by_customer' => $fixedByCustomer,
             'pending_transfers' => $pendingTransfers,
+            'pending_unloads' => $pendingUnloads,
             'recent_movements' => $recentMovements,
         ];
     }
@@ -763,20 +779,36 @@ class TruckInventoryService
                 ]
             );
 
-            // Validar que el camión no quede con existencias negativas
+            // Validar que el camión no quede con existencias negativas ni proponga dos veces las mismas unidades
             if ($bottleType === OrderItem::TYPE_EXCHANGE) {
                 if ($bottleCondition === BottleCustodyMovement::CONDITION_EMPTY) {
-                    if ($truckInv->exchange_empty_collected < $quantity) {
+                    $committedEmpty = (int) BottleCustodyMovement::where('user_id', $driver->id)
+                        ->where('bottle_type', OrderItem::TYPE_EXCHANGE)
+                        ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_UNLOAD_EXCHANGE)
+                        ->where('bottle_condition', BottleCustodyMovement::CONDITION_EMPTY)
+                        ->where('status', BottleCustodyMovement::STATUS_PROPOSED)
+                        ->sum('quantity');
+                    $availableUncommitted = max(0, (int) $truckInv->exchange_empty_collected - $committedEmpty);
+
+                    if ($availableUncommitted < $quantity) {
                         throw new OrderBusinessRuleException(
-                            "No se pueden descargar {$quantity} vacíos. Disponibles en camión: {$truckInv->exchange_empty_collected}.",
+                            "No se pueden descargar {$quantity} vacíos. Disponibles en camión sin entrega pendiente: {$availableUncommitted}.",
                             'quantity',
                             422
                         );
                     }
                 } elseif ($bottleCondition === BottleCustodyMovement::CONDITION_FULL) {
-                    if ($truckInv->exchange_full_available < $quantity) {
+                    $committedFull = (int) BottleCustodyMovement::where('user_id', $driver->id)
+                        ->where('bottle_type', OrderItem::TYPE_EXCHANGE)
+                        ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_UNLOAD_EXCHANGE)
+                        ->where('bottle_condition', BottleCustodyMovement::CONDITION_FULL)
+                        ->where('status', BottleCustodyMovement::STATUS_PROPOSED)
+                        ->sum('quantity');
+                    $availableFullUncommitted = max(0, (int) $truckInv->exchange_full_available - $committedFull);
+
+                    if ($availableFullUncommitted < $quantity) {
                         throw new OrderBusinessRuleException(
-                            "No se pueden devolver {$quantity} llenos. Disponibles en camión: {$truckInv->exchange_full_available}.",
+                            "No se pueden devolver {$quantity} llenos. Disponibles en camión: {$availableFullUncommitted}.",
                             'quantity',
                             422
                         );

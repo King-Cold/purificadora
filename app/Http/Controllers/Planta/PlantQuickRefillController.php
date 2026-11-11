@@ -106,5 +106,24 @@ class PlantQuickRefillController extends Controller
         $formattedTotal = number_format($totalAmount, 2);
         return back()->with('success', "Se registró el llenado de {$quantity} botellón(es) de 20L por un total de \${$formattedTotal} MXN.");
     }
+
+    /**
+     * Elimina un registro de llenado de mostrador por error de captura.
+     */
+    public function destroy(Request $request, PlantCounterRefill $refill): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (!$user->hasRole(['Operador Planta', 'Administrador', 'Super Admin'])) {
+            abort(403, 'No autorizado para eliminar registros de Planta.');
+        }
+
+        $qty = $refill->quantity;
+        $amount = number_format($refill->total_amount, 2);
+
+        $refill->delete();
+
+        return back()->with('success', "Se eliminó el registro de {$qty} botellón(es) (\${$amount} MXN) correctamente.");
+    }
 }
 

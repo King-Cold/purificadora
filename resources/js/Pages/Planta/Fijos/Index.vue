@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, useForm, usePage, router } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
@@ -16,25 +16,13 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
-    fixedPendingPrepare: {
+    fixedToFill: {
         type: Array,
         default: () => [],
     },
-    fixedInWashing: {
-        type: Array,
-        default: () => [],
-    },
-    fixedPrepared: {
-        type: Array,
-        default: () => [],
-    },
-    fixedReadyToLoad: {
-        type: Array,
-        default: () => [],
-    },
-    pendingFixedProposals: {
-        type: Array,
-        default: () => [],
+    fixedToFillCount: {
+        type: Number,
+        default: 0,
     },
     isOperator: {
         type: Boolean,
@@ -48,7 +36,7 @@ const props = defineProps({
 
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.flash?.error);
+const flashError = computed(() => page.props.flash?.error || page.props.errors?.fill || page.props.errors?.received_quantity || null);
 
 // Pestaña actual reactiva
 const currentTab = ref(props.activeTab || 'por-recibir');
@@ -63,857 +51,981 @@ const setTab = (tab) => {
 };
 
 // =========================================================================
-// TAB 1: POR RECIBIR (Cotejo físico presencial de fijos declarados por chofer)
+// ACCIONES: PAPELERA ROJA (CONFIRMACIÓN DE RETIRO / DERIVAR A INCIDENCIA)
 // =========================================================================
-// Estado local por cada pedido/renglón para cotejo táctil
-const receptionStates = ref({});
+const showTrashModal = ref(false);
+const itemForTrash = ref(null);
+const trashTab = ref('por-recibir');
 
-const initReceptionState = (itemId, pendingQty) => {
-    if (!receptionStates.value[itemId]) {
-        receptionStates.value[itemId] = {
-            checked: false,
-            received_quantity: 0,
-            pending_quantity: pendingQty,
-            damaged_quantity: 0,
-            damage_type: 'rotura',
-            damage_notes: '',
-            show_damaged: false,
-            difference_reason: '',
-            start_washing: false,
-        };
-    }
-    return receptionStates.value[itemId];
+const openTrashModal = (item, tab) => {
+    itemForTrash.value = item;
+    trashTab.value = tab;
+    showTrashModal.value = true;
 };
 
-// "Marcar todos los recibidos" para el pedido abierto
-const markAllReceived = (item) => {
-    const st = initReceptionState(item.order_item_id, item.pending_quantity);
-    st.checked = true;
-    st.received_quantity = item.pending_quantity;
-    st.difference_reason = '';
+const closeTrashModal = () => {
+    showTrashModal.value = false;
+    itemForTrash.value = null;
 };
 
-// Alternar checkbox individual
-const toggleCheck = (item) => {
-    const st = initReceptionState(item.order_item_id, item.pending_quantity);
-    if (!st.checked) {
-        st.checked = true;
-        st.received_quantity = item.pending_quantity;
+const handleTrashDeriveToIncident = () => {
+    const item = itemForTrash.value;
+    const tab = trashTab.value;
+    closeTrashModal();
+    if (tab === 'por-recibir') {
+        openReceptionIncidentModal(item);
     } else {
-        st.checked = false;
-        st.received_quantity = 0;
+        openFillIncidentModal(item);
     }
 };
 
-const submittingReception = ref({});
+// =========================================================================
+// PESTAÑA 1: POR RECIBIR
+// =========================================================================
 
-const submitReception = (item) => {
-    const st = initReceptionState(item.order_item_id, item.pending_quantity);
-    const received = Number(st.received_quantity) || 0;
-    const damaged = Number(st.damaged_quantity) || 0;
-    const pending = item.pending_quantity;
-
-    // Validación de faltante
-    if ((received + damaged) < pending && !st.difference_reason?.trim()) {
-        alert('Debe especificar el motivo del faltante de botellones fijos.');
-        return;
-    }
-
-    submittingReception.value[item.order_item_id] = true;
-
+// Acción 3: Palomita verde (Aceptar recepción en un toque)
+const submittingIndividual = ref({});
+const handleAcceptSingleReception = (item) => {
+    submittingIndividual.value[item.order_item_id] = true;
     router.post(route('planta.reception.confirm-fixed'), {
         order_item_id: item.order_item_id,
-        received_quantity: received,
-        start_washing: Boolean(st.start_washing),
-        damaged_quantity: damaged,
-        damage_type: damaged > 0 ? st.damage_type : null,
-        damage_notes: damaged > 0 ? st.damage_notes : null,
-        difference_reason: (received + damaged) < pending ? st.difference_reason : null,
+        received_quantity: item.expected_quantity,
+        damaged_quantity: 0,
+        difference_reason: null,
     }, {
         preserveScroll: true,
-        onSuccess: () => {
-            delete receptionStates.value[item.order_item_id];
-            submittingReception.value[item.order_item_id] = false;
-        },
-        onError: () => {
-            submittingReception.value[item.order_item_id] = false;
-        },
         onFinish: () => {
-            submittingReception.value[item.order_item_id] = false;
+            submittingIndividual.value[item.order_item_id] = false;
         },
     });
 };
 
-// =========================================================================
-// TAB 2: POR LLENAR (Lavado y llenado de fijos aptos recibidos)
-// =========================================================================
-const washingStates = ref({});
+// Acción 2: Triángulo ámbar (Modal Incidencia en Recepción)
+const showReceptionIncidentModal = ref(false);
+const itemForReceptionIncident = ref(null);
+const receptionIncidentForm = useForm({
+    order_item_id: null,
+    received_quantity: 0,
+    damaged_quantity: 0,
+    damage_type: 'rotura',
+    damage_notes: '',
+    difference_reason: '',
+});
 
-const initWashingState = (itemId, inWashingQty) => {
-    if (!washingStates.value[itemId]) {
-        washingStates.value[itemId] = {
-            checked: false,
-            finish_quantity: 0,
-            max_quantity: inWashingQty,
-        };
-    }
-    return washingStates.value[itemId];
+const openReceptionIncidentModal = (item) => {
+    itemForReceptionIncident.value = item;
+    receptionIncidentForm.order_item_id = item.order_item_id;
+    receptionIncidentForm.received_quantity = item.expected_quantity;
+    receptionIncidentForm.damaged_quantity = 0;
+    receptionIncidentForm.damage_type = 'rotura';
+    receptionIncidentForm.damage_notes = '';
+    receptionIncidentForm.difference_reason = '';
+    receptionIncidentForm.clearErrors();
+    showReceptionIncidentModal.value = true;
 };
 
-const markAllFilled = (item) => {
-    const st = initWashingState(item.item_id, item.in_washing_quantity);
-    st.checked = true;
-    st.finish_quantity = item.in_washing_quantity;
+const closeReceptionIncidentModal = () => {
+    showReceptionIncidentModal.value = false;
+    itemForReceptionIncident.value = null;
 };
 
-const toggleWashingCheck = (item) => {
-    const st = initWashingState(item.item_id, item.in_washing_quantity);
-    if (!st.checked) {
-        st.checked = true;
-        st.finish_quantity = item.in_washing_quantity;
-    } else {
-        st.checked = false;
-        st.finish_quantity = 0;
-    }
-};
+const receptionShortage = computed(() => {
+    if (!itemForReceptionIncident.value) return 0;
+    const total = Number(receptionIncidentForm.received_quantity || 0) + Number(receptionIncidentForm.damaged_quantity || 0);
+    return Math.max(0, itemForReceptionIncident.value.expected_quantity - total);
+});
 
-const submittingWashing = ref({});
+const submitReceptionIncident = () => {
+    if (!itemForReceptionIncident.value || receptionIncidentForm.processing) return;
 
-// Iniciar lavado para fijos pendientes
-const submitStartWash = (item, qty) => {
-    submittingWashing.value[item.item_id] = true;
-    router.post(route('planta.production.fixed.start'), {
-        order_item_id: item.item_id,
-        quantity: qty || item.pending_to_wash_quantity,
-    }, {
-        preserveScroll: true,
-        onFinish: () => {
-            submittingWashing.value[item.item_id] = false;
-        },
-    });
-};
-
-// Confirmar llenado (finalizar preparación)
-const submitFinishWash = (item) => {
-    const st = initWashingState(item.item_id, item.in_washing_quantity);
-    const qty = Number(st.finish_quantity) || (st.checked ? item.in_washing_quantity : 0);
-
-    if (qty <= 0) {
-        alert('Indique la cantidad de botellones llenados para confirmar.');
+    if (receptionShortage.value > 0 && receptionIncidentForm.difference_reason.trim().length < 5) {
+        alert('Debe especificar el motivo obligatorio de los faltantes (mínimo 5 caracteres).');
         return;
     }
 
-    submittingWashing.value[item.item_id] = true;
-    router.post(route('planta.production.fixed.finish'), {
-        order_item_id: item.item_id,
-        quantity: qty,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            delete washingStates.value[item.item_id];
-            submittingWashing.value[item.item_id] = false;
-        },
-        onError: () => {
-            submittingWashing.value[item.item_id] = false;
-        },
-        onFinish: () => {
-            submittingWashing.value[item.item_id] = false;
-        },
-    });
-};
-
-// =========================================================================
-// TAB 3: LISTOS PARA ENVIAR (Propuesta de carga al camión)
-// =========================================================================
-const loadStates = ref({});
-
-const initLoadState = (itemId, readyQty) => {
-    if (!loadStates.value[itemId]) {
-        loadStates.value[itemId] = {
-            quantity: readyQty,
-            notes: '',
-        };
-    }
-    return loadStates.value[itemId];
-};
-
-const submittingLoad = ref({});
-
-const submitSendToDriver = (item) => {
-    const st = initLoadState(item.item_id, item.ready_to_load_quantity);
-    const qty = Number(st.quantity) || item.ready_to_load_quantity;
-
-    if (qty <= 0) {
-        alert('Indique la cantidad de botellones a enviar al camión.');
+    if (receptionIncidentForm.damaged_quantity > 0 && receptionIncidentForm.damage_notes.trim().length < 5) {
+        alert('Debe describir el daño detectado en los envases (mínimo 5 caracteres).');
         return;
     }
 
-    submittingLoad.value[item.item_id] = true;
-    router.post(route('planta.loads.store'), {
-        bottle_type: 'fijo',
-        order_item_id: item.item_id,
-        quantity: qty,
-        notes: st.notes || null,
-    }, {
+    receptionIncidentForm.post(route('planta.reception.confirm-fixed'), {
         preserveScroll: true,
-        onSuccess: () => {
-            delete loadStates.value[item.item_id];
-            submittingLoad.value[item.item_id] = false;
-        },
-        onError: () => {
-            submittingLoad.value[item.item_id] = false;
-        },
-        onFinish: () => {
-            submittingLoad.value[item.item_id] = false;
-        },
+        onSuccess: () => closeReceptionIncidentModal(),
     });
 };
 
-// Retirar propuesta no aceptada
-const withdrawProposal = (proposalId) => {
-    if (!confirm('¿Desea retirar esta propuesta de carga de fijos?')) return;
-    router.post(route('planta.loads.withdraw', proposalId), {}, {
+// Modal Aceptar Todos (Por recibir)
+const showAcceptAllModal = ref(false);
+const acceptAllForm = useForm({});
+
+const eligibleForAcceptAll = computed(() => {
+    return props.fixedPending.filter(item => (item.damaged_quantity || 0) === 0);
+});
+
+const totalBottlesForAcceptAll = computed(() => {
+    return eligibleForAcceptAll.value.reduce((acc, curr) => acc + (curr.expected_quantity || 0), 0);
+});
+
+const excludedFromAcceptAll = computed(() => {
+    return props.fixedPending.filter(item => (item.damaged_quantity || 0) > 0);
+});
+
+const openAcceptAllModal = () => {
+    showAcceptAllModal.value = true;
+};
+
+const closeAcceptAllModal = () => {
+    showAcceptAllModal.value = false;
+};
+
+const submitAcceptAll = () => {
+    acceptAllForm.post(route('planta.reception.confirm-all-fixed'), {
         preserveScroll: true,
+        onSuccess: () => closeAcceptAllModal(),
+    });
+};
+
+// =========================================================================
+// PESTAÑA 2: POR LLENAR
+// =========================================================================
+
+// Acción 3: Palomita verde (Modal Marcar como llenados total o parcial)
+const showFillModal = ref(false);
+const itemToFill = ref(null);
+const fillForm = useForm({
+    order_item_id: null,
+    quantity: 1,
+});
+
+const openFillModal = (item) => {
+    itemToFill.value = item;
+    fillForm.order_item_id = item.order_item_id;
+    fillForm.quantity = item.pending_quantity;
+    fillForm.clearErrors();
+    showFillModal.value = true;
+};
+
+const closeFillModal = () => {
+    showFillModal.value = false;
+    itemToFill.value = null;
+};
+
+const incrementFillQty = () => {
+    if (itemToFill.value && fillForm.quantity < itemToFill.value.pending_quantity) {
+        fillForm.quantity++;
+    }
+};
+
+const decrementFillQty = () => {
+    if (fillForm.quantity > 1) {
+        fillForm.quantity--;
+    }
+};
+
+const submitFill = () => {
+    if (!itemToFill.value || fillForm.processing) return;
+
+    fillForm.post(route('planta.fijos.mark-filled'), {
+        preserveScroll: true,
+        onSuccess: () => closeFillModal(),
+    });
+};
+
+// Acción 2: Triángulo ámbar (Modal Incidencia en Llenado)
+const showFillIncidentModal = ref(false);
+const itemForFillIncident = ref(null);
+const fillIncidentForm = useForm({
+    order_item_id: null,
+    quantity: 1,
+    damage_type: 'rotura',
+    notes: '',
+});
+
+const openFillIncidentModal = (item) => {
+    itemForFillIncident.value = item;
+    fillIncidentForm.order_item_id = item.order_item_id;
+    fillIncidentForm.quantity = 1;
+    fillIncidentForm.damage_type = 'rotura';
+    fillIncidentForm.notes = '';
+    fillIncidentForm.clearErrors();
+    showFillIncidentModal.value = true;
+};
+
+const closeFillIncidentModal = () => {
+    showFillIncidentModal.value = false;
+    itemForFillIncident.value = null;
+};
+
+const submitFillIncident = () => {
+    if (!itemForFillIncident.value || fillIncidentForm.processing) return;
+
+    if (fillIncidentForm.notes.trim().length < 5) {
+        alert('Debe describir el daño detectado durante el lavado/llenado (mínimo 5 caracteres).');
+        return;
+    }
+
+    fillIncidentForm.post(route('planta.fijos.report-incident'), {
+        preserveScroll: true,
+        onSuccess: () => closeFillIncidentModal(),
+    });
+};
+
+// Modal Marcar Todos como Llenados
+const showFillAllModal = ref(false);
+const fillAllForm = useForm({});
+
+const totalOrdersForFillAll = computed(() => props.fixedToFill.length);
+const totalBottlesForFillAll = computed(() => {
+    return props.fixedToFill.reduce((acc, curr) => acc + (curr.pending_quantity || 0), 0);
+});
+
+const openFillAllModal = () => {
+    showFillAllModal.value = true;
+};
+
+const closeFillAllModal = () => {
+    showFillAllModal.value = false;
+};
+
+const submitFillAll = () => {
+    fillAllForm.post(route('planta.fijos.mark-all-filled'), {
+        preserveScroll: true,
+        onSuccess: () => closeFillAllModal(),
     });
 };
 </script>
 
 <template>
-    <Head title="Planta · Fijos del Repartidor" />
+    <Head title="Fijos en Planta" />
 
-    <AuthenticatedLayout>
-        <div class="py-6 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <AuthenticatedLayout wide>
+        <div class="max-w-4xl mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-3 pb-24 md:pb-12">
 
             <!-- Mensajes Flash -->
             <div
                 v-if="flashSuccess"
-                class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 shadow-2xs"
-                role="alert"
+                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
-                <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-circle-check text-lg"></i>
-                </div>
-                <div class="flex-1">
-                    <p class="text-sm font-bold">{{ flashSuccess }}</p>
-                </div>
+                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
+                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
             </div>
 
             <div
                 v-if="flashError"
-                class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 shadow-2xs"
-                role="alert"
+                class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
-                <div class="h-10 w-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                </div>
-                <div class="flex-1">
-                    <p class="text-sm font-bold">{{ flashError }}</p>
-                </div>
+                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
+                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
             </div>
 
-            <!-- ENCABEZADO Y TRES PESTAÑAS PRINCIPALES -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 space-y-5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div class="flex items-center gap-3.5">
-                        <div class="h-12 w-12 rounded-2xl bg-blue-900 text-white flex items-center justify-center shadow-2xs shrink-0">
-                            <i class="fa-solid fa-boxes-stacked text-xl text-sky-400"></i>
-                        </div>
-                        <div>
-                            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                                Botellones Fijos
-                            </h1>
-                            <p class="text-xs sm:text-sm font-medium text-slate-500">
-                                Gestión por propietario · 20L · Planta → Repartidor → Cliente
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Modo supervisor aviso -->
-                    <span
-                        v-if="isAdmin && !isOperator"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold"
-                    >
-                        <i class="fa-solid fa-eye text-amber-600"></i>
-                        <span>Modo Supervisión</span>
-                    </span>
+            <!-- ========================================================================= -->
+            <!-- 1. ENCABEZADO Y PESTAÑAS (POR RECIBIR / POR LLENAR)                       -->
+            <!-- ========================================================================= -->
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5">
+                <div class="flex items-center justify-between pb-3">
+                    <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                        <i class="fa-solid fa-industry text-blue-900"></i>
+                        <span>Fijos en Planta</span>
+                    </h1>
                 </div>
 
-                <!-- SELECTOR DE PESTAÑAS TÁCTIL (≥ 44 px de altura) -->
-                <div class="grid grid-cols-3 gap-2 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/60">
-                    <!-- Pestaña 1: Por recibir -->
+                <!-- Pestañas Por recibir / Por llenar -->
+                <div class="flex items-center gap-2 border-t border-slate-100 pt-3">
+                    <!-- Tab 1: Por recibir -->
                     <button
-                        type="button"
                         @click="setTab('por-recibir')"
-                        :class="[
-                            'min-h-[48px] py-2.5 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer',
-                            currentTab === 'por-recibir'
-                                ? 'bg-white text-blue-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                        ]"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl text-xs font-black transition min-h-[44px] flex items-center gap-2 border cursor-pointer"
+                        :class="currentTab === 'por-recibir'
+                            ? 'bg-blue-900 text-white border-blue-900 shadow-2xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
                     >
-                        <i class="fa-solid fa-dolly text-sm"></i>
+                        <i class="fa-solid fa-dolly text-xs"></i>
                         <span>Por recibir</span>
                         <span
-                            v-if="fixedPendingCount > 0"
-                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-black bg-amber-500 text-white"
+                            class="px-2 py-0.5 rounded-full text-[10px] font-black"
+                            :class="currentTab === 'por-recibir' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'"
                         >
                             {{ fixedPendingCount }}
                         </span>
                     </button>
 
-                    <!-- Pestaña 2: Por llenar -->
+                    <!-- Tab 2: Por llenar -->
                     <button
-                        type="button"
                         @click="setTab('por-llenar')"
-                        :class="[
-                            'min-h-[48px] py-2.5 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer',
-                            currentTab === 'por-llenar'
-                                ? 'bg-white text-blue-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                        ]"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl text-xs font-black transition min-h-[44px] flex items-center gap-2 border cursor-pointer"
+                        :class="currentTab === 'por-llenar'
+                            ? 'bg-blue-900 text-white border-blue-900 shadow-2xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
                     >
-                        <i class="fa-solid fa-soap text-sm"></i>
+                        <i class="fa-solid fa-faucet-drip text-xs"></i>
                         <span>Por llenar</span>
                         <span
-                            v-if="(fixedPendingPrepare.length + fixedInWashing.length) > 0"
-                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-black bg-blue-100 text-blue-900"
+                            class="px-2 py-0.5 rounded-full text-[10px] font-black"
+                            :class="currentTab === 'por-llenar' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'"
                         >
-                            {{ fixedPendingPrepare.length + fixedInWashing.length }}
-                        </span>
-                    </button>
-
-                    <!-- Pestaña 3: Listos para enviar -->
-                    <button
-                        type="button"
-                        @click="setTab('listos-para-enviar')"
-                        :class="[
-                            'min-h-[48px] py-2.5 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer',
-                            currentTab === 'listos-para-enviar'
-                                ? 'bg-white text-blue-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                        ]"
-                    >
-                        <i class="fa-solid fa-truck-ramp-box text-sm"></i>
-                        <span>Listos para enviar</span>
-                        <span
-                            v-if="fixedReadyToLoad.length > 0"
-                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800"
-                        >
-                            {{ fixedReadyToLoad.length }}
+                            {{ fixedToFillCount }}
                         </span>
                     </button>
                 </div>
             </div>
 
-            <!-- ============================================================= -->
-            <!-- CONTENIDO DE PESTAÑA 1: POR RECIBIR                           -->
-            <!-- ============================================================= -->
-            <div v-if="currentTab === 'por-recibir'" class="space-y-4">
-                <div class="flex items-center justify-between px-1">
-                    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Fijos declarados por el Repartidor pendientes de cotejo físico
-                    </p>
-                    <span class="text-xs font-bold text-slate-400">
-                        {{ fixedPending.length }} pedido{{ fixedPending.length === 1 ? '' : 's' }}
+            <!-- ========================================================================= -->
+            <!-- 2. TABLA: POR RECIBIR                                                     -->
+            <!-- ========================================================================= -->
+            <div v-if="currentTab === 'por-recibir'" class="space-y-3">
+                <!-- Acción masiva compacta encima de la tabla -->
+                <div class="flex items-center justify-between gap-3 bg-white px-3 sm:px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span class="text-xs font-bold text-slate-600">
+                        {{ fixedPending.length }} {{ fixedPending.length === 1 ? 'cliente pendiente' : 'clientes pendientes' }}
                     </span>
-                </div>
 
-                <!-- Estado vacío -->
-                <div v-if="fixedPending.length === 0" class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-10 text-center text-slate-500">
-                    <i class="fa-solid fa-clipboard-check text-4xl text-slate-300 mb-3 block"></i>
-                    <h3 class="text-base font-bold text-slate-800">No hay fijos pendientes de recibir</h3>
-                    <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                        Cuando el repartidor recoja envases fijos y declare su llegada a Planta, aparecerán aquí para su cotejo presencial.
-                    </p>
-                </div>
-
-                <!-- Lista de pedidos con fijos pendientes -->
-                <div v-else class="space-y-4">
-                    <div
-                        v-for="item in fixedPending"
-                        :key="item.order_item_id"
-                        class="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-6 space-y-4 transition hover:border-blue-900/40"
+                    <button
+                        v-if="fixedPending.length > 0"
+                        @click="openAcceptAllModal"
+                        type="button"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black bg-blue-900 hover:bg-blue-800 text-white shadow-2xs transition active:scale-95 min-h-[44px] cursor-pointer"
+                        title="Aceptar todos los fijos pendientes"
+                        aria-label="Aceptar todos los fijos pendientes"
                     >
-                        <!-- Fila de identificación del cliente y pedido -->
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-black text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg">
-                                        {{ item.order_folio }}
-                                    </span>
-                                    <span v-if="item.customer_code" class="text-xs font-mono font-bold text-slate-400">
-                                        {{ item.customer_code }}
-                                    </span>
-                                </div>
-                                <h3 class="text-base font-black text-slate-900 mt-1">
-                                    {{ item.customer_nickname || item.customer_name }}
-                                </h3>
-                                <p class="text-xs text-slate-500">
-                                    Declarado por: <span class="font-semibold text-slate-700">{{ item.driver_name }}</span> · {{ item.created_at }}
-                                </p>
-                            </div>
-
-                            <!-- Botones rápidos de marcado por pedido -->
-                            <div class="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    @click="markAllReceived(item)"
-                                    class="min-h-[44px] px-3.5 py-2 rounded-xl bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                                    title="Marcar todos los esperados como recibidos físicamente"
-                                >
-                                    <i class="fa-solid fa-check-double text-sky-600"></i>
-                                    <span>Marcar todos los recibidos ({{ item.pending_quantity }})</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Panel de cotejo físico por pedido -->
-                        <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 space-y-4">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <!-- Cantidad esperada vs recibida -->
-                                <div class="flex items-center gap-4">
-                                    <!-- Casilla táctil individual (empieza desmarcada) -->
-                                    <label class="flex items-center gap-3 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            :checked="initReceptionState(item.order_item_id, item.pending_quantity).checked"
-                                            @change="toggleCheck(item)"
-                                            class="h-6 w-6 rounded-lg text-blue-900 border-slate-300 focus:ring-blue-900/20 cursor-pointer"
-                                        />
-                                        <div>
-                                            <span class="text-xs font-bold uppercase text-slate-400 block">Declarados en camino</span>
-                                            <span class="text-lg font-black text-slate-900">{{ item.pending_quantity }} fijos (20L)</span>
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <!-- Ajuste numérico presencial (si llegaron menos o más) -->
-                                <div class="flex items-center gap-3">
-                                    <span class="text-xs font-bold text-slate-600">Llegaron físicamente:</span>
-                                    <div class="flex items-center gap-1.5">
-                                        <button
-                                            type="button"
-                                            @click="() => {
-                                                const st = initReceptionState(item.order_item_id, item.pending_quantity);
-                                                st.received_quantity = Math.max(0, (Number(st.received_quantity) || 0) - 1);
-                                                st.checked = st.received_quantity > 0;
-                                            }"
-                                            class="h-10 w-10 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center cursor-pointer shadow-2xs"
-                                        >-</button>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            :max="item.pending_quantity"
-                                            v-model.number="initReceptionState(item.order_item_id, item.pending_quantity).received_quantity"
-                                            @input="() => {
-                                                const st = initReceptionState(item.order_item_id, item.pending_quantity);
-                                                st.checked = st.received_quantity > 0;
-                                            }"
-                                            class="w-16 h-10 text-center font-black text-slate-900 bg-white border border-slate-200 rounded-xl text-base focus:ring-2 focus:ring-blue-900/20"
-                                        />
-                                        <button
-                                            type="button"
-                                            @click="() => {
-                                                const st = initReceptionState(item.order_item_id, item.pending_quantity);
-                                                st.received_quantity = Math.min(item.pending_quantity, (Number(st.received_quantity) || 0) + 1);
-                                                st.checked = true;
-                                            }"
-                                            class="h-10 w-10 rounded-xl bg-blue-900 text-white font-bold hover:bg-blue-800 flex items-center justify-center cursor-pointer shadow-2xs"
-                                        >+</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Si esperaban 3 y llegaron 2: pide motivo del faltante -->
-                            <div
-                                v-if="(Number(initReceptionState(item.order_item_id, item.pending_quantity).received_quantity) + Number(initReceptionState(item.order_item_id, item.pending_quantity).damaged_quantity)) < item.pending_quantity"
-                                class="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1.5"
-                            >
-                                <div class="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                                    <i class="fa-solid fa-triangle-exclamation"></i>
-                                    <span>Hay un faltante de {{ item.pending_quantity - (Number(initReceptionState(item.order_item_id, item.pending_quantity).received_quantity) + Number(initReceptionState(item.order_item_id, item.pending_quantity).damaged_quantity)) }} botellón(es). Indique el motivo:</span>
-                                </div>
-                                <input
-                                    type="text"
-                                    v-model="initReceptionState(item.order_item_id, item.pending_quantity).difference_reason"
-                                    placeholder="Ej: Chofer reporta que el cliente no entregó el tercer botellón..."
-                                    required
-                                    class="w-full text-xs rounded-lg border-amber-300 bg-white focus:ring-2 focus:ring-amber-500/20 text-slate-800"
-                                />
-                            </div>
-
-                            <!-- Opciones: Unidades dañadas al recibir -->
-                            <div class="pt-2 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        v-model="initReceptionState(item.order_item_id, item.pending_quantity).start_washing"
-                                        class="rounded text-blue-900 border-slate-300 focus:ring-blue-900/20"
-                                    />
-                                    <span>Ingresar de inmediato a lavado y llenado</span>
-                                </label>
-
-                                <button
-                                    type="button"
-                                    @click="initReceptionState(item.order_item_id, item.pending_quantity).show_damaged = !initReceptionState(item.order_item_id, item.pending_quantity).show_damaged"
-                                    class="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-                                >
-                                    <i class="fa-solid fa-flask-vial"></i>
-                                    <span>{{ initReceptionState(item.order_item_id, item.pending_quantity).show_damaged ? 'Ocultar daño' : '¿Llegó algún botellón dañado?' }}</span>
-                                </button>
-                            </div>
-
-                            <!-- Sub-formulario para registrar daño/incidencia física -->
-                            <div
-                                v-if="initReceptionState(item.order_item_id, item.pending_quantity).show_damaged"
-                                class="p-3 bg-rose-50/70 rounded-xl border border-rose-200 space-y-3"
-                            >
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                    <div>
-                                        <label class="block font-bold text-rose-900 mb-1">Cantidad con daño:</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            :max="item.pending_quantity"
-                                            v-model.number="initReceptionState(item.order_item_id, item.pending_quantity).damaged_quantity"
-                                            class="w-full text-xs rounded-lg border-rose-300 bg-white focus:ring-rose-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="block font-bold text-rose-900 mb-1">Tipo de daño:</label>
-                                        <select
-                                            v-model="initReceptionState(item.order_item_id, item.pending_quantity).damage_type"
-                                            class="w-full text-xs rounded-lg border-rose-300 bg-white focus:ring-rose-500"
-                                        >
-                                            <option value="rotura">Rotura / Quebrado</option>
-                                            <option value="fisura">Fisura / Fuga</option>
-                                            <option value="contaminacion">Contaminación interna</option>
-                                            <option value="deformacion">Deformación por calor/golpe</option>
-                                            <option value="otro">Otro daño</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div>
-                                    <input
-                                        type="text"
-                                        v-model="initReceptionState(item.order_item_id, item.pending_quantity).damage_notes"
-                                        placeholder="Descripción del daño detectado al cotejar..."
-                                        class="w-full text-xs rounded-lg border-rose-300 bg-white focus:ring-rose-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <!-- Botón de Confirmación Presencial -->
-                            <div class="pt-2 flex justify-end">
-                                <button
-                                    type="button"
-                                    @click="submitReception(item)"
-                                    :disabled="submittingReception[item.order_item_id] || (!initReceptionState(item.order_item_id, item.pending_quantity).checked && initReceptionState(item.order_item_id, item.pending_quantity).received_quantity === 0)"
-                                    class="min-h-[44px] px-6 py-2.5 rounded-xl bg-blue-900 text-white font-black text-xs sm:text-sm hover:bg-blue-800 active:scale-95 transition shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                >
-                                    <i v-if="submittingReception[item.order_item_id]" class="fa-solid fa-circle-notch fa-spin"></i>
-                                    <i v-else class="fa-solid fa-circle-check text-sky-400"></i>
-                                    <span>Confirmar recepción física</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================= -->
-            <!-- CONTENIDO DE PESTAÑA 2: POR LLENAR (Lavado y preparación)     -->
-            <!-- ============================================================= -->
-            <div v-else-if="currentTab === 'por-llenar'" class="space-y-6">
-                <!-- Subsección 1: Fijos pendientes de iniciar lavado -->
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between px-1">
-                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            1. Recibidos en Planta · Pendientes de ingresar a lavado
-                        </p>
-                        <span class="text-xs font-bold text-slate-400">
-                            {{ fixedPendingPrepare.length }} pedido{{ fixedPendingPrepare.length === 1 ? '' : 's' }}
-                        </span>
-                    </div>
-
-                    <div v-if="fixedPendingPrepare.length === 0" class="bg-white rounded-2xl border border-slate-200/80 p-5 text-center text-xs text-slate-400">
-                        No hay fijos pendientes de iniciar lavado.
-                    </div>
-
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="item in fixedPendingPrepare"
-                            :key="`prep-${item.item_id}`"
-                            class="bg-white rounded-2xl border border-slate-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                        >
-                            <div class="flex items-center gap-3">
-                                <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center font-black text-sm shrink-0">
-                                    {{ item.pending_to_wash_quantity }}
-                                </div>
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-black text-blue-900 bg-blue-50 px-2 py-0.5 rounded">
-                                            {{ item.order_folio }}
-                                        </span>
-                                        <span class="text-xs font-bold text-slate-900">
-                                            {{ item.customer_nickname || item.customer_name }}
-                                        </span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 mt-0.5">
-                                        Disponibles para lavar: <span class="font-bold text-slate-800">{{ item.pending_to_wash_quantity }} botellones</span>
-                                    </p>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                @click="submitStartWash(item)"
-                                :disabled="submittingWashing[item.item_id]"
-                                class="min-h-[44px] px-4 py-2 rounded-xl bg-blue-900 text-white font-bold text-xs hover:bg-blue-800 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs self-start sm:self-auto"
-                            >
-                                <i v-if="submittingWashing[item.item_id]" class="fa-solid fa-circle-notch fa-spin"></i>
-                                <i v-else class="fa-solid fa-soap text-sky-400"></i>
-                                <span>Iniciar lavado ({{ item.pending_to_wash_quantity }})</span>
-                            </button>
-                        </div>
-                    </div>
+                        <i class="fa-solid fa-check-double text-sky-400"></i>
+                        <span>Aceptar todos</span>
+                    </button>
                 </div>
 
-                <!-- Subsección 2: Fijos en lavado y llenado (mesa de trabajo) -->
-                <div class="space-y-3 pt-4 border-t border-slate-200/80">
-                    <div class="flex items-center justify-between px-1">
-                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            2. En línea de lavado y llenado · Finalizar preparación
-                        </p>
-                        <span class="text-xs font-bold text-slate-400">
-                            {{ fixedInWashing.length }} en proceso
-                        </span>
+                <!-- Tabla compacta (Cliente, Fijos, Acciones) -->
+                <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                    <div v-if="fixedPending.length === 0" class="p-12 text-center space-y-2">
+                        <div class="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-box-open"></i>
+                        </div>
+                        <p class="text-sm font-bold text-slate-800">No hay fijos pendientes de recibir</p>
+                        <p class="text-xs text-slate-400">Cuando el Repartidor confirme recogidas en ruta, aparecerán aquí.</p>
                     </div>
 
-                    <div v-if="fixedInWashing.length === 0" class="bg-white rounded-2xl border border-slate-200/80 p-6 text-center text-xs text-slate-400">
-                        No hay botellones fijos en proceso de lavado y llenado en este momento.
-                    </div>
-
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="item in fixedInWashing"
-                            :key="`wash-${item.item_id}`"
-                            class="bg-white rounded-2xl border border-slate-200/90 p-5 space-y-4 shadow-2xs hover:border-blue-900/40 transition"
-                        >
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-black text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg">
-                                            {{ item.order_folio }}
-                                        </span>
-                                        <span class="text-xs font-black text-slate-900">
-                                            {{ item.customer_nickname || item.customer_name }}
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-slate-500 mt-1">
-                                        En lavado y purificación: <span class="font-black text-slate-800">{{ item.in_washing_quantity }} botellones</span>
-                                    </p>
-                                </div>
-
-                                <!-- Botón Marcar todos como llenados -->
-                                <button
-                                    type="button"
-                                    @click="markAllFilled(item)"
-                                    class="min-h-[44px] px-3.5 py-2 rounded-xl bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
-                                >
-                                    <i class="fa-solid fa-check-double text-sky-600"></i>
-                                    <span>Marcar todos como llenados ({{ item.in_washing_quantity }})</span>
-                                </button>
-                            </div>
-
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/60">
-                                <label class="flex items-center gap-3 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        :checked="initWashingState(item.item_id, item.in_washing_quantity).checked"
-                                        @change="toggleWashingCheck(item)"
-                                        class="h-6 w-6 rounded-lg text-blue-900 border-slate-300 focus:ring-blue-900/20 cursor-pointer"
-                                    />
-                                    <div>
-                                        <span class="text-xs font-bold text-slate-700">Listo para pasar a Listos para enviar</span>
-                                        <span class="block text-[11px] text-slate-400">Lavado, llenado y sellado concluido</span>
-                                    </div>
-                                </label>
-
-                                <div class="flex items-center gap-3">
-                                    <span class="text-xs font-semibold text-slate-500">Cantidad terminada:</span>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        :max="item.in_washing_quantity"
-                                        v-model.number="initWashingState(item.item_id, item.in_washing_quantity).finish_quantity"
-                                        class="w-16 h-10 text-center font-black text-slate-900 bg-white border border-slate-200 rounded-xl text-sm"
-                                    />
-
-                                    <button
-                                        type="button"
-                                        @click="submitFinishWash(item)"
-                                        :disabled="submittingWashing[item.item_id] || initWashingState(item.item_id, item.in_washing_quantity).finish_quantity <= 0"
-                                        class="min-h-[44px] px-5 py-2 rounded-xl bg-blue-900 text-white font-black text-xs hover:bg-blue-800 active:scale-95 transition flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    <table v-else class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                                <th scope="col" class="py-3 px-3 sm:px-5">Cliente</th>
+                                <th scope="col" class="py-3 px-2 sm:px-4 text-right">Fijos</th>
+                                <th scope="col" class="py-3 px-3 sm:px-5 text-right w-[156px] sm:w-[168px]">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr
+                                v-for="item in fixedPending"
+                                :key="item.order_item_id"
+                                class="hover:bg-slate-50/60 transition"
+                            >
+                                <!-- 1. Cliente: Apodo en negrita sin comillas, nombre debajo si existe -->
+                                <td class="py-3.5 px-3 sm:px-5 align-middle">
+                                    <span class="font-bold text-slate-900 text-sm sm:text-base leading-tight block">
+                                        {{ item.customer_nickname || item.customer_name || 'Cliente' }}
+                                    </span>
+                                    <span
+                                        v-if="item.customer_nickname && item.customer_name"
+                                        class="text-xs text-slate-500 font-normal mt-0.5 block"
                                     >
-                                        <i v-if="submittingWashing[item.item_id]" class="fa-solid fa-circle-notch fa-spin"></i>
-                                        <i v-else class="fa-solid fa-check text-sky-400"></i>
-                                        <span>Confirmar llenado</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                        {{ item.customer_name }}
+                                    </span>
+                                </td>
+
+                                <!-- 2. Fijos: únicamente el número -->
+                                <td class="py-3.5 px-2 sm:px-4 align-middle text-right">
+                                    <span class="font-bold sm:font-black text-slate-900 text-base sm:text-lg font-mono">
+                                        {{ item.expected_quantity }}
+                                    </span>
+                                </td>
+
+                                <!-- 3. Acciones: Papelera roja, Triángulo ámbar, Palomita verde -->
+                                <td class="py-3.5 px-3 sm:px-5 align-middle text-right">
+                                    <div class="flex items-center justify-end gap-1.5 sm:gap-2">
+                                        <!-- Papelera roja -->
+                                        <button
+                                            @click="openTrashModal(item, 'por-recibir')"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 active:scale-95 transition cursor-pointer shadow-2xs"
+                                            title="Retirar o descartar registro"
+                                            aria-label="Retirar o descartar registro"
+                                        >
+                                            <i class="fa-solid fa-trash-can text-sm"></i>
+                                        </button>
+
+                                        <!-- Triángulo ámbar -->
+                                        <button
+                                            @click="openReceptionIncidentModal(item)"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 active:scale-95 transition cursor-pointer shadow-2xs"
+                                            title="Registrar incidencia (faltantes, daños o diferencias)"
+                                            aria-label="Registrar incidencia"
+                                        >
+                                            <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+                                        </button>
+
+                                        <!-- Palomita verde -->
+                                        <button
+                                            @click="handleAcceptSingleReception(item)"
+                                            :disabled="submittingIndividual[item.order_item_id]"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-95 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                                            title="Confirmar fijos recibidos"
+                                            aria-label="Confirmar fijos recibidos"
+                                        >
+                                            <i class="fa-solid fa-check text-sm font-black"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- ============================================================= -->
-            <!-- CONTENIDO DE PESTAÑA 3: LISTOS PARA ENVIAR                    -->
-            <!-- ============================================================= -->
-            <div v-else-if="currentTab === 'listos-para-enviar'" class="space-y-6">
-                <!-- Fijos preparados listos para entregar al camión -->
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between px-1">
-                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Fijos listos en almacén de Planta para proponer al camión
-                        </p>
-                        <span class="text-xs font-bold text-slate-400">
-                            {{ fixedReadyToLoad.length }} orden{{ fixedReadyToLoad.length === 1 ? '' : 'es' }}
-                        </span>
-                    </div>
+            <!-- ========================================================================= -->
+            <!-- 3. TABLA: POR LLENAR                                                      -->
+            <!-- ========================================================================= -->
+            <div v-if="currentTab === 'por-llenar'" class="space-y-3">
+                <!-- Acción masiva compacta encima de la tabla -->
+                <div class="flex items-center justify-between gap-3 bg-white px-3 sm:px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span class="text-xs font-bold text-slate-600">
+                        {{ fixedToFill.length }} {{ fixedToFill.length === 1 ? 'cliente pendiente' : 'clientes pendientes' }}
+                    </span>
 
-                    <!-- Estado vacío -->
-                    <div v-if="fixedReadyToLoad.length === 0" class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-8 text-center text-slate-400">
-                        <i class="fa-solid fa-boxes-packing text-3xl mb-2 text-slate-300"></i>
-                        <p class="text-sm font-semibold">No hay botellones fijos preparados en almacén de listos.</p>
-                        <p class="text-xs text-slate-400">Lava y llena los fijos recibidos en la pestaña «Por llenar» para tener unidades disponibles para enviar.</p>
-                    </div>
-
-                    <!-- Lista de fijos preparados con selector táctil -->
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="item in fixedReadyToLoad"
-                            :key="item.item_id"
-                            class="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-blue-900/40 transition"
-                        >
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-black text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg">
-                                        {{ item.order_folio }}
-                                    </span>
-                                    <span v-if="item.customer_code" class="text-xs font-mono font-bold text-slate-400">
-                                        {{ item.customer_code }}
-                                    </span>
-                                </div>
-                                <h3 class="text-base font-black text-slate-900 mt-1">
-                                    {{ item.customer_nickname || item.customer_name }}
-                                </h3>
-                                <p class="text-xs text-slate-500 mt-0.5">
-                                    Preparados disponibles: <span class="font-black text-emerald-700">{{ item.ready_to_load_quantity }} botellones</span>
-                                </p>
-                            </div>
-
-                            <!-- Selector de cantidad y botón Enviar al Repartidor -->
-                            <div class="flex items-center gap-3">
-                                <div class="flex items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        @click="() => {
-                                            const st = initLoadState(item.item_id, item.ready_to_load_quantity);
-                                            st.quantity = Math.max(1, (Number(st.quantity) || 1) - 1);
-                                        }"
-                                        class="h-10 w-10 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 flex items-center justify-center cursor-pointer shadow-2xs"
-                                    >-</button>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        :max="item.ready_to_load_quantity"
-                                        v-model.number="initLoadState(item.item_id, item.ready_to_load_quantity).quantity"
-                                        class="w-16 h-10 text-center font-black text-slate-900 bg-white border border-slate-200 rounded-xl text-sm"
-                                    />
-                                    <button
-                                        type="button"
-                                        @click="() => {
-                                            const st = initLoadState(item.item_id, item.ready_to_load_quantity);
-                                            st.quantity = Math.min(item.ready_to_load_quantity, (Number(st.quantity) || 1) + 1);
-                                        }"
-                                        class="h-10 w-10 rounded-xl bg-blue-900 text-white font-bold hover:bg-blue-800 flex items-center justify-center cursor-pointer shadow-2xs"
-                                    >+</button>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    @click="submitSendToDriver(item)"
-                                    :disabled="submittingLoad[item.item_id]"
-                                    class="min-h-[44px] px-5 py-2.5 rounded-xl bg-blue-900 text-white font-black text-xs sm:text-sm hover:bg-blue-800 active:scale-95 transition flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
-                                >
-                                    <i v-if="submittingLoad[item.item_id]" class="fa-solid fa-circle-notch fa-spin"></i>
-                                    <i v-else class="fa-solid fa-truck-arrow-right text-sky-400"></i>
-                                    <span>Enviar al repartidor</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <button
+                        v-if="fixedToFill.length > 0"
+                        @click="openFillAllModal"
+                        type="button"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black bg-blue-900 hover:bg-blue-800 text-white shadow-2xs transition active:scale-95 min-h-[44px] cursor-pointer"
+                        title="Marcar todos como llenados"
+                        aria-label="Marcar todos como llenados"
+                    >
+                        <i class="fa-solid fa-check-double text-sky-400"></i>
+                        <span>Llenar todos</span>
+                    </button>
                 </div>
 
-                <!-- Propuestas pendientes de confirmación por el Repartidor -->
-                <div class="space-y-3 pt-4 border-t border-slate-200/80">
-                    <div class="flex items-center justify-between px-1">
-                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Propuestas de fijos pendientes de aceptación física en camión
-                        </p>
-                        <span class="text-xs font-bold text-slate-400">
-                            {{ pendingFixedProposals.length }} propuesta{{ pendingFixedProposals.length === 1 ? '' : 's' }}
-                        </span>
-                    </div>
-
-                    <div v-if="pendingFixedProposals.length === 0" class="bg-white rounded-2xl border border-slate-200/80 p-5 text-center text-xs text-slate-400">
-                        No hay propuestas de fijos pendientes de confirmación por el chofer.
-                    </div>
-
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="prop in pendingFixedProposals"
-                            :key="`prop-${prop.id}`"
-                            class="bg-amber-50/60 rounded-2xl border border-amber-200/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                        >
-                            <div class="flex items-center gap-3">
-                                <div class="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-sm shrink-0">
-                                    {{ prop.quantity }}
-                                </div>
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-black text-blue-900 bg-white px-2 py-0.5 rounded shadow-2xs">
-                                            {{ prop.order_folio }}
-                                        </span>
-                                        <span class="text-xs font-bold text-slate-900">
-                                            {{ prop.customer_nickname || prop.customer_name }}
-                                        </span>
-                                        <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
-                                            Pendiente de confirmación
-                                        </span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-600 mt-0.5">
-                                        Propuesto por {{ prop.initiator_name }} · {{ prop.created_at }} · Esperando aceptación del chofer en «Mi carga».
-                                    </p>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                @click="withdrawProposal(prop.id)"
-                                class="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 text-rose-700 hover:bg-rose-50 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
-                                title="Retirar propuesta antes de que el repartidor acepte"
-                            >
-                                <i class="fa-solid fa-ban text-rose-500"></i>
-                                <span>Retirar propuesta</span>
-                            </button>
+                <!-- Tabla compacta (Cliente, Fijos, Acciones) -->
+                <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                    <div v-if="fixedToFill.length === 0" class="p-12 text-center space-y-2">
+                        <div class="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-bottle-water"></i>
                         </div>
+                        <p class="text-sm font-bold text-slate-800">No hay fijos pendientes por llenar</p>
+                        <p class="text-xs text-slate-400">Todos los botellones fijos recibidos aptos han sido lavados y llenados.</p>
                     </div>
+
+                    <table v-else class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                                <th scope="col" class="py-3 px-3 sm:px-5">Cliente</th>
+                                <th scope="col" class="py-3 px-2 sm:px-4 text-right">Fijos</th>
+                                <th scope="col" class="py-3 px-3 sm:px-5 text-right w-[156px] sm:w-[168px]">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr
+                                v-for="item in fixedToFill"
+                                :key="item.order_item_id"
+                                class="hover:bg-slate-50/60 transition"
+                            >
+                                <!-- 1. Cliente: Apodo en negrita sin comillas, nombre debajo si existe -->
+                                <td class="py-3.5 px-3 sm:px-5 align-middle">
+                                    <span class="font-bold text-slate-900 text-sm sm:text-base leading-tight block">
+                                        {{ item.customer_nickname || item.customer_name || 'Cliente' }}
+                                    </span>
+                                    <span
+                                        v-if="item.customer_nickname && item.customer_name"
+                                        class="text-xs text-slate-500 font-normal mt-0.5 block"
+                                    >
+                                        {{ item.customer_name }}
+                                    </span>
+                                </td>
+
+                                <!-- 2. Fijos: únicamente el número -->
+                                <td class="py-3.5 px-2 sm:px-4 align-middle text-right">
+                                    <span class="font-bold sm:font-black text-slate-900 text-base sm:text-lg font-mono">
+                                        {{ item.pending_quantity }}
+                                    </span>
+                                </td>
+
+                                <!-- 3. Acciones: Papelera roja, Triángulo ámbar, Palomita verde -->
+                                <td class="py-3.5 px-3 sm:px-5 align-middle text-right">
+                                    <div class="flex items-center justify-end gap-1.5 sm:gap-2">
+                                        <!-- Papelera roja -->
+                                        <button
+                                            @click="openTrashModal(item, 'por-llenar')"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 active:scale-95 transition cursor-pointer shadow-2xs"
+                                            title="Retirar o descartar registro"
+                                            aria-label="Retirar o descartar registro"
+                                        >
+                                            <i class="fa-solid fa-trash-can text-sm"></i>
+                                        </button>
+
+                                        <!-- Triángulo ámbar -->
+                                        <button
+                                            @click="openFillIncidentModal(item)"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 active:scale-95 transition cursor-pointer shadow-2xs"
+                                            title="Registrar incidencia por daño durante lavado o llenado"
+                                            aria-label="Registrar incidencia"
+                                        >
+                                            <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+                                        </button>
+
+                                        <!-- Palomita verde -->
+                                        <button
+                                            @click="openFillModal(item)"
+                                            type="button"
+                                            class="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 active:scale-95 transition cursor-pointer shadow-2xs"
+                                            title="Confirmar fijos llenados"
+                                            aria-label="Confirmar fijos llenados"
+                                        >
+                                            <i class="fa-solid fa-check text-sm font-black"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
         </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: RETIRAR REGISTRO (PAPELERA ROJA)                                   -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showTrashModal && itemForTrash"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-rose-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-start justify-between gap-3 border-b border-rose-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Confirmación de retiro</span>
+                            <h3 class="text-base font-black text-slate-900">
+                                {{ itemForTrash.customer_nickname || itemForTrash.customer_name || 'Cliente' }}
+                            </h3>
+                            <p v-if="itemForTrash.customer_nickname && itemForTrash.customer_name" class="text-xs text-slate-500">
+                                {{ itemForTrash.customer_name }}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        @click="closeTrashModal"
+                        type="button"
+                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm cursor-pointer"
+                        aria-label="Cerrar modal"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-100 text-xs text-rose-950 space-y-2">
+                    <p class="font-bold text-slate-900">
+                        ¿Deseas retirar a este cliente de la lista de {{ trashTab === 'por-recibir' ? 'recepción física' : 'lavado y llenado' }}?
+                    </p>
+                    <p v-if="trashTab === 'por-recibir'" class="text-slate-600 leading-relaxed">
+                        Este registro cuenta con <strong>{{ itemForTrash.expected_quantity }} botellones fijos</strong> reportados por el Repartidor. Para dar de baja unidades con diferencias o mermas y conservar la custodia, pagos y auditoría, debe derivarse a <strong>Incidencia</strong>.
+                    </p>
+                    <p v-else class="text-slate-600 leading-relaxed">
+                        Este registro cuenta con <strong>{{ itemForTrash.pending_quantity }} botellones fijos</strong> en custodia de Planta. Si no se llenarán por fisura, rotura o contaminación, deben darse de baja mediante <strong>Incidencia</strong> para mantener la auditoría del inventario.
+                    </p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeTrashModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="handleTrashDeriveToIncident"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black min-h-[44px] flex items-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Registrar incidencia</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: INCIDENCIA EN RECEPCIÓN (POR RECIBIR)                              -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showReceptionIncidentModal && itemForReceptionIncident"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-start justify-between gap-3 border-b border-amber-100 pb-3">
+                    <div>
+                        <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Incidencia en recepción física</span>
+                        <h3 class="text-base font-black text-slate-900">
+                            {{ itemForReceptionIncident.customer_nickname || itemForReceptionIncident.customer_name || 'Cliente' }}
+                        </h3>
+                        <p class="text-xs text-slate-500">Esperados: {{ itemForReceptionIncident.expected_quantity }} botellones fijos</p>
+                    </div>
+                    <button
+                        @click="closeReceptionIncidentModal"
+                        type="button"
+                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm cursor-pointer"
+                        aria-label="Cerrar modal"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
+                            <label class="font-bold text-emerald-900 block">Unidades aptas recibidas:</label>
+                            <input
+                                v-model.number="receptionIncidentForm.received_quantity"
+                                type="number"
+                                min="0"
+                                :max="itemForReceptionIncident.expected_quantity"
+                                class="w-full text-base font-black text-emerald-950 font-mono rounded-xl border-emerald-300"
+                            />
+                        </div>
+
+                        <div class="p-3 bg-amber-50 rounded-2xl border border-amber-200 space-y-1">
+                            <label class="font-bold text-amber-900 block">Unidades dañadas/rotas:</label>
+                            <input
+                                v-model.number="receptionIncidentForm.damaged_quantity"
+                                type="number"
+                                min="0"
+                                :max="itemForReceptionIncident.expected_quantity"
+                                class="w-full text-base font-black text-amber-950 font-mono rounded-xl border-amber-300"
+                            />
+                        </div>
+                    </div>
+
+                    <div v-if="receptionIncidentForm.damaged_quantity > 0" class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <label class="font-bold text-slate-700 block">Tipo y detalle del daño:</label>
+                        <select v-model="receptionIncidentForm.damage_type" class="w-full text-xs rounded-xl border-slate-300">
+                            <option value="rotura">Rotura / Quebrado</option>
+                            <option value="fisura">Fisura / Fuga</option>
+                            <option value="contaminacion">Contaminación</option>
+                            <option value="deformacion">Deformación</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                        <input
+                            v-model="receptionIncidentForm.damage_notes"
+                            type="text"
+                            placeholder="Descripción del daño (obligatorio)..."
+                            class="w-full text-xs rounded-xl border-slate-300"
+                        />
+                    </div>
+
+                    <div v-if="receptionShortage > 0" class="p-3 bg-rose-50 rounded-2xl border border-rose-200 space-y-1">
+                        <label class="font-bold text-rose-900 block">Faltan {{ receptionShortage }} botellón(es). Motivo obligatorio:</label>
+                        <input
+                            v-model="receptionIncidentForm.difference_reason"
+                            type="text"
+                            placeholder="Ej. Chofer reportó que cliente no entregó el 2do envase..."
+                            class="w-full text-xs rounded-xl border-rose-300"
+                        />
+                    </div>
+
+                    <p class="text-[11px] text-slate-500">
+                        * Solo las unidades aptas recibidas pasarán a la etapa "Por llenar".
+                    </p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeReceptionIncidentModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="submitReceptionIncident"
+                        :disabled="receptionIncidentForm.processing"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black min-h-[44px] cursor-pointer shadow-2xs"
+                    >
+                        {{ receptionIncidentForm.processing ? 'Guardando...' : 'Guardar incidencia' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: ACEPTAR TODOS EN RECEPCIÓN                                         -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showAcceptAllModal"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-center gap-3 text-blue-900 border-b border-slate-100 pb-3">
+                    <div class="h-10 w-10 rounded-2xl bg-blue-50 text-blue-900 flex items-center justify-center text-lg shrink-0">
+                        <i class="fa-solid fa-check-double"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-900">Aceptar todos los fijos recibidos</h3>
+                        <p class="text-xs text-slate-500">Confirmación masiva de recepción física en Planta</p>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-600">Pedidos a confirmar:</span>
+                        <span class="font-black text-slate-900 font-mono text-sm">{{ eligibleForAcceptAll.length }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-600">Total de botellones aptos:</span>
+                        <span class="font-black text-blue-900 font-mono text-base">{{ totalBottlesForAcceptAll }} unidades</span>
+                    </div>
+
+                    <div v-if="excludedFromAcceptAll.length > 0" class="pt-2 border-t border-slate-200 text-amber-800">
+                        <p class="font-bold">Se excluirán {{ excludedFromAcceptAll.length }} pedidos con diferencias previas para revisarse individualmente.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeAcceptAllModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="submitAcceptAll"
+                        :disabled="acceptAllForm.processing || eligibleForAcceptAll.length === 0"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-black min-h-[44px] cursor-pointer shadow-2xs"
+                    >
+                        {{ acceptAllForm.processing ? 'Confirmando...' : 'Confirmar recepción masiva' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: MARCAR COMO LLENADOS (POR LLENAR)                                  -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showFillModal && itemToFill"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                        <span class="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">Confirmación de llenado</span>
+                        <h3 class="text-base font-black text-slate-900">
+                            {{ itemToFill.customer_nickname || itemToFill.customer_name || 'Cliente' }}
+                        </h3>
+                        <p class="text-xs text-slate-500">Pendientes por llenar: {{ itemToFill.pending_quantity }} botellones</p>
+                    </div>
+                    <button
+                        @click="closeFillModal"
+                        type="button"
+                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm cursor-pointer"
+                        aria-label="Cerrar modal"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-2">
+                    <span class="text-xs font-bold text-slate-600 block">Cantidad lavada y llenada físicamente</span>
+                    <div class="flex items-center justify-center gap-4">
+                        <button
+                            @click="decrementFillQty"
+                            :disabled="fillForm.quantity <= 1"
+                            type="button"
+                            class="h-12 w-12 rounded-2xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center text-lg font-bold shadow-2xs cursor-pointer"
+                            aria-label="Disminuir cantidad"
+                        >
+                            <i class="fa-solid fa-minus"></i>
+                        </button>
+                        <span class="text-3xl font-black text-slate-900 font-mono w-16 text-center">
+                            {{ fillForm.quantity }}
+                        </span>
+                        <button
+                            @click="incrementFillQty"
+                            :disabled="fillForm.quantity >= itemToFill.pending_quantity"
+                            type="button"
+                            class="h-12 w-12 rounded-2xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center text-lg font-bold shadow-2xs cursor-pointer"
+                            aria-label="Aumentar cantidad"
+                        >
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+                    <p v-if="fillForm.quantity < itemToFill.pending_quantity" class="text-[11px] text-amber-700 font-bold bg-amber-50 p-1.5 rounded-lg border border-amber-200">
+                        Se confirmarán {{ fillForm.quantity }} botellones y el resto seguirá en "Por llenar".
+                    </p>
+                </div>
+
+                <p class="text-[11px] text-slate-500">
+                    * Al confirmar, las unidades terminadas aparecerán automáticamente en <strong>Reparto → Listos para cargar</strong>.
+                </p>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeFillModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="submitFill"
+                        :disabled="fillForm.processing"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-black min-h-[44px] cursor-pointer shadow-2xs"
+                    >
+                        {{ fillForm.processing ? 'Guardando...' : `Confirmar llenado (${fillForm.quantity})` }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: INCIDENCIA EN LLENADO (POR LLENAR)                                 -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showFillIncidentModal && itemForFillIncident"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-start justify-between gap-3 border-b border-amber-100 pb-3">
+                    <div>
+                        <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Incidencia en lavado o llenado</span>
+                        <h3 class="text-base font-black text-slate-900">
+                            {{ itemForFillIncident.customer_nickname || itemForFillIncident.customer_name || 'Cliente' }}
+                        </h3>
+                    </div>
+                    <button
+                        @click="closeFillIncidentModal"
+                        type="button"
+                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm cursor-pointer"
+                        aria-label="Cerrar modal"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">Cantidad de botellones dañados:</label>
+                        <input
+                            v-model.number="fillIncidentForm.quantity"
+                            type="number"
+                            min="1"
+                            :max="itemForFillIncident.pending_quantity"
+                            class="w-full text-base font-black font-mono rounded-xl border-slate-300"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">Tipo de daño detectado:</label>
+                        <select v-model="fillIncidentForm.damage_type" class="w-full text-xs rounded-xl border-slate-300">
+                            <option value="rotura">Rotura en túnel / tina</option>
+                            <option value="fisura">Fisura en boquilla / fondo</option>
+                            <option value="contaminacion">Contaminación química o de olor</option>
+                            <option value="deformacion">Deformación térmica</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">Descripción del daño (obligatorio):</label>
+                        <textarea
+                            v-model="fillIncidentForm.notes"
+                            rows="3"
+                            placeholder="Ej. Se detectó fisura en la base durante el proceso de presurización..."
+                            class="w-full text-xs rounded-xl border-slate-300"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeFillIncidentModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="submitFillIncident"
+                        :disabled="fillIncidentForm.processing"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black min-h-[44px] cursor-pointer shadow-2xs"
+                    >
+                        {{ fillIncidentForm.processing ? 'Registrando...' : 'Registrar daño' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: MARCAR TODOS COMO LLENADOS                                         -->
+        <!-- ========================================================================= -->
+        <div
+            v-if="showFillAllModal"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        >
+            <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+                <div class="flex items-center gap-3 text-blue-900 border-b border-slate-100 pb-3">
+                    <div class="h-10 w-10 rounded-2xl bg-blue-50 text-blue-900 flex items-center justify-center text-lg shrink-0">
+                        <i class="fa-solid fa-check-double"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-900">Llenar todos los botellones fijos</h3>
+                        <p class="text-xs text-slate-500">Confirmación masiva de botellones fijos preparados</p>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-600">Pedidos a procesar:</span>
+                        <span class="font-black text-slate-900 font-mono text-sm">{{ totalOrdersForFillAll }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-600">Total de botellones fijos:</span>
+                        <span class="font-black text-blue-900 font-mono text-base">{{ totalBottlesForFillAll }} unidades</span>
+                    </div>
+                </div>
+
+                <p class="text-[11px] text-slate-500">
+                    * Todos los fijos confirmados pasarán a estar disponibles de inmediato en <strong>Reparto → Listos para cargar</strong>.
+                </p>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                        @click="closeFillAllModal"
+                        type="button"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                    >
+                        Volver
+                    </button>
+                    <button
+                        @click="submitFillAll"
+                        :disabled="fillAllForm.processing || totalOrdersForFillAll === 0"
+                        type="button"
+                        class="px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-black min-h-[44px] cursor-pointer shadow-2xs"
+                    >
+                        {{ fillAllForm.processing ? 'Confirmando...' : 'Confirmar llenado masivo' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </AuthenticatedLayout>
 </template>
-

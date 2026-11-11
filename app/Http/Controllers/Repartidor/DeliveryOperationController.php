@@ -24,19 +24,21 @@ class DeliveryOperationController extends Controller
     public function searchCustomers(Request $request): JsonResponse
     {
         $term = trim((string) $request->query('q', ''));
-        if (strlen($term) < 2) {
+        if (mb_strlen($term) < 2) {
             return response()->json([]);
         }
+
+        $termLower = mb_strtolower($term, 'UTF-8');
 
         $orderService = app(\App\Services\OrderService::class);
         $promoService = app(\App\Services\WeeklyPromotionService::class);
 
         $customers = Customer::query()
-            ->where(function ($q) use ($term) {
-                $q->where('code', 'like', "%{$term}%")
-                    ->orWhere('name', 'like', "%{$term}%")
-                    ->orWhere('nickname', 'like', "%{$term}%")
-                    ->orWhere('phone', 'like', "%{$term}%");
+            ->where(function ($q) use ($termLower) {
+                $q->whereRaw('LOWER(code) LIKE ?', ["%{$termLower}%"])
+                    ->orWhereRaw('LOWER(name) LIKE ?', ["%{$termLower}%"])
+                    ->orWhereRaw('LOWER(nickname) LIKE ?', ["%{$termLower}%"])
+                    ->orWhereRaw('LOWER(phone) LIKE ?', ["%{$termLower}%"]);
             })
             ->with('address')
             ->limit(10)

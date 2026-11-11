@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 
@@ -31,12 +31,57 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.errors?.direct || null);
 
 // -------------------------------------------------------------------------
-// MODO CLIENTE: EXISTENTE VS NUEVO
+// 1. ELECCIÓN DE SERVICIO: 'fijos' O 'cambios' (inician sin seleccionar)
 // -------------------------------------------------------------------------
-const clientMode = ref(props.initialCustomer ? 'search' : 'search'); // 'search' o 'new'
+const selectedService = ref(null); // null, 'fijos', 'cambios'
+
+// Cantidad única del servicio seleccionado
+const quantity = ref(1);
+
+const selectService = (service) => {
+    selectedService.value = service;
+    // Al cambiar de servicio, limpia la cantidad anterior
+    quantity.value = 1;
+};
+
+const incrementQty = () => {
+    if (selectedService.value === 'fijos') {
+        quantity.value++;
+    } else if (selectedService.value === 'cambios') {
+        const maxAvailable = Number(props.truck?.exchange_full_available || 0);
+        if (quantity.value < maxAvailable) {
+            quantity.value++;
+        }
+    }
+};
+
+const decrementQty = () => {
+    if (quantity.value > 1) {
+        quantity.value--;
+    }
+};
+
+const setQuantityValue = (val) => {
+    const num = parseInt(val, 10);
+    if (isNaN(num) || num < 1) {
+        quantity.value = 1;
+        return;
+    }
+    if (selectedService.value === 'cambios') {
+        const maxAvailable = Number(props.truck?.exchange_full_available || 0);
+        quantity.value = Math.min(num, Math.max(1, maxAvailable));
+    } else {
+        quantity.value = num;
+    }
+};
+
+// -------------------------------------------------------------------------
+// 2. CLIENTE: BÚSQUEDA O NUEVO RÁPIDO
+// -------------------------------------------------------------------------
+const clientMode = ref('search'); // 'search' o 'new'
 
 // Búsqueda de cliente existente
-const searchQuery = ref('');
+const searchQuery = ref(props.initialCustomer?.nickname || '');
 const searchResults = ref([]);
 const isSearching = ref(false);
 const selectedCustomer = ref(props.initialCustomer || null);
@@ -77,6 +122,13 @@ const clearSelectedCustomer = () => {
 };
 
 // Formulario de nuevo cliente rápido
+const availableZones = [
+    { id: 'north', label: 'Norte' },
+    { id: 'south', label: 'Sur' },
+    { id: 'east', label: 'Este' },
+    { id: 'west', label: 'Oeste' },
+];
+
 const newCustomer = ref({
     nickname: '',
     name: '',
@@ -88,104 +140,14 @@ const newCustomer = ref({
     reference: '',
 });
 
-// -------------------------------------------------------------------------
-// CANTIDADES DE OPERACIÓN
-// -------------------------------------------------------------------------
-const exchangeQty = ref(1);
-const exchangeEmptyReceived = ref(1);
-const fixedQty = ref(0);
-
-const maxExchangeAvailable = computed(() => {
-    return Math.min(props.truck.exchange_full_available, exchangeEmptyReceived.value);
-});
-
-const exchangeDelivered = computed(() => {
-    return Math.min(exchangeQty.value, maxExchangeAvailable.value);
-});
-
-const totalDeliveredBottles = computed(() => exchangeDelivered.value);
-
-// Validación de pedido activo
+// Validación de pedido activo en cliente seleccionado
 const hasActiveOrder = computed(() => {
     return clientMode.value === 'search' && !!selectedCustomer.value?.active_order;
 });
 
-// Promoción semanal 9+1
-const promoApplied = computed(() => {
-    if (totalDeliveredBottles.value <= 0) return false;
-    const promo = selectedCustomer.value?.weekly_promo;
-    if (promo?.can_redeem) return true;
-    const paidInWeek = promo?.paid_count || 0;
-    const paidNow = unitsPaidCash.value || 0;
-    if (promo && (paidInWeek + paidNow >= promo.required) && (totalDeliveredBottles.value - paidNow) > 0) {
-        return true;
-    }
-    return false;
-});
-
-const unitsToCharge = computed(() => {
-    const total = totalDeliveredBottles.value;
-    if (total <= 0) return 0;
-    return promoApplied.value ? Math.max(0, total - 1) : total;
-});
-
-// Cobro
-const unitsPaidCash = ref(unitsToCharge.value);
-watch(unitsToCharge, (newVal) => {
-    unitsPaidCash.value = newVal;
-});
-
-const unitsToCredit = computed(() => {
-    return Math.max(0, unitsToCharge.value - unitsPaidCash.value);
-});
-
-const currentDebtBottles = computed(() => {
-    return selectedCustomer.value?.traffic_light?.pending_bottles || 0;
-});
-
-const creditLimit = computed(() => {
-    if (clientMode.value === 'new') {
-        return Number(props.max_pending_payment_bottles ?? 0);
-    }
-    return Number(selectedCustomer.value?.traffic_light?.limit ?? props.max_pending_payment_bottles ?? 0);
-});
-
-const availableCreditMargin = computed(() => {
-    return Math.max(0, creditLimit.value - currentDebtBottles.value);
-});
-
-const isCreditExceeded = computed(() => {
-    if (clientMode.value === 'new') {
-        // Cliente nuevo empieza con 0 deuda, límite configurable
-        return unitsToCredit.value > creditLimit.value;
-    }
-    if (unitsToCredit.value <= 0) return false;
-    return unitsToCredit.value > availableCreditMargin.value;
-});
-
-const cashAmountToPay = computed(() => {
-    return Math.round(unitsPaidCash.value * props.unit_price * 100) / 100;
-});
-
-const cashTendered = ref(cashAmountToPay.value);
-watch(cashAmountToPay, (newVal) => {
-    cashTendered.value = newVal;
-});
-
-const changeReturned = computed(() => {
-    const diff = Number(cashTendered.value || 0) - cashAmountToPay.value;
-    return diff > 0 ? Math.round(diff * 100) / 100 : 0;
-});
-
-const setQuickCash = (val) => {
-    if (val === 'exact') {
-        cashTendered.value = cashAmountToPay.value;
-    } else {
-        cashTendered.value = val;
-    }
-};
-
-// Formulario de Envío
+// -------------------------------------------------------------------------
+// 3. ENVÍO DEL PEDIDO AL PASO
+// -------------------------------------------------------------------------
 const form = useForm({
     customer_id: null,
     nickname: '',
@@ -196,41 +158,58 @@ const form = useForm({
     neighborhood: '',
     delivery_zone: '',
     reference: '',
-    exchange_quantity: 1,
-    exchange_empty_received: 1,
+    service_type: '',
+    exchange_quantity: 0,
+    exchange_empty_received: 0,
     fixed_quantity: 0,
-    units_paid_cash: 1,
-    cash_tendered: 15,
+    units_paid_cash: 0,
+    cash_tendered: 0,
 });
 
 const submitDirectOrder = () => {
+    if (!selectedService.value) {
+        alert('Por favor elige primero el servicio: Fijos o Cambios.');
+        return;
+    }
+
     if (clientMode.value === 'search' && !selectedCustomer.value) {
-        alert('Debes buscar y seleccionar un cliente o cambiar a la pestaña "Nuevo Cliente".');
+        alert('Debes buscar y seleccionar un cliente o registrar un Nuevo Cliente Rápido.');
         return;
     }
 
     if (hasActiveOrder.value) {
-        alert('Este cliente ya cuenta con un pedido activo. No se puede registrar otro pedido hasta que se complete o cancele.');
+        alert('Este cliente ya cuenta con un pedido activo. No se puede registrar otro pedido hasta que concluya el actual.');
         return;
     }
 
-    if (clientMode.value === 'new' && !newCustomer.value.nickname.trim()) {
-        alert('El apodo es obligatorio para el nuevo cliente.');
-        return;
+    if (clientMode.value === 'new') {
+        if (!newCustomer.value.nickname.trim()) {
+            alert('El apodo es obligatorio para registrar un nuevo cliente.');
+            return;
+        }
+        if (!newCustomer.value.delivery_zone) {
+            alert('Por favor especifica la zona de reparto del nuevo cliente (Norte, Sur, Este u Oeste).');
+            return;
+        }
     }
 
-    if (isCreditExceeded.value) {
-        alert(`No es posible fiar ${unitsToCredit.value} botellones.`);
-        return;
-    }
-
-    if (unitsPaidCash.value > 0 && Number(cashTendered.value || 0) < cashAmountToPay.value) {
-        alert(`El efectivo recibido ($${cashTendered.value}) es insuficiente para cubrir los $${cashAmountToPay.value}.`);
-        return;
+    if (selectedService.value === 'cambios') {
+        const fulls = Number(props.truck?.exchange_full_available || 0);
+        if (fulls <= 0) {
+            alert('No tienes cambios llenos disponibles en tu camión.');
+            return;
+        }
+        if (quantity.value > fulls) {
+            alert(`Solo tienes ${fulls} botellones llenos disponibles.`);
+            return;
+        }
     }
 
     if (clientMode.value === 'search') {
         form.customer_id = selectedCustomer.value.id;
+        form.nickname = '';
+        form.name = null;
+        form.phone = null;
     } else {
         form.customer_id = null;
         form.nickname = newCustomer.value.nickname.trim();
@@ -243,11 +222,21 @@ const submitDirectOrder = () => {
         form.reference = newCustomer.value.reference ? newCustomer.value.reference.trim() : null;
     }
 
-    form.exchange_quantity = exchangeQty.value;
-    form.exchange_empty_received = exchangeEmptyReceived.value;
-    form.fixed_quantity = fixedQty.value;
-    form.units_paid_cash = unitsPaidCash.value;
-    form.cash_tendered = cashTendered.value;
+    if (selectedService.value === 'fijos') {
+        form.service_type = 'fijos';
+        form.fixed_quantity = quantity.value;
+        form.exchange_quantity = 0;
+        form.exchange_empty_received = 0;
+        form.units_paid_cash = 0;
+        form.cash_tendered = 0;
+    } else {
+        form.service_type = 'cambios';
+        form.fixed_quantity = 0;
+        form.exchange_quantity = quantity.value;
+        form.exchange_empty_received = quantity.value;
+        form.units_paid_cash = quantity.value;
+        form.cash_tendered = Math.round(quantity.value * props.unit_price * 100) / 100;
+    }
 
     form.post(route('repartidor.direct-service.store'), {
         preserveScroll: true,
@@ -256,136 +245,188 @@ const submitDirectOrder = () => {
 </script>
 
 <template>
-    <Head title="Atender Cliente al Paso · Repartidor" />
+    <Head title="Pedido al paso · Reparto" />
 
     <AuthenticatedLayout>
-        <div class="max-w-2xl mx-auto space-y-4 pb-16">
+        <div class="max-w-2xl mx-auto space-y-4 pb-16 px-2 sm:px-4">
 
             <!-- ========================================================================= -->
-            <!-- 1. ENCABEZADO Y REGRESO                                                    -->
+            <!-- ENCABEZADO Y REGRESO A REPARTO                                            -->
             <!-- ========================================================================= -->
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center justify-between gap-3 pt-1">
                 <Link
-                    :href="route('repartidor.route.index')"
-                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs hover:bg-slate-50 active:scale-95 transition"
+                    :href="route('repartidor.reparto')"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs hover:bg-slate-50 active:scale-95 transition"
                 >
-                    <span>⬅️</span> Volver a Mi Ruta
+                    <i class="fa-solid fa-arrow-left text-slate-500"></i>
+                    <span>Volver a Reparto</span>
                 </Link>
 
                 <div class="text-right">
                     <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Servicio en Ruta</span>
-                    <span class="text-xs font-extrabold text-blue-900">Cliente al Paso</span>
+                    <span class="text-sm font-extrabold text-blue-900">Pedido al paso</span>
                 </div>
             </div>
 
-            <!-- Alertas de error -->
-            <div v-if="flashError" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold">
-                {{ flashError }}
+            <!-- Alerta flash de error -->
+            <div v-if="flashError" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
+                <i class="fa-solid fa-circle-exclamation text-rose-600 shrink-0"></i>
+                <span>{{ flashError }}</span>
             </div>
 
-            <!-- Aviso y acción para iniciar ruta si no hay una en curso -->
+            <!-- ========================================================================= -->
+            <!-- 1. ELIGE EL SERVICIO PRIMERO                                              -->
+            <!-- ========================================================================= -->
+            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3">
+                <div>
+                    <h2 class="text-sm sm:text-base font-black text-slate-900">1. Elige el servicio</h2>
+                    <p class="text-xs text-slate-500">Selecciona qué operación realizarás con el cliente</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- BOTÓN FIJOS -->
+                    <button
+                        type="button"
+                        @click="selectService('fijos')"
+                        class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative"
+                        :class="selectedService === 'fijos'
+                            ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
+                    >
+                        <div
+                            class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
+                            :class="selectedService === 'fijos' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
+                        >
+                            <i class="fa-solid fa-bottle-water"></i>
+                        </div>
+                        <div class="flex-1 min-w-0 pr-6">
+                            <div class="text-base font-black text-slate-900">Fijos</div>
+                            <p class="text-xs text-slate-600 mt-0.5 leading-snug">Recoger para llenar en Planta</p>
+                        </div>
+                        <div
+                            v-if="selectedService === 'fijos'"
+                            class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
+                        >
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                    </button>
+
+                    <!-- BOTÓN CAMBIOS -->
+                    <button
+                        type="button"
+                        @click="selectService('cambios')"
+                        class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative"
+                        :class="selectedService === 'cambios'
+                            ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
+                    >
+                        <div
+                            class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
+                            :class="selectedService === 'cambios' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
+                        >
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </div>
+                        <div class="flex-1 min-w-0 pr-6">
+                            <div class="text-base font-black text-slate-900">Cambios</div>
+                            <p class="text-xs text-slate-600 mt-0.5 leading-snug">Cambiar vacíos por llenos</p>
+                        </div>
+                        <div
+                            v-if="selectedService === 'cambios'"
+                            class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
+                        >
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- 2. BÚSQUEDA / NUEVO CLIENTE (Visible tras elegir servicio)                  -->
+            <!-- ========================================================================= -->
             <div
-                v-if="!activeRoute || activeRoute.status !== 'in_progress'"
-                class="p-4 rounded-2xl bg-blue-50 border border-blue-200/80 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                v-if="selectedService"
+                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4 animate-fade-in"
             >
-                <div class="space-y-0.5">
-                    <span class="font-extrabold text-blue-950 flex items-center gap-1.5 text-sm">
-                        <i class="fa-solid fa-route text-blue-800"></i> No tienes una ruta en curso activa
-                    </span>
-                    <p class="text-blue-800">
-                        Inicia tu recorrido para que los pedidos al paso queden vinculados automáticamente a tu hoja de ruta.
-                    </p>
-                </div>
-                <Link
-                    :href="route('repartidor.route.start-today')"
-                    method="post"
-                    as="button"
-                    class="px-4 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-extrabold rounded-xl text-xs active:scale-95 transition shadow-xs shrink-0 inline-flex items-center gap-1.5"
-                >
-                    <i class="fa-solid fa-play"></i> Iniciar Jornada de Hoy
-                </Link>
-            </div>
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div>
+                        <h2 class="text-sm sm:text-base font-black text-slate-900">2. Cliente</h2>
+                        <p class="text-xs text-slate-500">Busca el cliente o regístralo rápidamente</p>
+                    </div>
 
-            <!-- Existencias en Camión -->
-            <div class="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/70 text-xs flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-truck text-lg text-blue-900"></i>
-                    <span class="font-bold text-blue-950">Existencias en tu camión:</span>
-                </div>
-                <div class="text-right font-extrabold text-blue-900">
-                    <span>{{ truck.exchange_full_available }} llenos</span> /
-                    <span class="text-slate-500">{{ truck.exchange_empty_collected }} vacíos</span>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- 2. SELECTOR DE CLIENTE (BUSCAR O NUEVO)                                    -->
-            <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
-                <div class="flex items-center gap-2 border-b border-slate-100 pb-3">
-                    <button
-                        @click="clientMode = 'search'"
-                        type="button"
-                        class="flex-1 py-2 text-xs sm:text-sm font-black rounded-xl transition text-center inline-flex items-center justify-center gap-1.5"
-                        :class="clientMode === 'search' ? 'bg-blue-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                    >
-                        <i class="fa-solid fa-magnifying-glass"></i> Buscar Cliente
-                    </button>
-                    <button
-                        @click="clientMode = 'new'"
-                        type="button"
-                        class="flex-1 py-2 text-xs sm:text-sm font-black rounded-xl transition text-center inline-flex items-center justify-center gap-1.5"
-                        :class="clientMode === 'new' ? 'bg-blue-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                    >
-                        <i class="fa-solid fa-user-plus"></i> Nuevo Cliente Rápido
-                    </button>
+                    <!-- Toggle de modo de cliente -->
+                    <div class="inline-flex p-1 bg-slate-100 rounded-xl gap-1">
+                        <button
+                            type="button"
+                            @click="clientMode = 'search'"
+                            class="px-3 py-1.5 text-xs font-black rounded-lg transition"
+                            :class="clientMode === 'search' ? 'bg-blue-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+                        >
+                            <i class="fa-solid fa-magnifying-glass mr-1"></i> Buscar
+                        </button>
+                        <button
+                            type="button"
+                            @click="clientMode = 'new'"
+                            class="px-3 py-1.5 text-xs font-black rounded-lg transition"
+                            :class="clientMode === 'new' ? 'bg-blue-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+                        >
+                            <i class="fa-solid fa-user-plus mr-1"></i> Nuevo rápido
+                        </button>
+                    </div>
                 </div>
 
                 <!-- MODO A: BUSCADOR -->
                 <div v-if="clientMode === 'search'" class="space-y-3">
                     <div v-if="!selectedCustomer" class="space-y-2">
-                        <label class="block text-xs font-extrabold text-slate-700">
+                        <label class="block text-xs font-bold text-slate-700">
                             Buscar por apodo, nombre, código o teléfono:
                         </label>
-                        <input
-                            v-model="searchQuery"
-                            @input="onSearchInput"
-                            type="text"
-                            placeholder="Ej. Don Pancho, CLI-001..."
-                            class="w-full text-sm py-2.5 px-3 rounded-xl border border-slate-200 bg-white"
-                        />
+                        <div class="relative">
+                            <input
+                                v-model="searchQuery"
+                                @input="onSearchInput"
+                                type="text"
+                                placeholder="Ej. Don Pancho, Doña Mari, CLI-001..."
+                                class="w-full text-sm py-2.5 pl-9 pr-3 rounded-xl border border-slate-200 bg-white focus:border-blue-900 focus:ring-1 focus:ring-blue-900 transition"
+                            />
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3.5 text-slate-400 text-xs"></i>
+                        </div>
 
                         <!-- Resultados -->
-                        <div v-if="isSearching" class="text-xs text-slate-400 py-2 text-center">Buscando...</div>
-                        <div v-else-if="searchResults.length > 0" class="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-48 overflow-y-auto">
+                        <div v-if="isSearching" class="text-xs text-slate-400 py-2 text-center">Buscando clientes...</div>
+                        <div v-else-if="searchResults.length > 0" class="divide-y divide-slate-100 border border-slate-100 rounded-xl max-h-48 overflow-y-auto shadow-2xs">
                             <button
                                 v-for="c in searchResults"
                                 :key="c.id"
                                 @click="selectCustomer(c)"
                                 type="button"
-                                class="w-full p-2.5 text-left hover:bg-blue-50/50 flex items-center justify-between text-xs transition"
+                                class="w-full p-2.5 text-left hover:bg-blue-50/70 flex items-center justify-between text-xs transition"
                             >
                                 <div>
-                                    <span class="font-bold text-slate-900">{{ c.nickname }}</span>
-                                    <span v-if="c.name" class="text-slate-500 block text-[11px]">{{ c.name }}</span>
+                                    <span class="font-bold text-slate-900 text-sm block">{{ c.nickname }}</span>
+                                    <span v-if="c.name" class="text-slate-500 text-[11px]">{{ c.name }}</span>
                                 </div>
-                                <span class="text-[11px] font-mono text-slate-400">{{ c.code }}</span>
+                                <span class="text-[11px] font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{{ c.code }}</span>
                             </button>
                         </div>
                     </div>
 
                     <!-- Cliente seleccionado -->
                     <div v-else class="space-y-3">
-                        <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs flex items-center justify-between gap-3">
-                            <div>
-                                <span class="font-mono text-[10px] text-emerald-700 font-bold block">{{ selectedCustomer.code }}</span>
-                                <span class="text-base font-black text-emerald-950 block">{{ selectedCustomer.nickname }}</span>
-                                <span v-if="selectedCustomer.name" class="text-slate-600 text-[11px]">{{ selectedCustomer.name }}</span>
+                        <div class="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs flex items-center justify-between gap-3">
+                            <div class="space-y-0.5">
+                                <span class="font-mono text-[10px] text-blue-700 font-bold block">{{ selectedCustomer.code }}</span>
+                                <span class="text-base font-black text-blue-950 block">{{ selectedCustomer.nickname }}</span>
+                                <span v-if="selectedCustomer.name" class="text-slate-600 text-[11px] block">{{ selectedCustomer.name }}</span>
+                                <span v-if="selectedCustomer.phone" class="text-slate-500 text-[11px] block"><i class="fa-solid fa-phone text-[10px]"></i> {{ selectedCustomer.phone }}</span>
+                                <span v-if="selectedCustomer.address?.zone_label" class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100/70 px-2 py-0.5 rounded-md mt-1">
+                                    <i class="fa-solid fa-location-dot text-[10px]"></i>
+                                    {{ selectedCustomer.address.zone_label }}
+                                </span>
                             </div>
                             <button
                                 @click="clearSelectedCustomer"
                                 type="button"
-                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50"
+                                class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 active:scale-95 transition shadow-2xs shrink-0"
                             >
                                 Cambiar
                             </button>
@@ -393,49 +434,17 @@ const submitDirectOrder = () => {
 
                         <!-- ALERTA SI TIENE PEDIDO ACTIVO -->
                         <div
-                            v-if="selectedCustomer.active_order"
-                            class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-3"
+                            v-if="hasActiveOrder"
+                            class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2"
                         >
                             <div class="flex items-center gap-2 font-black text-amber-900">
-                                <i class="fa-solid fa-triangle-exclamation text-amber-700"></i>
+                                <i class="fa-solid fa-triangle-exclamation text-amber-700 text-base"></i>
                                 <span>El cliente ya cuenta con un pedido activo</span>
                             </div>
                             <p class="text-amber-800 leading-relaxed">
                                 Pedido <strong>{{ selectedCustomer.active_order.folio }}</strong> en estado <strong>{{ selectedCustomer.active_order.status_label }}</strong>.
-                                Por regla de negocio, cada cliente tiene un único pedido activo a la vez. Puedes atender la operación pendiente directamente:
+                                Por regla de negocio, cada cliente tiene un único pedido activo a la vez. No es posible crear otro pedido al paso hasta que concluya.
                             </p>
-                            <div class="flex items-center gap-2 flex-wrap pt-1">
-                                <Link
-                                    v-if="selectedCustomer.active_order.stop_id"
-                                    :href="route('repartidor.stops.serve', selectedCustomer.active_order.stop_id)"
-                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs hover:bg-emerald-700 transition shadow-2xs"
-                                >
-                                    <i class="fa-solid fa-bottle-water"></i> Atender Parada en Mi Ruta
-                                </Link>
-                                <Link
-                                    v-else-if="selectedCustomer.active_order.is_fixed"
-                                    :href="route('repartidor.collections.index')"
-                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white font-extrabold text-xs hover:bg-amber-700 transition shadow-2xs"
-                                >
-                                    <i class="fa-solid fa-hand-holding-hand"></i> Ir a Por Recoger
-                                </Link>
-                                <Link
-                                    v-else
-                                    :href="route('repartidor.deliveries.index')"
-                                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-900 text-white font-extrabold text-xs hover:bg-blue-800 transition shadow-2xs"
-                                >
-                                    <i class="fa-solid fa-truck-ramp-box"></i> Ir a Por Entregar
-                                </Link>
-                            </div>
-                        </div>
-
-                        <!-- Promoción semanal del cliente si aplica -->
-                        <div
-                            v-if="selectedCustomer.weekly_promo"
-                            class="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-xs flex items-center justify-between text-blue-900"
-                        >
-                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-gift text-blue-700"></i> Promoción semanal:</span>
-                            <span class="font-bold">{{ selectedCustomer.weekly_promo.label }}</span>
                         </div>
                     </div>
                 </div>
@@ -443,23 +452,25 @@ const submitDirectOrder = () => {
                 <!-- MODO B: ALTA RÁPIDA -->
                 <div v-else class="space-y-3 text-xs">
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">Apodo del cliente <span class="text-rose-500">*</span>:</label>
+                        <label class="block font-bold text-slate-700 mb-1">
+                            Apodo del cliente <span class="text-rose-500">*</span>:
+                        </label>
                         <input
                             v-model="newCustomer.nickname"
                             type="text"
-                            placeholder="Ej. Tienda Doña Mary, Carnicería el Toro..."
-                            class="w-full text-sm py-2 px-3 rounded-xl border border-slate-200 bg-white"
+                            placeholder="Ej. Tienda Doña Mary, Taller Mecánico..."
+                            class="w-full text-sm py-2 px-3 rounded-xl border border-slate-200 bg-white focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                         />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                             <label class="block font-bold text-slate-700 mb-1">Nombre (opcional):</label>
                             <input
                                 v-model="newCustomer.name"
                                 type="text"
                                 placeholder="Nombre completo"
-                                class="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white"
+                                class="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                             />
                         </div>
                         <div>
@@ -468,213 +479,238 @@ const submitDirectOrder = () => {
                                 v-model="newCustomer.phone"
                                 type="text"
                                 placeholder="10 dígitos"
-                                class="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white"
+                                class="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                             />
                         </div>
                     </div>
 
+                    <!-- Selector de Zona de Reparto -->
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1.5">
+                            Zona de reparto <span class="text-rose-500">*</span>:
+                        </label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <button
+                                v-for="zone in availableZones"
+                                :key="zone.id"
+                                type="button"
+                                @click="newCustomer.delivery_zone = zone.id"
+                                class="py-2.5 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 min-h-[44px] select-none cursor-pointer"
+                                :class="newCustomer.delivery_zone === zone.id
+                                    ? 'bg-blue-900 text-white border-blue-900 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:bg-slate-100'"
+                            >
+                                <i
+                                    class="fa-solid fa-location-dot text-xs"
+                                    :class="newCustomer.delivery_zone === zone.id ? 'text-blue-300' : 'text-slate-400'"
+                                ></i>
+                                <span>{{ zone.label }}</span>
+                            </button>
+                        </div>
+                        <p v-if="!newCustomer.delivery_zone" class="text-[11px] text-amber-600 mt-1 flex items-center gap-1 font-medium">
+                            <i class="fa-solid fa-circle-info"></i> Selecciona la zona para ubicar al cliente en el listado de reparto.
+                        </p>
+                    </div>
+
                     <p class="text-[11px] text-slate-400 italic">
-                        * No se exige cuenta de correo, contraseña ni domicilio para registrar al cliente en el momento.
+                        * No se exige cuenta de correo, contraseña ni domicilio detallado para registrar al cliente en el momento.
                     </p>
                 </div>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 3. OPERACIÓN DE BOTELLONES                                                -->
+            <!-- 3. CANTIDAD DEL SERVICIO (Visible tras elegir servicio)                    -->
             <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
-                <h3 class="font-extrabold text-blue-950 text-sm sm:text-base border-b border-slate-100 pb-2 flex items-center gap-2">
-                    <i class="fa-solid fa-bottle-water text-blue-900"></i> Cantidades del Servicio
-                </h3>
 
-                <!-- Botellones de Cambio -->
-                <div class="space-y-3">
-                    <div class="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                            <label class="block font-bold text-slate-700 mb-1">Vacíos que entrega el cliente:</label>
-                            <div class="flex items-center gap-2">
-                                <button
-                                    @click="exchangeEmptyReceived = Math.max(0, exchangeEmptyReceived - 1)"
-                                    type="button"
-                                    class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                                >-</button>
-                                <input
-                                    v-model.number="exchangeEmptyReceived"
-                                    type="number"
-                                    min="0"
-                                    class="w-full text-center font-black py-2 rounded-xl border border-slate-200"
-                                />
-                                <button
-                                    @click="exchangeEmptyReceived = exchangeEmptyReceived + 1"
-                                    type="button"
-                                    class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                                >+</button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block font-bold text-slate-700 mb-1">Llenos que solicita:</label>
-                            <div class="flex items-center gap-2">
-                                <button
-                                    @click="exchangeQty = Math.max(0, exchangeQty - 1)"
-                                    type="button"
-                                    class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                                >-</button>
-                                <input
-                                    v-model.number="exchangeQty"
-                                    type="number"
-                                    min="0"
-                                    class="w-full text-center font-black py-2 rounded-xl border border-slate-200 text-blue-950"
-                                />
-                                <button
-                                    @click="exchangeQty = exchangeQty + 1"
-                                    type="button"
-                                    class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                                >+</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="p-2.5 rounded-xl bg-slate-50 text-xs flex justify-between text-slate-600">
-                        <span>Llenos efectivamente entregados:</span>
-                        <span class="font-black text-blue-950 text-sm">{{ exchangeDelivered }} garrafones</span>
-                    </div>
-                </div>
-
-                <!-- Botellones Fijos para recoger -->
-                <div class="pt-3 border-t border-slate-100 space-y-2">
-                    <label class="block text-xs font-bold text-purple-900">
-                        Botellones fijos a recoger (Llevando a planta):
-                    </label>
-                    <div class="flex items-center gap-2">
-                        <button
-                            @click="fixedQty = Math.max(0, fixedQty - 1)"
-                            type="button"
-                            class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                        >-</button>
-                        <input
-                            v-model.number="fixedQty"
-                            type="number"
-                            min="0"
-                            class="w-24 text-center font-black py-2 rounded-xl border border-slate-200 text-purple-950"
-                        />
-                        <button
-                            @click="fixedQty = fixedQty + 1"
-                            type="button"
-                            class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                        >+</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- 4. COBRO DE CONTADO Y FIADO                                               -->
-            <!-- ========================================================================= -->
+            <!-- CASO A: SI ELIGE FIJOS -->
             <div
-                v-if="totalDeliveredBottles > 0"
+                v-if="selectedService === 'fijos'"
                 class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
             >
-                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <h3 class="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                        <i class="fa-solid fa-cash-register text-slate-800"></i> Cobro en Ruta
-                    </h3>
-                    <span class="text-xs font-mono font-bold text-slate-500">${{ unit_price }} c/u</span>
+                <div class="border-b border-slate-100 pb-2.5">
+                    <h2 class="text-sm sm:text-base font-black text-slate-900">3. Cantidad</h2>
+                    <p class="text-xs text-slate-500">¿Cuántos fijos recogiste?</p>
                 </div>
 
-                <!-- Unidades de contado -->
-                <div class="space-y-2 text-xs">
-                    <div class="flex items-center justify-between">
-                        <label class="font-extrabold text-slate-800">¿Cuántos paga de contado?</label>
-                        <span class="font-black text-blue-900">{{ unitsPaidCash }} de {{ totalDeliveredBottles }}</span>
+                <!-- Campo de cantidad con stepper táctil grande -->
+                <div class="space-y-3 py-2">
+                    <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Botellones fijos de 20 L a recoger:
+                    </label>
+
+                    <div class="flex items-center justify-center gap-4">
+                        <!-- Botón Menos (>= 48x48px) -->
+                        <button
+                            type="button"
+                            @click="decrementQty"
+                            :disabled="quantity <= 1"
+                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs"
+                        >
+                            <i class="fa-solid fa-minus"></i>
+                        </button>
+
+                        <!-- Input / Visualizador de Cantidad -->
+                        <div class="text-center">
+                            <input
+                                :value="quantity"
+                                @input="setQuantityValue($event.target.value)"
+                                type="number"
+                                min="1"
+                                class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
+                            />
+                            <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                {{ quantity === 1 ? 'Botellón fijo' : 'Botellones fijos' }}
+                            </span>
+                        </div>
+
+                        <!-- Botón Más (>= 48x48px) -->
+                        <button
+                            type="button"
+                            @click="incrementQty"
+                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 transition flex items-center justify-center shadow-sm"
+                        >
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
                     </div>
 
-                    <div class="flex items-center gap-2">
-                        <button
-                            @click="unitsPaidCash = Math.max(0, unitsPaidCash - 1)"
-                            type="button"
-                            class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                        >-</button>
-                        <input
-                            v-model.number="unitsPaidCash"
-                            type="number"
-                            min="0"
-                            :max="totalDeliveredBottles"
-                            class="w-full text-center font-black py-2 rounded-xl border border-slate-200 text-emerald-950"
-                        />
-                        <button
-                            @click="unitsPaidCash = Math.min(totalDeliveredBottles, unitsPaidCash + 1)"
-                            type="button"
-                            class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-lg active:scale-95"
-                        >+</button>
-                    </div>
-
-                    <div v-if="unitsToCredit > 0" class="p-2.5 rounded-xl text-xs" :class="isCreditExceeded ? 'bg-rose-100 text-rose-900 font-bold border border-rose-200' : 'bg-amber-50 text-amber-900 font-bold'">
-                        <template v-if="creditLimit === 0">
-                            Fiado deshabilitado (Límite: 0). No se pueden fiar {{ unitsToCredit }} botellones.
-                        </template>
-                        <template v-else-if="isCreditExceeded">
-                            Límite excedido. Solo puedes fiar hasta {{ availableCreditMargin }} botellones.
-                        </template>
-                        <template v-else>
-                            Botellones fiados: {{ unitsToCredit }} (Margen disponible: {{ availableCreditMargin }})
-                        </template>
-                    </div>
+                    <p class="text-[11px] text-center text-slate-500 pt-1">
+                        Esta operación se puede registrar aunque el camión tenga cero cambios llenos. Las unidades pasan directamente a <strong>Planta → Por recibir</strong>.
+                    </p>
                 </div>
 
-                <!-- Efectivo recibido -->
-                <div v-if="unitsPaidCash > 0" class="space-y-3 pt-2 border-t border-slate-100 text-xs">
-                    <div class="flex items-center justify-between">
-                        <span class="font-bold text-slate-600">Total a cobrar:</span>
-                        <span class="text-2xl font-black text-emerald-950">${{ cashAmountToPay }}</span>
-                    </div>
-
-                    <div>
-                        <label class="block font-bold text-slate-700 mb-1">Efectivo recibido ($):</label>
-                        <input
-                            v-model.number="cashTendered"
-                            type="number"
-                            step="0.5"
-                            class="w-full text-xl font-black py-2 px-3 rounded-xl border border-slate-200 bg-white"
-                        />
-                    </div>
-
-                    <!-- Botones rápidos -->
-                    <div class="flex gap-2 flex-wrap">
-                        <button
-                            @click="setQuickCash('exact')"
-                            type="button"
-                            class="px-3 py-1.5 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 active:scale-95"
-                        >Exacto</button>
-                        <button
-                            v-for="amt in [50, 100, 200]"
-                            :key="amt"
-                            v-show="amt >= cashAmountToPay"
-                            @click="setQuickCash(amt)"
-                            type="button"
-                            class="px-3 py-1.5 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 active:scale-95"
-                        >${{ amt }}</button>
-                    </div>
-
-                    <div v-if="changeReturned > 0" class="p-2.5 rounded-xl bg-emerald-50 text-emerald-900 font-black text-xs">
-                        Cambio: ${{ changeReturned }}
-                    </div>
+                <!-- Resumen previo al botón -->
+                <div class="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-center font-bold text-blue-950 text-xs sm:text-sm">
+                    Recoges {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }} para enviar a Planta
                 </div>
+
+                <!-- Botón de Confirmación Principal -->
+                <button
+                    type="button"
+                    @click="submitDirectOrder"
+                    :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
+                    class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    <span>Registrar recogida de {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }}</span>
+                </button>
             </div>
 
-            <!-- ========================================================================= -->
-            <!-- 5. CONFIRMAR                                                              -->
-            <!-- ========================================================================= -->
-            <button
-                @click="submitDirectOrder"
-                :disabled="form.processing || hasActiveOrder || isCreditExceeded || (unitsPaidCash > 0 && cashTendered < cashAmountToPay)"
-                type="button"
-                class="w-full py-4 rounded-2xl text-base font-black bg-blue-600 text-white hover:bg-blue-700 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+            <!-- CASO B: SI ELIGE CAMBIOS -->
+            <div
+                v-if="selectedService === 'cambios'"
+                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
             >
-                <span v-if="hasActiveOrder" class="inline-flex items-center gap-1.5"><i class="fa-solid fa-triangle-exclamation"></i> Cliente ya cuenta con pedido activo</span>
-                <span v-else class="inline-flex items-center gap-1.5"><i class="fa-solid fa-check"></i> Confirmar Servicio Directo en Ruta</span>
-            </button>
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div>
+                        <h2 class="text-sm sm:text-base font-black text-slate-900">3. Cantidad</h2>
+                        <p class="text-xs text-slate-500">¿Cuántos cambios vas a hacer?</p>
+                    </div>
+
+                    <!-- Llenos disponibles en el camión -->
+                    <div
+                        class="px-3 py-1.5 rounded-full text-xs font-black inline-flex items-center gap-1.5"
+                        :class="truck.exchange_full_available > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'"
+                    >
+                        <i class="fa-solid fa-truck"></i>
+                        <span>{{ truck.exchange_full_available }} llenos en camión</span>
+                    </div>
+                </div>
+
+                <!-- Aviso si camión tiene 0 cambios llenos -->
+                <div
+                    v-if="truck.exchange_full_available <= 0"
+                    class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2"
+                >
+                    <div class="flex items-center gap-2 font-black text-amber-900 text-sm">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-700"></i>
+                        <span>No tienes cambios llenos disponibles</span>
+                    </div>
+                    <p class="text-amber-800 leading-relaxed">
+                        Tu camión no cuenta con botellones de cambio llenos para entregar en este momento. Puedes seguir atendiendo al cliente cambiando al servicio de <strong>Fijos</strong> para recoger sus envases y llevarlos a Planta.
+                    </p>
+                    <button
+                        type="button"
+                        @click="selectService('fijos')"
+                        class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs active:scale-95 transition inline-flex items-center gap-1.5"
+                    >
+                        <i class="fa-solid fa-bottle-water"></i> Cambiar a Fijos
+                    </button>
+                </div>
+
+                <!-- Campo de cantidad con stepper táctil si hay existencias -->
+                <div v-else class="space-y-3 py-2">
+                    <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Cantidad de cambios a realizar:
+                    </label>
+
+                    <div class="flex items-center justify-center gap-4">
+                        <!-- Botón Menos (>= 48x48px) -->
+                        <button
+                            type="button"
+                            @click="decrementQty"
+                            :disabled="quantity <= 1"
+                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs"
+                        >
+                            <i class="fa-solid fa-minus"></i>
+                        </button>
+
+                        <!-- Input / Visualizador de Cantidad -->
+                        <div class="text-center">
+                            <input
+                                :value="quantity"
+                                @input="setQuantityValue($event.target.value)"
+                                type="number"
+                                min="1"
+                                :max="truck.exchange_full_available"
+                                class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
+                            />
+                            <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                {{ quantity === 1 ? 'Cambio' : 'Cambios' }}
+                            </span>
+                        </div>
+
+                        <!-- Botón Más (>= 48x48px) -->
+                        <button
+                            type="button"
+                            @click="incrementQty"
+                            :disabled="quantity >= truck.exchange_full_available"
+                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-sm"
+                        >
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+
+                    <p class="text-[11px] text-center text-slate-400">
+                        Máximo disponible en camión: {{ truck.exchange_full_available }} unidades
+                    </p>
+                </div>
+
+                <!-- Resumen automático inmediatamente arriba del botón -->
+                <div
+                    v-if="truck.exchange_full_available > 0"
+                    class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center space-y-1"
+                >
+                    <p class="text-sm sm:text-base font-black text-blue-950">
+                        Entregas {{ quantity }} {{ quantity === 1 ? 'lleno' : 'llenos' }} · Recibes {{ quantity }} {{ quantity === 1 ? 'vacío' : 'vacíos' }}
+                    </p>
+                    <p class="text-xs text-blue-800 font-bold">
+                        {{ quantity }} × ${{ unit_price }} = ${{ Math.round(quantity * unit_price * 100) / 100 }} MXN
+                    </p>
+                </div>
+
+                <!-- Botón de Confirmación Principal -->
+                <button
+                    v-if="truck.exchange_full_available > 0"
+                    type="button"
+                    @click="submitDirectOrder"
+                    :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
+                    class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    <span>Confirmar {{ quantity }} {{ quantity === 1 ? 'cambio' : 'cambios' }}</span>
+                </button>
+            </div>
 
         </div>
     </AuthenticatedLayout>
 </template>
-

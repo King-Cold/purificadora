@@ -137,6 +137,14 @@ class Order extends Model
     }
 
     /**
+     * Alias para compatibilidad con paradas de ruta.
+     */
+    public function stops(): HasMany
+    {
+        return $this->routeStops();
+    }
+
+    /**
      * Cargos por unidades entregadas.
      */
     public function charges(): HasMany

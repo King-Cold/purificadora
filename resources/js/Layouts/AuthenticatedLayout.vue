@@ -175,7 +175,7 @@ const shortName = computed(() => {
                                 <div class="h-8 w-8 rounded-full bg-blue-900 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                                     {{ getInitials($page.props.auth.user.name) }}
                                 </div>
-                                <span class="max-w-[110px] sm:max-w-[150px] truncate font-semibold text-slate-800 text-xs sm:text-sm">
+                                <span class="hidden sm:inline-block max-w-[150px] truncate font-semibold text-slate-800 text-xs sm:text-sm">
                                     {{ shortName }}
                                 </span>
                                 <svg

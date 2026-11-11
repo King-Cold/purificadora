@@ -189,8 +189,19 @@ class OrderService
         }
 
         // Restricción a roles operativos ajenos
-        if ($user->hasRole('Repartidor') || $user->hasRole('Operador Planta')) {
-            throw new OrderBusinessRuleException('No tienes permisos para cancelar pedidos.', 'authorization', 403);
+        if ($user->hasRole('Operador Planta')) {
+            throw new OrderBusinessRuleException('El Operador de Planta no tiene permisos para cancelar pedidos.', 'authorization', 403);
+        }
+
+        // El Repartidor solo puede cancelar pedidos en visita si no se han recogido botellones aún
+        if ($user->hasRole('Repartidor')) {
+            if ($order->hasCollectedFixedCustody() || $order->hasStartedPhysicalAttention()) {
+                throw new OrderBusinessRuleException(
+                    'No se puede cancelar el pedido porque ya se recogieron botellones o existe custodia en curso. Se debe procesar la devolución de envases.',
+                    'custody',
+                    422
+                );
+            }
         }
 
         // Validar pertenencia si quien cancela es Cliente

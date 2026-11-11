@@ -34,12 +34,17 @@ class OrderCustodyService
             }
 
             $pendingToCollect = $fixedItem->quantity - $fixedItem->collected_quantity - $fixedItem->cancelled_quantity;
-            if ($quantity > $pendingToCollect) {
-                throw new OrderBusinessRuleException("No se pueden recolectar {$quantity} fijos. Máximo pendiente: {$pendingToCollect}.", 'quantity', 422);
+            $customerMax = max($pendingToCollect, (int) ($lockedOrder->customer?->fixed_bottles_count ?? $pendingToCollect));
+            if ($quantity > $customerMax) {
+                throw new OrderBusinessRuleException("No se pueden recolectar {$quantity} fijos. Máximo permitido del cliente: {$customerMax}.", 'quantity', 422);
             }
 
+            $newCollected = (int) $fixedItem->collected_quantity + $quantity;
+            $newQuantity = max((int) $fixedItem->quantity, $newCollected);
+
             $fixedItem->update([
-                'collected_quantity' => $fixedItem->collected_quantity + $quantity,
+                'quantity' => $newQuantity,
+                'collected_quantity' => $newCollected,
                 'status' => OrderItem::STATUS_TRANSPORTING_TO_PLANT,
             ]);
 

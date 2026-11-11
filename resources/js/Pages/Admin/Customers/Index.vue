@@ -90,6 +90,32 @@ const getInitials = (customer) => {
     }
     return text.substring(0, 2).toUpperCase();
 };
+
+// Control de borrado de cliente
+const customerToDelete = ref(null);
+const isDeleting = ref(false);
+
+const confirmDelete = (customer) => {
+    customerToDelete.value = customer;
+};
+
+const cancelDelete = () => {
+    customerToDelete.value = null;
+};
+
+const deleteCustomer = () => {
+    if (!customerToDelete.value) return;
+    isDeleting.value = true;
+    router.delete(route('admin.customers.destroy', customerToDelete.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            customerToDelete.value = null;
+        },
+        onFinish: () => {
+            isDeleting.value = false;
+        },
+    });
+};
 </script>
 
 <template>
@@ -326,19 +352,28 @@ const getInitials = (customer) => {
                                 </Link>
                                 <div v-else></div>
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                     <Link
                                         :href="route('admin.customers.edit', customer.id)"
-                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+                                        class="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
                                     >
                                         Editar
                                     </Link>
                                     <Link
                                         :href="route('admin.customers.show', customer.id)"
-                                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 transition"
+                                        class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 transition"
                                     >
                                         Detalles
                                     </Link>
+                                    <button
+                                        type="button"
+                                        @click="confirmDelete(customer)"
+                                        class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition inline-flex items-center gap-1 cursor-pointer"
+                                        title="Borrar cliente"
+                                    >
+                                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                        <span>Borrar</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -506,6 +541,16 @@ const getInitials = (customer) => {
                                                 <i class="fa-solid fa-eye text-[10px]"></i>
                                                 <span>Ver</span>
                                             </Link>
+
+                                            <button
+                                                type="button"
+                                                @click="confirmDelete(customer)"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition shadow-2xs cursor-pointer"
+                                                title="Borrar cliente"
+                                            >
+                                                <i class="fa-solid fa-trash-can text-[10px] text-rose-600"></i>
+                                                <span>Borrar</span>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -566,6 +611,51 @@ const getInitials = (customer) => {
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Modal de confirmación para eliminar cliente -->
+        <div
+            v-if="customerToDelete"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            @click.self="cancelDelete"
+        >
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-in">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">¿Eliminar este cliente?</h3>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Estás a punto de eliminar a <strong>{{ customerToDelete.nickname || customerToDelete.name }}</strong> ({{ customerToDelete.code }}).
+                        </p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    El cliente será dado de baja del catálogo y dejará de aparecer en las listas de pedidos y rutas activas.
+                </p>
+
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        :disabled="isDeleting"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        @click="deleteCustomer"
+                        :disabled="isDeleting"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                        <span>{{ isDeleting ? 'Borrando...' : 'Sí, borrar cliente' }}</span>
+                    </button>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>

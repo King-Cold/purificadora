@@ -45,6 +45,7 @@ class TruckLoadController extends Controller
             'truckInventory' => $state['truck_inventory'],
             'fixedByCustomer' => $state['fixed_by_customer'],
             'pendingTransfers' => $state['pending_transfers'],
+            'pendingUnloads' => $state['pending_unloads'] ?? [],
             'recentMovements' => $state['recent_movements'],
             'canManage' => $user->hasRole('Repartidor') || $user->can('bottles.manage'),
         ]);
@@ -180,6 +181,33 @@ class TruckLoadController extends Controller
             return back()->with('success', 'Descarga registrada y enviada a planta para su confirmación física.');
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['unload' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Reporta un inconveniente de botellones de cambio desde la unidad del Repartidor.
+     */
+    public function reportInconvenience(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->hasRole('Repartidor') && !$user->can('bottles.manage') && !$user->hasRole(['Administrador', 'Super Admin'])) {
+            abort(403, 'No autorizado para reportar inconvenientes.');
+        }
+
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1'],
+            'origin_stage' => ['required', 'string', 'in:truck_full,truck_empty,plant_empty,plant_full'],
+            'reason' => ['required', 'string', 'max:100'],
+            'location_status' => ['required', 'string', 'in:separado,sin_localizar'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            app(\App\Services\PlantInventoryService::class)->reportExchangeInconvenience($user, $validated);
+
+            return back()->with('success', 'Inconveniente reportado. Las unidades afectadas pasaron a «En revisión».');
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['transfer' => $e->getMessage()]);
         }
     }
 }

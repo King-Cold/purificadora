@@ -11,6 +11,8 @@ use App\Models\DeliveryRoute;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\OrderItem;
+use App\Models\OrderPayment;
+use App\Models\OrderStatusHistory;
 use App\Models\RouteStop;
 use App\Services\DebtAndCreditService;
 use App\Services\DeliveryRouteService;
@@ -740,6 +742,14 @@ class RouteExecutionController extends Controller
         try {
             if ($customerId) {
                 $customer = Customer::findOrFail($customerId);
+                $exchangeQty = max(0, (int) $request->input('exchange_quantity', 0));
+                $fixedQty = max(0, (int) $request->input('fixed_quantity', 0));
+                if ($fixedQty > (int) $customer->fixed_bottles_count) {
+                    $customer->update(['fixed_bottles_count' => $fixedQty]);
+                }
+                if ($exchangeQty > (int) $customer->exchange_bottles_count) {
+                    $customer->update(['exchange_bottles_count' => $exchangeQty]);
+                }
             } else {
                 $custValidated = $request->validate([
                     'nickname' => ['required', 'string', 'max:100'],
@@ -770,7 +780,7 @@ class RouteExecutionController extends Controller
 
             $order = $this->routeService->registerDirectRouteOrder($user, $customer, $request->all(), $activeRoute);
 
-            return redirect()->route('repartidor.route.index')->with('success', "Servicio directo registrado exitosamente (Folio {$order->folio}).");
+            return redirect()->route('repartidor.reparto')->with('success', "Servicio directo registrado exitosamente (Folio {$order->folio}).");
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors(['direct' => $e->getMessage()]);
         }
@@ -900,56 +910,428 @@ class RouteExecutionController extends Controller
 
     /**
      * Confirma la recolección física de botellones fijos vacíos.
+     * Soporta recogida regular y recogida con pago anticipado simultáneo.
      */
     public function collectFixed(Order $order, Request $request): RedirectResponse
     {
         $user = $request->user();
         $fixedItem = $order->items()->where('type', OrderItem::TYPE_FIXED)->firstOrFail();
         $pendingToCollect = max(0, (int) $fixedItem->quantity - (int) $fixedItem->collected_quantity - (int) $fixedItem->cancelled_quantity);
+        $customerFixedMax = max($pendingToCollect, (int) ($order->customer?->fixed_bottles_count ?? $pendingToCollect));
+
+        if (!$request->has('quantity') && $request->has('collected_quantity')) {
+            $request->merge(['quantity' => $request->input('collected_quantity')]);
+        }
 
         $validated = $request->validate([
-            'quantity' => ['required', 'integer', 'min:1', "max:{$pendingToCollect}"],
+            'quantity' => ['required', 'integer', 'min:1', "max:{$customerFixedMax}"],
+            'is_advance_payment' => ['nullable', 'boolean'],
+            'cash_tendered' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'collection_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $quantity = (int) $validated['quantity'];
+        $isAdvance = !empty($validated['is_advance_payment']);
+        $notes = $validated['notes'] ?? $validated['collection_notes'] ?? null;
+
+        $refillPrice = (float) (\App\Models\BottlePresentation::where('capacity', 20.00)
+            ->where('is_available_for_delivery', true)
+            ->first()?->refill_price ?? 15.00);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($order, $fixedItem, $quantity, $isAdvance, $validated, $refillPrice, $user, $notes) {
+                // 1. Recolección física en custodia
+                $this->custodyService->recordFixedBottlesCollected(
+                    $order,
+                    $quantity,
+                    $user,
+                    $notes ?: ($isAdvance ? 'Recolección física con pago anticipado' : 'Recolección física en domicilio - Llevando a planta')
+                );
+
+                // 2. Si es pago anticipado, registrar cargo y pago en la misma transacción atómica
+                if ($isAdvance) {
+                    $exactAmount = round($quantity * $refillPrice, 2);
+                    $cashTendered = isset($validated['cash_tendered']) ? (float) $validated['cash_tendered'] : $exactAmount;
+
+                    if ($cashTendered < $exactAmount) {
+                        throw new OrderBusinessRuleException("El efectivo recibido (\${$cashTendered}) es menor al total requerido (\${$exactAmount}).", 'cash_tendered', 422);
+                    }
+
+                    $charge = OrderCharge::create([
+                        'order_id' => $order->id,
+                        'order_item_id' => $fixedItem->id,
+                        'customer_id' => $order->customer_id,
+                        'bottle_type' => OrderItem::TYPE_FIXED,
+                        'quantity_delivered' => $quantity,
+                        'unit_price' => $refillPrice,
+                        'total_amount' => $exactAmount,
+                        'paid_amount' => 0.00,
+                        'status' => OrderCharge::STATUS_PENDING,
+                    ]);
+
+                    $this->debtService->recordPayment(
+                        $order->customer,
+                        $cashTendered,
+                        $user,
+                        $order,
+                        "Pago anticipado por {$quantity} botellones fijos de 20 L",
+                        $quantity
+                    );
+                }
+
+                // Parada de ruta activa si existiera
+                $activeRoute = DeliveryRoute::where('driver_user_id', $user->id)
+                    ->where('status', DeliveryRoute::STATUS_IN_PROGRESS)
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if ($activeRoute) {
+                    $stop = RouteStop::where('delivery_route_id', $activeRoute->id)
+                        ->where('order_id', $order->id)
+                        ->where('status', RouteStop::STATUS_PENDING)
+                        ->first();
+
+                    if ($stop) {
+                        $hasPendingExchange = $order->items()->where('type', OrderItem::TYPE_EXCHANGE)
+                            ->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0')
+                            ->exists();
+
+                        if (!$hasPendingExchange) {
+                            $stop->update([
+                                'status' => RouteStop::STATUS_COMPLETED,
+                                'completed_at' => now(),
+                                'notes' => 'Recolección de fijos concluida exitosamente',
+                            ]);
+                        }
+                    }
+                }
+            });
+
+            if ($isAdvance) {
+                $totalPaid = round($quantity * $refillPrice, 2);
+                return back()->with('success', "Se recolectaron exitosamente {$quantity} botellón(es) fijos con pago anticipado (\${$totalPaid}). En camión rumbo a Planta.");
+            }
+
+            return back()->with('success', "Se recolectaron exitosamente {$quantity} botellón(es) fijos. En camión rumbo a Planta.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['collect' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Cancela un pedido de botellones fijos antes de recoger envases o según las reglas vigentes.
+     */
+    public function cancelOrder(Order $order, Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'reason.required' => 'El motivo de cancelación es obligatorio.',
+            'reason.min' => 'El motivo debe tener al menos 5 caracteres.',
         ]);
 
         try {
-            $this->custodyService->recordFixedBottlesCollected(
-                $order,
-                (int) $validated['quantity'],
-                $user,
-                $validated['notes'] ?? 'Recolección física confirmada por repartidor en ruta'
-            );
+            $this->orderService->cancelOrder($order, $request->user(), $validated['reason']);
+            return back()->with('success', "Pedido {$order->folio} cancelado exitosamente.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['cancel' => $e->getMessage()]);
+        } catch (\Exception $e) {
+            return back()->withErrors(['cancel' => $e->getMessage()]);
+        }
+    }
 
-            // Si el pedido está asignado como parada en la ruta activa, marcar parada completada si no restan intercambios
-            $activeRoute = DeliveryRoute::where('driver_user_id', $user->id)
-                ->where('status', DeliveryRoute::STATUS_IN_PROGRESS)
-                ->orderBy('id', 'desc')
-                ->first();
+    /**
+     * Pantalla de fijos preparados en Planta listos para cargar al camión.
+     */
+    public function listosParaCargar(Request $request): Response
+    {
+        $user = $request->user();
 
-            if ($activeRoute) {
-                $stop = RouteStop::where('delivery_route_id', $activeRoute->id)
-                    ->where('order_id', $order->id)
-                    ->where('status', RouteStop::STATUS_PENDING)
-                    ->first();
+        $items = OrderItem::with(['order.customer.address'])
+            ->where('type', OrderItem::TYPE_FIXED)
+            ->where('prepared_quantity', '>', 0)
+            ->whereRaw('(prepared_quantity - loaded_quantity - damaged_quantity) > 0')
+            ->whereHas('order', function ($q) {
+                $q->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_DELIVERED]);
+            })
+            ->get();
 
-                if ($stop) {
-                    $hasPendingExchange = $order->items()->where('type', OrderItem::TYPE_EXCHANGE)
-                        ->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0')
-                        ->exists();
+        $formattedReady = $items->map(function ($item) {
+            $order = $item->order;
+            $customer = $order?->customer;
+            $readyQty = $item->getReadyToLoadQuantity();
 
-                    if (!$hasPendingExchange) {
-                        $stop->update([
-                            'status' => RouteStop::STATUS_COMPLETED,
-                            'completed_at' => now(),
-                            'notes' => 'Recolección de fijos concluida exitosamente',
-                        ]);
-                    }
-                }
+            $hasAddress = !empty($order->delivery_street) || !empty($customer?->address?->street);
+            $street = $order->delivery_street ?: $customer?->address?->street;
+            $ext = $order->delivery_exterior_number ?: $customer?->address?->exterior_number;
+            $col = $order->delivery_neighborhood ?: $customer?->address?->neighborhood;
+            $addressSummary = $hasAddress
+                ? ($street . ($ext ? ' #' . $ext : '') . ($col ? ', ' . $col : ''))
+                : 'Sin domicilio registrado';
+
+            $phone = $order->recipient_phone ?: $customer?->phone;
+
+            return [
+                'item_id' => $item->id,
+                'order_id' => $order->id,
+                'order_folio' => $order->folio,
+                'customer' => [
+                    'id' => $customer?->id,
+                    'name' => $customer?->name,
+                    'nickname' => $customer?->nickname,
+                    'phone' => $phone,
+                    'code' => $customer?->code,
+                ],
+                'address_summary' => $addressSummary,
+                'delivery_zone' => $order->delivery_zone ?: 'Sin zona',
+                'ready_quantity' => $readyQty,
+                'prepared_total' => (int) $item->prepared_quantity,
+                'loaded_quantity' => (int) $item->loaded_quantity,
+            ];
+        })->filter(fn ($i) => $i['ready_quantity'] > 0)->values();
+
+        return Inertia::render('Repartidor/ReadyToLoad/Index', [
+            'readyItems' => $formattedReady,
+            'totalOrders' => $formattedReady->count(),
+            'totalBottles' => $formattedReady->sum('ready_quantity'),
+        ]);
+    }
+
+    /**
+     * Confirma la carga física de botellones fijos de un pedido hacia el camión.
+     */
+    public function acceptTruckLoadFixed(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'order_id' => ['required', 'integer', 'exists:orders,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'difference_reason' => ['nullable', 'string', 'max:500'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $order = Order::findOrFail($validated['order_id']);
+        $item = $order->items()->where('type', OrderItem::TYPE_FIXED)->firstOrFail();
+        $readyQty = $item->getReadyToLoadQuantity();
+        $quantity = (int) $validated['quantity'];
+
+        if ($quantity > $readyQty) {
+            return back()->withErrors(['load' => "No se pueden cargar {$quantity} fijos. Solo hay {$readyQty} listos para cargar."]);
+        }
+
+        $notes = $validated['notes'] ?? 'Fijos llenos cargados al camión';
+        if ($quantity < $readyQty && !empty($validated['difference_reason'])) {
+            $notes .= " | Discrepancia: {$validated['difference_reason']}";
+        }
+
+        try {
+            $this->custodyService->recordFixedBottlesLoadedOnTruck($order, $quantity, $request->user(), $notes);
+
+            $plural = $quantity === 1 ? '1 fijo cargado' : "{$quantity} fijos cargados";
+            if ($quantity < $readyQty) {
+                $diff = $readyQty - $quantity;
+                return back()->with('success', "{$plural}. Ya aparecen en Por entregar ({$diff} restante en Planta).");
             }
 
-            return back()->with('success', "Se recolectaron exitosamente {$validated['quantity']} botellón(es) fijos. En camión rumbo a planta.");
+            return back()->with('success', "{$plural}. Ya aparecen en Por entregar.");
         } catch (OrderBusinessRuleException $e) {
-            return back()->withErrors(['collect' => $e->getMessage()]);
+            return back()->withErrors(['load' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Reporta incidencia o daño de botellones fijos en Planta durante la carga.
+     */
+    public function reportFixedLoadIncident(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'order_id' => ['required', 'integer', 'exists:orders,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'damage_type' => ['required', 'string'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $order = Order::findOrFail($validated['order_id']);
+        $item = $order->items()->where('type', OrderItem::TYPE_FIXED)->firstOrFail();
+        $readyQty = $item->getReadyToLoadQuantity();
+        $qty = min($readyQty, (int) $validated['quantity']);
+
+        if ($qty <= 0) {
+            return back()->withErrors(['incident' => 'No hay unidades disponibles para reportar incidencia.']);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $item, $qty, $validated, $request) {
+            $item->increment('damaged_quantity', $qty);
+
+            \App\Models\BottleIncident::create([
+                'customer_id' => $order->customer_id,
+                'order_id' => $order->id,
+                'order_item_id' => $item->id,
+                'reported_by_user_id' => $request->user()->id,
+                'bottle_type' => OrderItem::TYPE_FIXED,
+                'bottle_condition' => \App\Models\BottleCustodyMovement::CONDITION_FULL,
+                'quantity' => $qty,
+                'stage' => \App\Models\BottleIncident::STAGE_DELIVERY,
+                'damage_type' => $validated['damage_type'],
+                'status' => \App\Models\BottleIncident::STATUS_PENDING,
+                'notes' => $validated['notes'] ?? "Incidencia reportada en carga en Planta ({$validated['damage_type']})",
+            ]);
+        });
+
+        $plural = $qty === 1 ? '1 fijo' : "{$qty} fijos";
+        return back()->with('success', "Incidencia registrada para {$plural}. Se apartó de los disponibles para cargar.");
+    }
+
+    /**
+     * Confirma la carga física masiva de todos los botellones fijos listos visibles.
+     */
+    public function acceptAllTruckLoadFixed(Request $request): RedirectResponse
+    {
+        $items = OrderItem::with('order')
+            ->where('type', OrderItem::TYPE_FIXED)
+            ->where('prepared_quantity', '>', 0)
+            ->whereRaw('(prepared_quantity - loaded_quantity - damaged_quantity) > 0')
+            ->whereHas('order', function ($q) {
+                $q->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_DELIVERED]);
+            })
+            ->get();
+
+        $confirmedOrders = 0;
+        $confirmedBottles = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($items, $request, &$confirmedOrders, &$confirmedBottles) {
+            foreach ($items as $item) {
+                $ready = $item->getReadyToLoadQuantity();
+                if ($ready <= 0) continue;
+
+                $this->custodyService->recordFixedBottlesLoadedOnTruck(
+                    $item->order,
+                    $ready,
+                    $request->user(),
+                    'Carga masiva física al camión'
+                );
+                $confirmedOrders++;
+                $confirmedBottles += $ready;
+            }
+        });
+
+        return back()->with('success', "{$confirmedBottles} fijos cargados al camión ({$confirmedOrders} pedidos).");
+    }
+
+    /**
+     * Confirma la entrega física de botellones fijos de 20 L al cliente con su estado de cobro.
+     */
+    public function deliverFixed(Order $order, Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $item = $order->items()->where('type', OrderItem::TYPE_FIXED)->firstOrFail();
+        $inTruck = max(0, (int)$item->loaded_quantity - (int)$item->delivered_quantity);
+
+        $validated = $request->validate([
+            'quantity_delivered' => ['required', 'integer', 'min:1', "max:{$inTruck}"],
+            'payment_action' => ['required', 'string', 'in:already_paid,full_cash,partial_cash,defer'],
+            'cash_tendered' => ['nullable', 'numeric', 'min:0'],
+            'units_paid_cash' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $delivered = (int) $validated['quantity_delivered'];
+        $action = $validated['payment_action'];
+        $refillPrice = (float) (\App\Models\BottlePresentation::where('capacity', 20.00)
+            ->where('is_available_for_delivery', true)
+            ->first()?->refill_price ?? 15.00);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($order, $item, $delivered, $action, $validated, $refillPrice, $user) {
+                $customer = $order->customer;
+
+                // 1. Movimiento de custodia de entrega
+                BottleCustodyMovement::create([
+                    'order_id' => $order->id,
+                    'order_item_id' => $item->id,
+                    'customer_id' => $customer->id,
+                    'user_id' => $user->id,
+                    'movement_type' => BottleCustodyMovement::TYPE_DELIVERY_REFILL_TO_CUSTOMER,
+                    'bottle_type' => OrderItem::TYPE_FIXED,
+                    'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+                    'quantity' => $delivered,
+                    'origin' => 'truck',
+                    'destination' => 'customer',
+                    'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                    'notes' => $validated['notes'] ?? 'Devolución de fijos llenos entregados al cliente',
+                    'created_at' => now(),
+                ]);
+
+                // 2. Cobros / Pagos
+                if ($action === 'already_paid') {
+                    // Ya liquidado por anticipado; no crear nuevo cargo
+                } elseif ($action === 'full_cash') {
+                    $charge = $this->debtService->recordCharge($order, $item, $delivered, $refillPrice, false);
+                    $cash = isset($validated['cash_tendered']) ? (float) $validated['cash_tendered'] : round($delivered * $refillPrice, 2);
+                    $this->debtService->recordPayment(
+                        $customer,
+                        $cash,
+                        $user,
+                        $order,
+                        "Cobro de {$delivered} fijos al entregar",
+                        $delivered
+                    );
+                } elseif ($action === 'partial_cash') {
+                    $paidUnits = min($delivered, max(0, (int) ($validated['units_paid_cash'] ?? 0)));
+                    $deferUnits = $delivered - $paidUnits;
+
+                    if ($deferUnits > 0 && !$this->debtService->canChargeDebt($customer, $deferUnits)) {
+                        $limit = $this->settingService->getMaxPendingPaymentBottles();
+                        $pending = $this->debtService->getPendingDebtBottles($customer);
+                        throw new OrderBusinessRuleException("No se pueden fiar {$deferUnits} botellones. El cliente cuenta con {$pending} pendientes y el límite es {$limit}.", 'debt_limit', 422);
+                    }
+
+                    $charge = $this->debtService->recordCharge($order, $item, $delivered, $refillPrice, false);
+                    if ($paidUnits > 0) {
+                        $cash = isset($validated['cash_tendered']) ? (float) $validated['cash_tendered'] : round($paidUnits * $refillPrice, 2);
+                        $this->debtService->recordPayment(
+                            $customer,
+                            $cash,
+                            $user,
+                            $order,
+                            "Pago parcial de {$paidUnits} fijos en efectivo al entregar",
+                            $paidUnits
+                        );
+                    }
+                } elseif ($action === 'defer') {
+                    if (!$this->debtService->canChargeDebt($customer, $delivered)) {
+                        $limit = $this->settingService->getMaxPendingPaymentBottles();
+                        $pending = $this->debtService->getPendingDebtBottles($customer);
+                        throw new OrderBusinessRuleException("No se pueden fiar {$delivered} botellones. El cliente cuenta con {$pending} pendientes y el límite es {$limit}.", 'debt_limit', 422);
+                    }
+                    $this->debtService->recordCharge($order, $item, $delivered, $refillPrice, false);
+                }
+
+                // 3. Actualizar Item y Pedido
+                $newDelivered = (int) $item->delivered_quantity + $delivered;
+                $allDelivered = ($newDelivered + (int)$item->cancelled_quantity) >= (int)$item->quantity;
+
+                $item->update([
+                    'delivered_quantity' => $newDelivered,
+                    'status' => $allDelivered ? OrderItem::STATUS_DELIVERED : OrderItem::STATUS_OUT_FOR_DELIVERY,
+                ]);
+
+                if ($allDelivered) {
+                    $order->update(['status' => Order::STATUS_DELIVERED]);
+                    OrderStatusHistory::create([
+                        'order_id' => $order->id,
+                        'previous_status' => $order->status,
+                        'new_status' => Order::STATUS_DELIVERED,
+                        'user_id' => $user->id,
+                        'reason' => "Entrega de {$delivered} fijos concluida exitosamente",
+                        'created_at' => now(),
+                    ]);
+                }
+            });
+
+            return back()->with('success', "{$delivered} botellón(es) fijos entregados exitosamente al cliente.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors(['deliver' => $e->getMessage()]);
         }
     }
 
@@ -974,11 +1356,11 @@ class RouteExecutionController extends Controller
         $activeRouteStopsByOrderId = $activeRoute ? $activeRoute->stops->keyBy('order_id') : collect();
 
         // 3. Pedidos con entregas pendientes
-        $orders = Order::with(['customer.address', 'items', 'deliveryRoute.stops'])
+        $orders = Order::with(['customer.address', 'items', 'deliveryRoute.stops', 'charges', 'payments'])
             ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
             ->where(function ($q) {
                 $q->whereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_EXCHANGE)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'))
-                  ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'));
+                  ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->whereRaw('(loaded_quantity - delivered_quantity) > 0'));
             })
             ->orderBy('id', 'desc')
             ->get();
@@ -989,7 +1371,11 @@ class RouteExecutionController extends Controller
             $zoneCounts[$zk] = 0;
         }
 
-        $formattedDeliveries = $orders->map(function ($order) use ($activeRoute, $activeRouteStopsByOrderId, $exchangeAvailable, &$zoneCounts) {
+        $refillPrice = (float) (\App\Models\BottlePresentation::where('capacity', 20.00)
+            ->where('is_available_for_delivery', true)
+            ->first()?->refill_price ?? 15.00);
+
+        $formattedDeliveries = $orders->map(function ($order) use ($activeRoute, $activeRouteStopsByOrderId, $exchangeAvailable, &$zoneCounts, $refillPrice) {
             $customer = $order->customer;
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
@@ -997,6 +1383,18 @@ class RouteExecutionController extends Controller
             $exchangeQty = max(0, (int) ($exchangeItem?->quantity ?? 0) - (int) ($exchangeItem?->delivered_quantity ?? 0) - (int) ($exchangeItem?->cancelled_quantity ?? 0));
             $fixedQty = max(0, (int) ($fixedItem?->quantity ?? 0) - (int) ($fixedItem?->delivered_quantity ?? 0) - (int) ($fixedItem?->cancelled_quantity ?? 0));
             $fixedPrepared = (int) ($fixedItem?->prepared_quantity ?? 0);
+            $fixedInTruck = $fixedItem ? max(0, (int)$fixedItem->loaded_quantity - (int)$fixedItem->delivered_quantity) : 0;
+
+            // Análisis de pagos anticipados para botellones fijos
+            $advancePaidBottles = (int) $order->payments->sum('bottles_covered_count');
+            $paidChargesBottles = (int) $order->charges->where('status', OrderCharge::STATUS_PAID)->sum('quantity_delivered');
+            $coveredBottles = max($advancePaidBottles, $paidChargesBottles);
+
+            $alreadyDelivered = (int) ($fixedItem?->delivered_quantity ?? 0);
+            $coveredRemaining = max(0, $coveredBottles - $alreadyDelivered);
+            $unpaidInTruck = max(0, $fixedInTruck - $coveredRemaining);
+            $isAdvancePaid = ($fixedInTruck > 0 && $unpaidInTruck === 0);
+            $unpaidAmount = round($unpaidInTruck * $refillPrice, 2);
 
             // Ubicación
             $hasAddress = !empty($order->delivery_street) || !empty($customer?->address?->street);
@@ -1041,8 +1439,6 @@ class RouteExecutionController extends Controller
             $isBlocked = false;
             $blockReason = null;
 
-            $fixedInTruck = $fixedItem ? $fixedItem->getInTruckQuantity() : 0;
-
             if ($exchangeQty > 0 && $exchangeAvailable < $exchangeQty) {
                 $isBlocked = true;
                 $blockReason = "Falta carga en camión: Requiere {$exchangeQty} garrafón(es) de cambio, pero hay {$exchangeAvailable} disponibles.";
@@ -1050,7 +1446,7 @@ class RouteExecutionController extends Controller
 
             if ($fixedQty > 0 && $fixedInTruck === 0) {
                 $isBlocked = true;
-                $blockReason = "Pendiente de cargar en camión: {$fixedQty} fijos del cliente aún no han sido cargados y aceptados en 'Mi Carga'.";
+                $blockReason = "Pendiente de cargar en camión: {$fixedQty} fijos del cliente aún no han sido cargados y aceptados en 'Listos para cargar'.";
             }
 
             $activeStop = $activeRouteStopsByOrderId->get($order->id);
@@ -1071,11 +1467,18 @@ class RouteExecutionController extends Controller
                     'phone' => $phone,
                     'has_phone' => !empty($phone),
                 ],
+                'fixed_item_id' => $fixedItem?->id,
                 'exchange_quantity' => $exchangeQty,
                 'fixed_quantity' => $fixedQty,
                 'fixed_prepared' => $fixedPrepared,
                 'fixed_in_truck' => $fixedInTruck,
+                'quantity_to_deliver' => $fixedInTruck > 0 ? $fixedInTruck : ($exchangeQty + $fixedQty),
                 'total_bottles_to_deliver' => $exchangeQty + $fixedQty,
+                'is_advance_paid' => $isAdvancePaid,
+                'advance_paid_bottles' => $coveredRemaining,
+                'unpaid_bottles' => $unpaidInTruck,
+                'unpaid_amount' => $unpaidAmount,
+                'unit_price' => $refillPrice,
                 'address_summary' => $addressSummary,
                 'delivery_zone' => $zoneLabel,
                 'delivery_zone_key' => $zoneKey,
@@ -1233,9 +1636,9 @@ class RouteExecutionController extends Controller
     public function reparto(Request $request): Response
     {
         $user = $request->user();
-        $activeTab = $request->query('tab', 'pendientes');
-        if (!in_array($activeTab, ['pendientes', 'por_recoger', 'por_entregar', 'en_proceso', 'atendidos'], true)) {
-            $activeTab = 'pendientes';
+        $activeTab = $request->query('tab', 'por_recoger');
+        if (!in_array($activeTab, ['por_recoger', 'por_recoger_planta', 'por_entregar'], true)) {
+            $activeTab = 'por_recoger';
         }
 
         $activeZone = $request->query('zone', 'all');
@@ -1311,11 +1714,15 @@ class RouteExecutionController extends Controller
         $handledOrderIds = array_unique($handledOrderIds);
 
         // Pedidos activos disponibles para atender
-        $allOrders = Order::with(['customer', 'items', 'charges'])
+        $allOrders = Order::with(['customer', 'items', 'charges', 'payments'])
             ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_PROCESS, Order::STATUS_IN_ROUTE])
             ->whereNotIn('id', $handledOrderIds)
             ->orderBy('id', 'asc')
             ->get();
+
+        $refillPrice = (float) (\App\Models\BottlePresentation::where('capacity', 20.00)
+            ->where('is_available_for_delivery', true)
+            ->first()?->refill_price ?? 15.00);
 
         // Precargar movimientos de custodia de fijos por cliente (evitar N+1)
         $customerIds = $allOrders->pluck('customer_id')->filter()->unique()->values()->all();
@@ -1352,7 +1759,7 @@ class RouteExecutionController extends Controller
 
         // Mapeo canónico de zona
         $mapOrderZone = function ($order) {
-            $z = strtolower(trim((string) ($order->delivery_zone ?? '')));
+            $z = strtolower(trim((string) ($order->delivery_zone ?: ($order->customer?->address?->delivery_zone ?? ''))));
             if (in_array($z, ['north', 'norte'], true)) return 'north';
             if (in_array($z, ['south', 'sur'], true)) return 'south';
             if (in_array($z, ['east', 'este'], true)) return 'east';
@@ -1361,7 +1768,7 @@ class RouteExecutionController extends Controller
         };
 
         // Formateador de tarjeta
-        $formatOrderCard = function ($order, $stop = null) use ($mapOrderZone, $exchangeAvailable, $loadedFixedByCustomer, $deliveredFixedByCustomer, $proposedFixedByCustomer) {
+        $formatOrderCard = function ($order, $stop = null) use ($mapOrderZone, $exchangeAvailable, $loadedFixedByCustomer, $deliveredFixedByCustomer, $proposedFixedByCustomer, $refillPrice) {
             $customer = $order->customer;
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
@@ -1382,6 +1789,23 @@ class RouteExecutionController extends Controller
             $custDelivered = (int) ($deliveredFixedByCustomer[$customerId] ?? 0);
             $fixedAvailableOnTruck = max(0, $custLoaded - $custDelivered);
             $fixedProposedOnTruck = (int) ($proposedFixedByCustomer[$customerId] ?? 0);
+
+            // Disponibilidad real de fijos en camión
+            $fixedInTruck = $fixedItem ? max(0, (int)$fixedItem->loaded_quantity - (int)$fixedItem->delivered_quantity) : 0;
+            if ($fixedInTruck === 0 && $fixedAvailableOnTruck > 0) {
+                $fixedInTruck = min($fixedToDeliver, $fixedAvailableOnTruck);
+            }
+
+            // Análisis de pagos anticipados para botellones fijos
+            $advancePaidBottles = (int) $order->payments->sum('bottles_covered_count');
+            $paidChargesBottles = (int) $order->charges->where('status', OrderCharge::STATUS_PAID)->sum('quantity_delivered');
+            $coveredBottles = max($advancePaidBottles, $paidChargesBottles);
+
+            $alreadyDelivered = (int) ($fixedItem?->delivered_quantity ?? 0);
+            $coveredRemaining = max(0, $coveredBottles - $alreadyDelivered);
+            $unpaidInTruck = max(0, $fixedInTruck - $coveredRemaining);
+            $isAdvancePaid = ($fixedInTruck > 0 && $unpaidInTruck === 0);
+            $unpaidAmount = round($unpaidInTruck * $refillPrice, 2);
 
             $hasExchange = ($exchangePending > 0);
             $hasFixedCollect = ($fixedToCollect > 0);
@@ -1552,6 +1976,13 @@ class RouteExecutionController extends Controller
                 'fixed_quantity' => $fixedQty,
                 'fixed_to_collect' => $fixedToCollect,
                 'fixed_to_deliver' => $fixedToDeliver,
+                'fixed_item_id' => $fixedItem?->id,
+                'fixed_in_truck' => $fixedInTruck,
+                'is_advance_paid' => $isAdvancePaid,
+                'advance_paid_bottles' => $coveredRemaining,
+                'unpaid_bottles' => $unpaidInTruck,
+                'unpaid_amount' => $unpaidAmount,
+                'unit_price' => $refillPrice,
                 'total_bottles' => $exchangeQty + $fixedQty,
                 'traffic_light' => $tl,
                 'pending_debt_amount' => $debtAmount,
@@ -1574,11 +2005,7 @@ class RouteExecutionController extends Controller
         };
 
         // Listados por pestaña
-        $pendientesList = $allOrders->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
-            $stop = $pendingStopMap->get($order->id);
-            return $formatOrderCard($order, $stop);
-        });
-
+        // 1. Por recoger (cliente)
         $porRecogerList = $allOrders->filter(function ($order) {
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
             return $fixedItem && ($fixedItem->quantity > $fixedItem->collected_quantity);
@@ -1587,52 +2014,55 @@ class RouteExecutionController extends Controller
             return $formatOrderCard($order, $stop);
         })->values();
 
-        $porEntregarList = $allOrders->filter(function ($order) {
+        // 2. Por recoger en Planta (listos tras lavado y llenado)
+        $porRecogerPlantaList = $allOrders->filter(function ($order) {
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+            if (!$fixedItem) return false;
+            $readyToLoad = max(0, (int)$fixedItem->prepared_quantity - (int)$fixedItem->loaded_quantity - (int)$fixedItem->damaged_quantity);
+            return $readyToLoad > 0;
+        })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
+            $stop = $pendingStopMap->get($order->id);
+            $card = $formatOrderCard($order, $stop);
+            $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
+            $readyToLoad = max(0, (int)$fixedItem->prepared_quantity - (int)$fixedItem->loaded_quantity - (int)$fixedItem->damaged_quantity);
+            $card['fixed_ready_to_load'] = $readyToLoad;
+            $card['fixed_quantity'] = $readyToLoad;
+            $card['order_item_id'] = $fixedItem->id;
+            return $card;
+        })->values();
+
+        // 3. Por entregar (en camión)
+        $porEntregarList = $allOrders->filter(function ($order) use ($loadedFixedByCustomer, $deliveredFixedByCustomer) {
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
             $hasExchange = $exchangeItem && ($exchangeItem->quantity > $exchangeItem->delivered_quantity);
-            $hasFixedToDeliver = $fixedItem && ($fixedItem->prepared_quantity > $fixedItem->delivered_quantity);
-            return $hasExchange || $hasFixedToDeliver;
+            $fixedInTruck = $fixedItem ? max(0, (int)$fixedItem->loaded_quantity - (int)$fixedItem->delivered_quantity) : 0;
+            $custAvail = max(0, (int)($loadedFixedByCustomer[$order->customer_id] ?? 0) - (int)($deliveredFixedByCustomer[$order->customer_id] ?? 0));
+            return $hasExchange || ($fixedInTruck > 0) || ($custAvail > 0);
         })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
             $stop = $pendingStopMap->get($order->id);
             return $formatOrderCard($order, $stop);
         })->values();
 
+        $pendientesList = $porRecogerList;
         $enProcesoList = collect();
         $atendidosList = collect();
 
-        if ($activeRoute) {
-            $pendingStops = $activeRoute->stops->where('status', RouteStop::STATUS_PENDING);
-            $enProcesoList = $pendingStops->map(function ($stop) use ($formatOrderCard) {
-                return $formatOrderCard($stop->order, $stop);
-            })->values();
-
-            $handledStops = $activeRoute->stops->whereIn('status', [RouteStop::STATUS_COMPLETED, RouteStop::STATUS_FAILED]);
-            $atendidosList = $handledStops->map(function ($stop) use ($formatOrderCard) {
-                return $formatOrderCard($stop->order, $stop);
-            })->values();
-        } elseif ($completedTodayRoute) {
-            $atendidosList = $completedTodayRoute->stops->map(function ($stop) use ($formatOrderCard) {
-                return $formatOrderCard($stop->order, $stop);
-            })->values();
-        }
-
         // Conteo por pestañas
         $tabCounts = [
-            'pendientes' => $pendientesList->count(),
             'por_recoger' => $porRecogerList->count(),
+            'por_recoger_planta' => $porRecogerPlantaList->count(),
             'por_entregar' => $porEntregarList->count(),
-            'en_proceso' => $enProcesoList->count(),
-            'atendidos' => $atendidosList->count(),
+            'pendientes' => $allOrders->count(),
+            'en_proceso' => 0,
+            'atendidos' => 0,
         ];
 
         // Colección seleccionada
         $currentCollection = match ($activeTab) {
-            'por_recoger' => $porRecogerList,
+            'por_recoger_planta' => $porRecogerPlantaList,
             'por_entregar' => $porEntregarList,
-            'en_proceso' => $enProcesoList,
-            'atendidos' => $atendidosList,
-            default => $pendientesList,
+            default => $porRecogerList,
         };
 
         // Conteo por zonas de la colección activa

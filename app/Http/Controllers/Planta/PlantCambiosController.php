@@ -35,6 +35,8 @@ class PlantCambiosController extends Controller
         }
 
         $invState = $this->plantInventoryService->getInventoryState();
+        $supervision = $this->plantInventoryService->getExchangeSupervisionState();
+        $prodState = $this->plantInventoryService->getProductionState();
         $inv = $this->plantInventoryService->getOrCreatePlantInventory();
         $receptionsData = $this->plantInventoryService->getPendingReceptions();
 
@@ -98,7 +100,11 @@ class PlantCambiosController extends Controller
                 'exchange_washing_filling' => (int) $inv->exchange_washing_filling,
                 'exchange_full_ready' => (int) $inv->exchange_full_available,
                 'exchange_full_reserved' => (int) $inv->exchange_full_reserved,
+                'exchange_unlocated' => (int) ($inv->exchange_unlocated ?? 0),
+                'exchange_damaged_total' => (int) ($invState['balances']['exchange_damaged_total'] ?? 0),
             ],
+            'supervisionSummary' => $supervision['summary'],
+            'activeBatches' => $prodState['exchange_batches_in_process'] ?? [],
             'initialCountPending' => is_null($inv->initial_count_completed_at),
             'initialCountInfo' => $invState['initial_count_info'] ?? null,
             'pendingExchangeReceptions' => $pendingExchangeReceptions,
@@ -106,7 +112,29 @@ class PlantCambiosController extends Controller
             'recentExchangeMovements' => $recentExchangeMovements,
             'drivers' => $drivers,
             'isOperator' => $user->hasRole('Operador Planta') || $user->hasRole('Super Admin'),
-            'isAdmin' => $user->hasRole('Administrador'),
+            'isAdmin' => $user->hasRole('Administrador') || $user->hasRole('Super Admin'),
         ]);
+    }
+
+    /**
+     * Reporta un inconveniente de botellones de cambio desde Planta → Cambios.
+     */
+    public function reportInconvenience(Request $request)
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1'],
+            'origin_stage' => ['required', 'string', 'in:plant_empty,plant_preparation,plant_full,truck_full,truck_empty'],
+            'reason' => ['required', 'string', 'max:100'],
+            'location_status' => ['required', 'string', 'in:separado,sin_localizar'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->plantInventoryService->reportExchangeInconvenience($request->user(), $validated);
+
+            return back()->with('success', 'Inconveniente reportado. Las unidades afectadas pasaron a «En revisión».');
+        } catch (\App\Exceptions\OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
     }
 }

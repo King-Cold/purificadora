@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
@@ -87,6 +87,32 @@ const submitRefill = () => {
         },
         onFinish: () => {
             isSubmitting.value = false;
+        },
+    });
+};
+
+// Control para eliminar registro por equivocación
+const refillToDelete = ref(null);
+const isDeleting = ref(false);
+
+const confirmDeleteRefill = (item) => {
+    refillToDelete.value = item;
+};
+
+const cancelDeleteRefill = () => {
+    refillToDelete.value = null;
+};
+
+const deleteRefill = () => {
+    if (!refillToDelete.value) return;
+    isDeleting.value = true;
+    router.delete(route('planta.quick-refill.destroy', refillToDelete.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            refillToDelete.value = null;
+        },
+        onFinish: () => {
+            isDeleting.value = false;
         },
     });
 };
@@ -342,14 +368,72 @@ const submitRefill = () => {
                             </div>
                         </div>
 
-                        <div class="text-right">
-                            <span class="text-sm font-black text-slate-900">${{ Number(item.total_amount).toFixed(2) }} MXN</span>
-                            <span class="block text-[10px] text-slate-400 font-mono">(${{ Number(item.unit_price).toFixed(2) }} c/u)</span>
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <span class="text-sm font-black text-slate-900">${{ Number(item.total_amount).toFixed(2) }} MXN</span>
+                                <span class="block text-[10px] text-slate-400 font-mono">(${{ Number(item.unit_price).toFixed(2) }} c/u)</span>
+                            </div>
+
+                            <!-- Botón de eliminar registro por equivocación -->
+                            <button
+                                type="button"
+                                @click="confirmDeleteRefill(item)"
+                                class="h-9 w-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition active:scale-95 cursor-pointer shrink-0"
+                                title="Eliminar registro por equivocación"
+                                aria-label="Eliminar registro"
+                            >
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
+        </div>
+
+        <!-- Modal de confirmación para eliminar registro de llenado -->
+        <div
+            v-if="refillToDelete"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            @click.self="cancelDeleteRefill"
+        >
+            <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-in">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-trash-can text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">¿Eliminar registro?</h3>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Hora {{ refillToDelete.time }} · {{ refillToDelete.quantity }} botellón(es) (${{ Number(refillToDelete.total_amount).toFixed(2) }} MXN).
+                        </p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    Se eliminará este registro por equivocación y se descontará del resumen de llenados e importes del día.
+                </p>
+
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                    <button
+                        type="button"
+                        @click="cancelDeleteRefill"
+                        :disabled="isDeleting"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        @click="deleteRefill"
+                        :disabled="isDeleting"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                        <span>{{ isDeleting ? 'Eliminando...' : 'Sí, eliminar' }}</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </AuthenticatedLayout>
 </template>
