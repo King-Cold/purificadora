@@ -201,7 +201,7 @@ const getRouteStatusBadge = (status) => {
                                 Pedido al instante
                             </span>
                             <span class="text-[11px] text-blue-100 block leading-tight mt-0.5">
-                                Atender cliente al paso (cambio, fijos o mixto)
+                                Atender cliente al paso (cambio o fijos)
                             </span>
                         </div>
                     </Link>

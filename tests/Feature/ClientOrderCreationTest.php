@@ -64,7 +64,7 @@ class ClientOrderCreationTest extends TestCase
             'name' => 'María Pech',
             'phone' => '9991234567',
             'fixed_bottles_count' => 3,
-            'exchange_bottles_count' => 2,
+            'exchange_bottles_count' => 0,
         ]);
 
         $this->clientAddress = CustomerAddress::create([
@@ -90,8 +90,8 @@ class ClientOrderCreationTest extends TestCase
             'code' => 'CLI-0002',
             'name' => 'José Canché',
             'phone' => '9997654321',
-            'fixed_bottles_count' => 1,
-            'exchange_bottles_count' => 1,
+            'fixed_bottles_count' => 0,
+            'exchange_bottles_count' => 2,
         ]);
 
         $this->otherClientAddress = CustomerAddress::create([
@@ -134,7 +134,7 @@ class ClientOrderCreationTest extends TestCase
             ->component('Cliente/Orders/Create')
             ->has('customer')
             ->where('customer.fixed_bottles_count', 3)
-            ->where('customer.exchange_bottles_count', 2)
+            ->where('customer.exchange_bottles_count', 0)
             ->has('address')
             ->where('address.full_address', $this->clientAddress->full_address)
             ->where('activeOrder', null)
@@ -174,7 +174,7 @@ class ClientOrderCreationTest extends TestCase
      */
     public function test_client_can_create_order_with_only_exchange_bottles(): void
     {
-        $response = $this->actingAs($this->clientUser)
+        $response = $this->actingAs($this->otherClientUser)
             ->post(route('cliente.orders.store'), [
                 'fixed_quantity' => 0,
                 'exchange_quantity' => 2,
@@ -190,25 +190,21 @@ class ClientOrderCreationTest extends TestCase
     }
 
     /**
-     * 4. Creación exitosa de pedido mixto con notas de entrega opcionales.
+     * 4. Rechazo estricto de pedido mixto en el servidor.
      */
-    public function test_client_can_create_order_with_mixed_bottles_and_notes(): void
+    public function test_rejects_mixed_bottles_order(): void
     {
         $response = $this->actingAs($this->clientUser)
+            ->from(route('cliente.orders.create'))
             ->post(route('cliente.orders.store'), [
                 'fixed_quantity' => 2,
                 'exchange_quantity' => 1,
                 'notes' => 'Dejar los garrafones junto al portón azul.',
             ]);
 
-        $order = Order::first();
-        $this->assertNotNull($order);
-        $response->assertRedirect(route('cliente.orders.show', $order->id));
-
-        $this->assertEquals(2, $order->fixed_quantity);
-        $this->assertEquals(1, $order->exchange_quantity);
-        $this->assertEquals(3, $order->total_bottles);
-        $this->assertEquals('Dejar los garrafones junto al portón azul.', $order->notes);
+        $response->assertRedirect(route('cliente.orders.create'));
+        $response->assertSessionHasErrors('quantity');
+        $this->assertDatabaseCount('orders', 0);
     }
 
     /**
@@ -218,8 +214,8 @@ class ClientOrderCreationTest extends TestCase
     {
         $response = $this->actingAs($this->clientUser)
             ->post(route('cliente.orders.store'), [
-                'fixed_quantity' => 1,
-                'exchange_quantity' => 1,
+                'fixed_quantity' => 2,
+                'exchange_quantity' => 0,
             ]);
 
         $order = Order::first();
@@ -241,7 +237,7 @@ class ClientOrderCreationTest extends TestCase
         $this->actingAs($this->clientUser)
             ->post(route('cliente.orders.store'), [
                 'fixed_quantity' => 2,
-                'exchange_quantity' => 1,
+                'exchange_quantity' => 0,
             ]);
 
         $freshCustomer = $this->clientCustomer->fresh();
@@ -272,8 +268,8 @@ class ClientOrderCreationTest extends TestCase
      */
     public function test_rejects_quantities_exceeding_registered_exchange_bottles(): void
     {
-        // María tiene 2 de cambio, pide 3
-        $response = $this->actingAs($this->clientUser)
+        // José Canché tiene 2 de cambio, pide 3
+        $response = $this->actingAs($this->otherClientUser)
             ->from(route('cliente.orders.create'))
             ->post(route('cliente.orders.store'), [
                 'fixed_quantity' => 0,
@@ -311,7 +307,7 @@ class ClientOrderCreationTest extends TestCase
             ->from(route('cliente.orders.create'))
             ->post(route('cliente.orders.store'), [
                 'fixed_quantity' => -1,
-                'exchange_quantity' => 1,
+                'exchange_quantity' => 0,
             ]);
 
         $response->assertRedirect(route('cliente.orders.create'));

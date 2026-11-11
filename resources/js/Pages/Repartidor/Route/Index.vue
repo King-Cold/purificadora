@@ -181,8 +181,6 @@ const getOpBadgeClass = (type) => {
     switch (type) {
         case 'intercambio':
             return 'bg-blue-100 text-blue-800 border-blue-200';
-        case 'mixto':
-            return 'bg-purple-100 text-purple-800 border-purple-200';
         case 'recoleccion_fijos':
             return 'bg-amber-100 text-amber-800 border-amber-200';
         case 'devolucion_fijos':

@@ -158,21 +158,17 @@ class DeliveryRouteController extends Controller
             $exchangeQty = (int) ($exchangeItem?->quantity ?? 0);
             $fixedQty = (int) ($fixedItem?->quantity ?? 0);
 
-            // Operación
-            $opType = 'intercambio';
-            $opLabel = 'Intercambio de botellones de cambio';
-
-            if ($exchangeQty > 0 && $fixedQty > 0) {
-                $opType = 'mixto';
-                $opLabel = 'Operación mixta (Cambio + Fijos)';
-            } elseif ($fixedQty > 0) {
-                if ($fixedItem->prepared_quantity > 0) {
+            if ($fixedQty > 0) {
+                if ($fixedItem && $fixedItem->prepared_quantity > 0) {
                     $opType = 'devolucion_fijos';
                     $opLabel = 'Devolución de fijos preparados';
                 } else {
                     $opType = 'recoleccion_fijos';
                     $opLabel = 'Recolección de fijos vacíos';
                 }
+            } else {
+                $opType = 'intercambio';
+                $opLabel = 'Intercambio de botellones de cambio';
             }
 
             $address = $order?->delivery_street 

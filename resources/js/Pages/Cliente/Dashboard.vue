@@ -189,7 +189,7 @@ const getStageBadgeClass = (stageKey) => {
                         </Link>
                     </div>
 
-                    <!-- Avance Independiente para Pedidos Mixtos o Desglose de Modalidad -->
+                    <!-- Desglose de Modalidad del Pedido -->
                     <div v-if="activeOrder.operational_progress" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <!-- Tarjeta de Cambio -->
                         <div

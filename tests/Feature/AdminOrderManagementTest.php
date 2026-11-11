@@ -91,7 +91,7 @@ class AdminOrderManagementTest extends TestCase
             'nickname' => 'Don Manolo',
             'phone' => '9991112233',
             'fixed_bottles_count' => 4,
-            'exchange_bottles_count' => 3,
+            'exchange_bottles_count' => 0,
         ]);
 
         $this->customerAddress = CustomerAddress::create([
@@ -116,7 +116,7 @@ class AdminOrderManagementTest extends TestCase
             'nickname' => 'Mary',
             'phone' => '9994445566',
             'fixed_bottles_count' => 2,
-            'exchange_bottles_count' => 2,
+            'exchange_bottles_count' => 0,
         ]);
 
         $this->clientAddress = CustomerAddress::create([
@@ -168,14 +168,14 @@ class AdminOrderManagementTest extends TestCase
         $orderSinCuenta = $this->orderService->createOrder($this->adminUser, [
             'customer_id' => $this->customerWithoutAccount->id,
             'fixed_quantity' => 2,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
             'notes' => 'Tocar fuerte',
         ]);
 
         // Pedido de cliente con cuenta creado por el cliente
         $orderConCuenta = $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 1,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
         ]);
 
         $response = $this->actingAs($this->adminUser)->get(route('admin.orders.index'));
@@ -281,7 +281,7 @@ class AdminOrderManagementTest extends TestCase
                 'nickname' => 'Don Manolo',
                 'code' => 'CLI-SINCTA-01',
                 'fixed_bottles_count' => 4,
-                'exchange_bottles_count' => 3,
+                'exchange_bottles_count' => 0,
                 'has_address' => true,
             ]);
 
@@ -302,7 +302,7 @@ class AdminOrderManagementTest extends TestCase
         $response = $this->actingAs($this->adminUser)->post(route('admin.orders.store'), [
             'customer_id' => $this->customerWithoutAccount->id,
             'fixed_quantity' => 2,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
             'notes' => 'Entregar por la tarde',
         ]);
 
@@ -316,8 +316,8 @@ class AdminOrderManagementTest extends TestCase
         $this->assertEquals($this->adminUser->id, $order->created_by_user_id);
         $this->assertEquals($this->adminUser->name, $order->creator->name);
         $this->assertEquals(2, $order->fixed_quantity);
-        $this->assertEquals(1, $order->exchange_quantity);
-        $this->assertEquals(3, $order->total_bottles);
+        $this->assertEquals(0, $order->exchange_quantity);
+        $this->assertEquals(2, $order->total_bottles);
         $this->assertEquals(Order::STATUS_PENDING, $order->status);
         $this->assertEquals('Calle 15', $order->delivery_street);
         $this->assertEquals('40', $order->delivery_exterior_number);
@@ -325,7 +325,7 @@ class AdminOrderManagementTest extends TestCase
         // Los conteos del cliente no se alteran
         $this->customerWithoutAccount->refresh();
         $this->assertEquals(4, $this->customerWithoutAccount->fixed_bottles_count);
-        $this->assertEquals(3, $this->customerWithoutAccount->exchange_bottles_count);
+        $this->assertEquals(0, $this->customerWithoutAccount->exchange_bottles_count);
     }
 
     public function test_admin_order_creation_strictly_rejects_customer_with_account(): void
@@ -364,7 +364,7 @@ class AdminOrderManagementTest extends TestCase
         $response = $this->actingAs($this->adminUser)->post(route('admin.orders.store'), [
             'customer_id' => $this->customerWithoutAccount->id,
             'fixed_quantity' => 5,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
         ]);
 
         $response->assertSessionHasErrors(['fixed_quantity']);
@@ -435,7 +435,7 @@ class AdminOrderManagementTest extends TestCase
         $order = $this->orderService->createOrder($this->adminUser, [
             'customer_id' => $this->customerWithoutAccount->id,
             'fixed_quantity' => 2,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
             'notes' => 'Nota especial',
         ]);
 
@@ -451,8 +451,8 @@ class AdminOrderManagementTest extends TestCase
                 ->where('order.folio', $order->folio)
                 ->where('order.status', Order::STATUS_PENDING)
                 ->where('order.fixed_quantity', 2)
-                ->where('order.exchange_quantity', 1)
-                ->where('order.total_bottles', 3)
+                ->where('order.exchange_quantity', 0)
+                ->where('order.total_bottles', 2)
                 ->where('order.notes', 'Nota especial')
                 ->where('order.address.street', 'Calle 15') // Preservado histórico
                 ->where('order.creator.name', $this->adminUser->name)
@@ -497,7 +497,7 @@ class AdminOrderManagementTest extends TestCase
         // Los conteos del cliente no se alteran
         $this->customerWithoutAccount->refresh();
         $this->assertEquals(4, $this->customerWithoutAccount->fixed_bottles_count);
-        $this->assertEquals(3, $this->customerWithoutAccount->exchange_bottles_count);
+        $this->assertEquals(0, $this->customerWithoutAccount->exchange_bottles_count);
     }
 
     public function test_admin_cannot_confirm_already_confirmed_or_cancelled_order(): void
@@ -691,7 +691,7 @@ class AdminOrderManagementTest extends TestCase
         // Cliente crea su propio pedido
         $order = $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 1,
-            'exchange_quantity' => 1,
+            'exchange_quantity' => 0,
         ]);
 
         // Cliente ve su pedido como Pendiente

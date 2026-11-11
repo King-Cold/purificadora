@@ -276,21 +276,17 @@ class RouteExecutionController extends Controller
                 $exchangeQty = (int) ($exchangeItem?->quantity ?? 0);
                 $fixedQty = (int) ($fixedItem?->quantity ?? 0);
 
-                // Determinar tipo de operación
-                $opType = 'intercambio';
-                $opLabel = 'Intercambio de botellones de cambio';
-
-                if ($exchangeQty > 0 && $fixedQty > 0) {
-                    $opType = 'mixto';
-                    $opLabel = 'Operación mixta (Cambio + Fijos)';
-                } elseif ($fixedQty > 0) {
-                    if ($fixedItem->prepared_quantity > 0) {
+                if ($fixedQty > 0) {
+                    if ($fixedItem && $fixedItem->prepared_quantity > 0) {
                         $opType = 'devolucion_fijos';
                         $opLabel = 'Devolución de fijos rellenados';
                     } else {
                         $opType = 'recoleccion_fijos';
                         $opLabel = 'Recolección de fijos vacíos';
                     }
+                } else {
+                    $opType = 'intercambio';
+                    $opLabel = 'Intercambio de botellones de cambio';
                 }
 
                 // Ubicación real o sin registrar
@@ -706,6 +702,9 @@ class RouteExecutionController extends Controller
                     'phone' => $c->phone,
                     'fixed_bottles_count' => (int) $c->fixed_bottles_count,
                     'exchange_bottles_count' => (int) $c->exchange_bottles_count,
+                    'bottle_type' => $c->bottle_type,
+                    'bottle_type_label' => $c->bottle_type_label,
+                    'assigned_bottles_count' => $c->assigned_bottles_count,
                     'traffic_light' => $this->debtService->getTrafficLight($c),
                     'pending_debt' => [
                         'bottles' => $this->debtService->getPendingDebtBottles($c),
@@ -742,13 +741,36 @@ class RouteExecutionController extends Controller
         try {
             if ($customerId) {
                 $customer = Customer::findOrFail($customerId);
+
                 $exchangeQty = max(0, (int) $request->input('exchange_quantity', 0));
                 $fixedQty = max(0, (int) $request->input('fixed_quantity', 0));
-                if ($fixedQty > (int) $customer->fixed_bottles_count) {
-                    $customer->update(['fixed_bottles_count' => $fixedQty]);
+
+                if ($fixedQty > 0 && $exchangeQty > 0) {
+                    return back()->withErrors(['direct' => 'No se permiten servicios combinados de botellones fijos y de cambio.']);
                 }
-                if ($exchangeQty > (int) $customer->exchange_bottles_count) {
-                    $customer->update(['exchange_bottles_count' => $exchangeQty]);
+
+                // Si el cliente no tenía botellones registrados (unassigned), definir tipo con el pedido
+                if ($customer->bottle_type === Customer::BOTTLE_TYPE_UNASSIGNED) {
+                    if ($fixedQty > 0) {
+                        $customer->update(['fixed_bottles_count' => $fixedQty, 'exchange_bottles_count' => 0]);
+                    } elseif ($exchangeQty > 0) {
+                        $customer->update(['exchange_bottles_count' => $exchangeQty, 'fixed_bottles_count' => 0]);
+                    }
+                } else {
+                    // Validar que no solicite el tipo contrario al registrado
+                    if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
+                        return back()->withErrors(['direct' => 'El cliente está registrado exclusivamente para botellones fijos.']);
+                    }
+                    if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
+                        return back()->withErrors(['direct' => 'El cliente está registrado exclusivamente para botellones de cambio.']);
+                    }
+
+                    if ($fixedQty > (int) $customer->fixed_bottles_count) {
+                        $customer->update(['fixed_bottles_count' => $fixedQty]);
+                    }
+                    if ($exchangeQty > (int) $customer->exchange_bottles_count) {
+                        $customer->update(['exchange_bottles_count' => $exchangeQty]);
+                    }
                 }
             } else {
                 $custValidated = $request->validate([
@@ -767,8 +789,12 @@ class RouteExecutionController extends Controller
                 $exchangeQty = max(0, (int) $request->input('exchange_quantity', 0));
                 $fixedQty = max(0, (int) $request->input('fixed_quantity', 0));
 
-                $custValidated['exchange_bottles_count'] = max($exchangeQty, (int) ($custValidated['exchange_bottles_count'] ?? 0));
-                $custValidated['fixed_bottles_count'] = max($fixedQty, (int) ($custValidated['fixed_bottles_count'] ?? 0));
+                if ($fixedQty > 0 && $exchangeQty > 0) {
+                    return back()->withErrors(['direct' => 'El cliente debe registrarse exclusivamente con botellones fijos o de cambio.']);
+                }
+
+                $custValidated['exchange_bottles_count'] = $exchangeQty;
+                $custValidated['fixed_bottles_count'] = $fixedQty;
 
                 $customer = $this->routeService->registerDirectRouteCustomer($user, $custValidated);
             }
@@ -1824,53 +1850,7 @@ class RouteExecutionController extends Controller
             $isPartial = false;
             $breakdown = [];
 
-            if ($exchangeQty > 0 && $fixedQty > 0) {
-                $opType = 'mixto';
-                $opLabel = 'Mixto (Cambio + Fijos)';
-
-                if ($hasExchange) {
-                    if ($canDeliverExchange) {
-                        $breakdown[] = "Entregar {$exchangePending} de cambio";
-                    } else {
-                        $breakdown[] = "Sin botellones de cambio en camión ({$exchangePending} sol.)";
-                    }
-                }
-                if ($hasFixedCollect) {
-                    $breakdown[] = "Recoger {$fixedToCollect} fijos";
-                }
-                if ($hasFixedDeliver) {
-                    if ($canDeliverFixed) {
-                        $deliverable = min($fixedToDeliver, $fixedAvailableOnTruck);
-                        $breakdown[] = "Entregar {$deliverable} fijos";
-                    } elseif ($hasFixedPendingAcceptance) {
-                        $breakdown[] = "Fijos por aceptar en Mi Carga ({$fixedToDeliver} u.)";
-                    } else {
-                        $breakdown[] = "Fijos en preparación en Planta ({$fixedToDeliver} u.)";
-                    }
-                }
-
-                $hasAnyAction = $canDeliverExchange || $hasFixedCollect || $canDeliverFixed;
-                if ($hasAnyAction) {
-                    $actionType = 'serve_mixed';
-                    $actionLabel = 'Atender pedido';
-                    $canExecute = true;
-                } elseif ($hasFixedPendingAcceptance) {
-                    $actionType = 'review_load';
-                    $actionLabel = 'Revisar carga';
-                    $situationLabel = 'Fijos pendientes de aceptar en Mi Carga';
-                    $canExecute = true;
-                } else {
-                    $actionType = 'blocked';
-                    $canExecute = false;
-                    if ($exchangeAvailable == 0 && $fixedInPlant) {
-                        $blockedReason = 'Sin existencias de cambio y fijos en Planta';
-                    } elseif ($exchangeAvailable == 0) {
-                        $blockedReason = 'Sin botellones de cambio en camión';
-                    } else {
-                        $blockedReason = 'En preparación en Planta';
-                    }
-                }
-            } elseif ($fixedQty > 0) {
+            if ($fixedQty > 0) {
                 if ($hasFixedCollect) {
                     $opType = 'recoleccion_fijos';
                     $opLabel = 'Recolección de fijos';

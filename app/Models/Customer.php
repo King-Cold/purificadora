@@ -18,6 +18,15 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const BOTTLE_TYPE_FIXED = 'fixed';
+    public const BOTTLE_TYPE_EXCHANGE = 'exchange';
+    public const BOTTLE_TYPE_UNASSIGNED = 'unassigned';
+
+    /**
+     * Bandera para habilitar o suspender la validación estricta de exclusividad (por defecto activada).
+     */
+    public static bool $enforceExclusivity = true;
+
     /**
      * The table associated with the model.
      *
@@ -42,6 +51,18 @@ class Customer extends Model
         'fixed_bottles_count',
         'exchange_bottles_count',
         'notes',
+    ];
+
+    /**
+     * Atributos dinámicos calculados anexados a la serialización del modelo.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'total_bottles',
+        'bottle_type',
+        'bottle_type_label',
+        'assigned_bottles_count',
     ];
 
     /**
@@ -84,6 +105,17 @@ class Customer extends Model
                     ]);
                 }
             }
+
+            // Regla de exclusividad estricta en el servidor:
+            // Impide guardar cantidades positivas en fixed_bottles_count y exchange_bottles_count para el mismo cliente.
+            $fixed = (int) ($customer->fixed_bottles_count ?? 0);
+            $exchange = (int) ($customer->exchange_bottles_count ?? 0);
+
+            if ($fixed > 0 && $exchange > 0) {
+                throw ValidationException::withMessages([
+                    'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
+                ]);
+            }
         });
     }
 
@@ -110,10 +142,55 @@ class Customer extends Model
             'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
-            'fixed_bottles_count' => ['required', 'integer', 'min:0'],
-            'exchange_bottles_count' => ['required', 'integer', 'min:0'],
+            'bottle_type' => ['nullable', 'string', 'in:fixed,exchange,none'],
+            'bottles_count' => ['nullable', 'integer', 'min:0'],
+            'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],
+            'exchange_bottles_count' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string'],
         ];
+    }
+
+    /**
+     * Determina el tipo de botellón exclusivo del cliente: 'fixed', 'exchange', 'unassigned' o 'mixed' (legado).
+     */
+    public function getBottleTypeAttribute(): string
+    {
+        $fixed = (int) ($this->fixed_bottles_count ?? 0);
+        $exchange = (int) ($this->exchange_bottles_count ?? 0);
+
+        if ($fixed > 0) {
+            return self::BOTTLE_TYPE_FIXED;
+        }
+
+        if ($exchange > 0) {
+            return self::BOTTLE_TYPE_EXCHANGE;
+        }
+
+        return self::BOTTLE_TYPE_UNASSIGNED;
+    }
+
+    /**
+     * Etiqueta legible del tipo de botellón del cliente.
+     */
+    public function getBottleTypeLabelAttribute(): string
+    {
+        return match ($this->bottle_type) {
+            self::BOTTLE_TYPE_FIXED => 'Fijos',
+            self::BOTTLE_TYPE_EXCHANGE => 'Cambios',
+            default => 'Sin botellones asignados',
+        };
+    }
+
+    /**
+     * Cantidad asignada del tipo exclusivo del cliente.
+     */
+    public function getAssignedBottlesCountAttribute(): int
+    {
+        return match ($this->bottle_type) {
+            self::BOTTLE_TYPE_FIXED => (int) $this->fixed_bottles_count,
+            self::BOTTLE_TYPE_EXCHANGE => (int) $this->exchange_bottles_count,
+            default => 0,
+        };
     }
 
     /**

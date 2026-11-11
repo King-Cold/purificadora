@@ -761,21 +761,17 @@ class DeliveryRouteService
             $exchangeQty = (int) ($exchangeItem?->quantity ?? 0);
             $fixedQty = (int) ($fixedItem?->quantity ?? 0);
 
-            // Determinar tipo de operación
-            $opType = 'intercambio';
-            $opLabel = 'Intercambio de botellones de cambio';
-
-            if ($exchangeQty > 0 && $fixedQty > 0) {
-                $opType = 'mixto';
-                $opLabel = 'Operación mixta (Cambio + Fijos)';
-            } elseif ($fixedQty > 0) {
-                if ($fixedItem->prepared_quantity > 0) {
+            if ($fixedQty > 0) {
+                if ($fixedItem && $fixedItem->prepared_quantity > 0) {
                     $opType = 'devolucion_fijos';
                     $opLabel = 'Devolución de fijos preparados';
                 } else {
                     $opType = 'recoleccion_fijos';
                     $opLabel = 'Recolección de fijos vacíos';
                 }
+            } else {
+                $opType = 'intercambio';
+                $opLabel = 'Intercambio de botellones de cambio';
             }
 
             $address = $order->delivery_street 
@@ -907,13 +903,20 @@ class DeliveryRouteService
             $name = !empty($data['name']) ? trim((string)$data['name']) : null;
             $phone = !empty($data['phone']) ? trim((string)$data['phone']) : null;
 
+            $fixed = max(0, (int) ($data['fixed_bottles_count'] ?? 0));
+            $exchange = max(0, (int) ($data['exchange_bottles_count'] ?? 0));
+
+            if ($fixed > 0 && $exchange > 0) {
+                throw new OrderBusinessRuleException('Un cliente nuevo no puede registrarse con botellones fijos y de cambio simultáneamente.', 'bottle_type', 422);
+            }
+
             $customer = Customer::create([
                 'user_id' => null,
                 'name' => $name,
                 'nickname' => $nickname,
                 'phone' => $phone,
-                'fixed_bottles_count' => max(0, (int) ($data['fixed_bottles_count'] ?? 0)),
-                'exchange_bottles_count' => max(0, (int) ($data['exchange_bottles_count'] ?? 0)),
+                'fixed_bottles_count' => $fixed,
+                'exchange_bottles_count' => $exchange,
                 'notes' => !empty($data['notes']) ? trim((string)$data['notes']) : null,
             ]);
 
@@ -960,6 +963,20 @@ class DeliveryRouteService
 
             if (($fixedQty + $exchangeQty) <= 0) {
                 throw new OrderBusinessRuleException('Debe solicitarse al menos un botellón en el pedido.', 'quantity', 422);
+            }
+
+            // Regla de Exclusividad: rechazar pedidos combinados
+            if ($fixedQty > 0 && $exchangeQty > 0) {
+                throw new OrderBusinessRuleException('No se permiten pedidos combinados de botellones fijos y de cambio.', 'quantity', 422);
+            }
+
+            // Regla de Exclusividad: coherencia con el tipo registrado
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
+                throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones fijos.', 'exchange_quantity', 422);
+            }
+
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
+                throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones de cambio.', 'fixed_quantity', 422);
             }
 
             // Validar que las cantidades no superen las registradas del cliente

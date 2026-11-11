@@ -118,10 +118,34 @@ class StoreAdminOrderRequest extends FormRequest
                 );
             }
 
-            // 5. REGLA: Cantidades de botellones de 20L
+            // 5. REGLA: Exclusividad de modalidad y cantidades de botellones de 20L
             $fixedQty = (int) $this->input('fixed_quantity', 0);
             $exchangeQty = (int) $this->input('exchange_quantity', 0);
             $totalQty = $fixedQty + $exchangeQty;
+
+            // Regla de Exclusividad: rechazar pedidos combinados
+            if ($fixedQty > 0 && $exchangeQty > 0) {
+                $validator->errors()->add(
+                    'quantity',
+                    'No se permiten pedidos combinados de botellones fijos y de cambio. Cada cliente opera exclusivamente bajo una sola modalidad.'
+                );
+                return;
+            }
+
+            // Regla de Exclusividad: coherencia con el tipo registrado
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
+                $validator->errors()->add(
+                    'exchange_quantity',
+                    'El cliente está registrado exclusivamente para botellones fijos.'
+                );
+            }
+
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
+                $validator->errors()->add(
+                    'fixed_quantity',
+                    'El cliente está registrado exclusivamente para botellones de cambio.'
+                );
+            }
 
             $registeredFixed = (int) ($customer->fixed_bottles_count ?? 0);
             $registeredExchange = (int) ($customer->exchange_bottles_count ?? 0);

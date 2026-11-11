@@ -108,10 +108,34 @@ class StoreClientOrderRequest extends FormRequest
                 );
             }
 
-            // 5. Validación de botellones registrados y cantidades
+            // 5. Validación de modalidad exclusiva y botellones registrados
             $fixedQty = (int) $this->input('fixed_quantity', 0);
             $exchangeQty = (int) $this->input('exchange_quantity', 0);
             $totalQty = $fixedQty + $exchangeQty;
+
+            // Regla de Exclusividad: rechazar combinaciones simultáneas de fijos y cambios
+            if ($fixedQty > 0 && $exchangeQty > 0) {
+                $validator->errors()->add(
+                    'quantity',
+                    'No se permiten pedidos combinados de botellones fijos y de cambio. Cada cliente opera exclusivamente bajo una sola modalidad.'
+                );
+                return;
+            }
+
+            // Regla de Exclusividad: validar coherencia con el tipo registrado del cliente
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
+                $validator->errors()->add(
+                    'exchange_quantity',
+                    'Tu cuenta está registrada exclusivamente para botellones fijos.'
+                );
+            }
+
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
+                $validator->errors()->add(
+                    'fixed_quantity',
+                    'Tu cuenta está registrada exclusivamente para botellones de cambio.'
+                );
+            }
 
             $registeredFixed = (int) ($customer->fixed_bottles_count ?? 0);
             $registeredExchange = (int) ($customer->exchange_bottles_count ?? 0);

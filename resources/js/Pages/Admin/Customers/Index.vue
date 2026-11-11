@@ -329,9 +329,27 @@ const deleteCustomer = () => {
                             <!-- Botellones 20L y Domicilio -->
                             <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
                                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
-                                    <span class="text-[10px] text-slate-500 font-bold uppercase block">Botellones 20L</span>
-                                    <span class="font-mono font-bold text-slate-800">F: {{ customer.fixed_bottles_count }} | C: {{ customer.exchange_bottles_count }}</span>
-                                    <span class="text-[10px] text-slate-400 block">Total: {{ customer.total_bottles }} envases</span>
+                                    <span class="text-[10px] text-slate-500 font-bold uppercase block">Modalidad (20L)</span>
+                                    <div class="mt-0.5">
+                                        <span
+                                            v-if="customer.bottle_type === 'fixed'"
+                                            class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-900 border border-blue-200"
+                                        >
+                                            Fijos: {{ customer.fixed_bottles_count }}
+                                        </span>
+                                        <span
+                                            v-else-if="customer.bottle_type === 'exchange'"
+                                            class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-900 border border-sky-200"
+                                        >
+                                            Cambios: {{ customer.exchange_bottles_count }}
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                                        >
+                                            Sin botellones
+                                        </span>
+                                    </div>
                                 </div>
                                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
                                     <span class="text-[10px] text-slate-500 font-bold uppercase block">Zona / Ubicación</span>
@@ -446,18 +464,28 @@ const deleteCustomer = () => {
                                         </div>
                                     </td>
 
-                                    <!-- Botellones (Fijos / Cambio / Total de 20L) -->
+                                    <!-- Botellones (Modalidad exclusiva de 20L) -->
                                     <td class="whitespace-nowrap px-4 py-3.5 text-xs">
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200" title="Botellones fijos de 20L (con nombre rotulado)">
-                                                F: {{ customer.fixed_bottles_count }}
+                                        <div v-if="customer.bottle_type === 'fixed'">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-900 border border-blue-200">
+                                                <i class="fa-solid fa-tag text-[10px] mr-1"></i> Fijos: {{ customer.fixed_bottles_count }}
                                             </span>
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-sky-50 text-sky-900 border border-sky-200" title="Botellones de cambio de 20L (intercambiables)">
-                                                C: {{ customer.exchange_bottles_count }}
-                                            </span>
+                                            <div class="text-[10px] text-slate-500 mt-0.5 font-medium">
+                                                Garrafones rotulados
+                                            </div>
                                         </div>
-                                        <div class="text-[10px] text-slate-500 mt-0.5 font-medium">
-                                            Total: {{ customer.total_bottles }} envase(s) de 20L
+                                        <div v-else-if="customer.bottle_type === 'exchange'">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-900 border border-sky-200">
+                                                <i class="fa-solid fa-arrows-rotate text-[10px] mr-1"></i> Cambios: {{ customer.exchange_bottles_count }}
+                                            </span>
+                                            <div class="text-[10px] text-slate-500 mt-0.5 font-medium">
+                                                Garrafones de cambio
+                                            </div>
+                                        </div>
+                                        <div v-else>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                Sin botellones
+                                            </span>
                                         </div>
                                     </td>
 

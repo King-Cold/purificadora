@@ -282,7 +282,7 @@ const getInitials = (name) => {
                         </div>
                     </div>
 
-                    <!-- 3. Botellones fijos y de cambio -->
+                    <!-- 3. Botellones (Modalidad Exclusiva) -->
                     <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
                             <div class="flex items-center gap-3">
@@ -291,10 +291,10 @@ const getInitials = (name) => {
                                 </div>
                                 <div>
                                     <h3 class="text-base font-bold text-slate-900">
-                                        Cantidad de Botellones
+                                        Modalidad de Botellones
                                     </h3>
                                     <p class="text-xs text-slate-500">
-                                        Control de envases en posesión del cliente
+                                        Control exclusivo de envases en posesión del cliente
                                     </p>
                                 </div>
                             </div>
@@ -305,28 +305,51 @@ const getInitials = (name) => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                            <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Botellones Fijos (20L)</span>
-                                    <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">Rotulados</span>
-                                </div>
-                                <div class="text-2xl font-bold font-mono text-blue-950 mt-1">
-                                    {{ customer.fixed_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
-                                </div>
+                        <!-- Caso 1: Fijos Exclusivo -->
+                        <div v-if="customer.bottle_type === 'fixed'" class="p-4 rounded-xl bg-blue-50/70 border border-blue-200 text-xs">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                    <i class="fa-solid fa-tag text-blue-900"></i>
+                                    Modalidad Exclusiva: Botellones Fijos (20L)
+                                </span>
+                                <span class="text-[11px] px-2.5 py-0.5 rounded bg-blue-600 text-white font-semibold">
+                                    Rotulados
+                                </span>
                             </div>
+                            <div class="text-3xl font-bold font-mono text-blue-950 mt-2">
+                                {{ customer.fixed_bottles_count }}
+                                <span class="text-sm font-normal text-slate-600">envase(s) de 20L registrados</span>
+                            </div>
+                            <p class="text-slate-500 mt-2 text-[11px]">
+                                El cliente maneja exclusivamente envases rotulados que se trasladan a Planta para su llenado individual.
+                            </p>
+                        </div>
 
-                            <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Botellones de Cambio (20L)</span>
-                                    <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">Intercambiables</span>
-                                </div>
-                                <div class="text-2xl font-bold font-mono text-sky-950 mt-1">
-                                    {{ customer.exchange_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
-                                </div>
+                        <!-- Caso 3: Cambios Exclusivo -->
+                        <div v-else-if="customer.bottle_type === 'exchange'" class="p-4 rounded-xl bg-sky-50/70 border border-sky-200 text-xs">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                    <i class="fa-solid fa-arrows-rotate text-sky-600"></i>
+                                    Modalidad Exclusiva: Botellones de Cambio (20L)
+                                </span>
+                                <span class="text-[11px] px-2.5 py-0.5 rounded bg-sky-600 text-white font-semibold">
+                                    Intercambiables
+                                </span>
                             </div>
+                            <div class="text-3xl font-bold font-mono text-sky-950 mt-2">
+                                {{ customer.exchange_bottles_count }}
+                                <span class="text-sm font-normal text-slate-600">envase(s) de 20L registrados</span>
+                            </div>
+                            <p class="text-slate-500 mt-2 text-[11px]">
+                                El cliente intercambia envases vacíos por llenos de las existencias generales en el camión.
+                            </p>
+                        </div>
+
+                        <!-- Caso 4: Sin botellones -->
+                        <div v-else class="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                            <i class="fa-solid fa-bottle-water text-2xl text-slate-400 mb-1 block"></i>
+                            <p class="font-medium text-slate-700">Sin botellones de 20L asignados</p>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Puedes asignar modalidad fijos o cambios al editar este cliente.</p>
                         </div>
 
                         <div v-if="customer.notes" class="mt-4 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">

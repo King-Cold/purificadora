@@ -333,19 +333,6 @@ const getStageIconClass = (stageKey) => {
                                                 <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
                                                 <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
                                             </span>
-
-                                            <!-- Si es mixto y tienen diferente avance -->
-                                            <div
-                                                v-if="order.operational_progress?.is_mixed"
-                                                class="flex flex-wrap gap-1 text-[10px]"
-                                            >
-                                                <span class="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-medium">
-                                                    Cambio: {{ order.operational_progress.exchange?.stage_label }}
-                                                </span>
-                                                <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-medium">
-                                                    Fijos: {{ order.operational_progress.fixed?.stage_label }}
-                                                </span>
-                                            </div>
                                         </div>
                                     </td>
 
@@ -416,21 +403,6 @@ const getStageIconClass = (stageKey) => {
                                 <div class="border-l border-slate-200">
                                     <span class="text-[10px] font-bold text-blue-900 uppercase block">Total 20L</span>
                                     <span class="font-mono font-bold text-slate-900 text-sm">{{ order.total_bottles }}</span>
-                                </div>
-                            </div>
-
-                            <!-- Explicación granular si es mixto -->
-                            <div
-                                v-if="order.operational_progress?.is_mixed"
-                                class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1"
-                            >
-                                <div class="flex items-center justify-between text-slate-600">
-                                    <span class="font-semibold text-sky-900">Cambio:</span>
-                                    <span>{{ order.operational_progress.exchange?.stage_label }}</span>
-                                </div>
-                                <div class="flex items-center justify-between text-slate-600">
-                                    <span class="font-semibold text-blue-900">Fijos:</span>
-                                    <span>{{ order.operational_progress.fixed?.stage_label }}</span>
                                 </div>
                             </div>
 

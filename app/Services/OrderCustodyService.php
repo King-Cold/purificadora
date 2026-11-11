@@ -64,7 +64,7 @@ class OrderCustodyService
                 'created_at' => now(),
             ]);
 
-            // Transición a En Proceso para fijos / mixto
+            // Transición a En Proceso para botellones fijos
             if ($lockedOrder->status !== Order::STATUS_IN_PROCESS) {
                 $previousStatus = $lockedOrder->status;
                 $lockedOrder->update(['status' => Order::STATUS_IN_PROCESS]);

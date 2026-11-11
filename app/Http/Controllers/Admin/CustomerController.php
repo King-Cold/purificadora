@@ -139,6 +139,9 @@ class CustomerController extends Controller
                     'phone' => $customer->phone ?: 'No registrado',
                     'secondary_phone' => $customer->secondary_phone ?: null,
                     'email' => $customer->email ?: 'Sin correo registrado',
+                    'bottle_type' => $customer->bottle_type,
+                    'bottle_type_label' => $customer->bottle_type_label,
+                    'assigned_bottles_count' => $customer->assigned_bottles_count,
                     'fixed_bottles_count' => $fixedCount,
                     'exchange_bottles_count' => $exchangeCount,
                     'total_bottles' => $fixedCount + $exchangeCount,
@@ -199,10 +202,36 @@ class CustomerController extends Controller
             'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
-            'fixed_bottles_count' => ['required', 'integer', 'min:0'],
-            'exchange_bottles_count' => ['required', 'integer', 'min:0'],
+            'bottle_type' => ['nullable', 'string', 'in:fixed,exchange,none'],
+            'bottles_count' => ['nullable', 'integer', 'min:0'],
+            'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],
+            'exchange_bottles_count' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // Determinar cantidades según selector exclusivo
+        if (isset($validated['bottle_type'])) {
+            if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
+                $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
+                $exchangeCount = 0;
+            } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
+                $fixedCount = 0;
+                $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
+            } else {
+                $fixedCount = 0;
+                $exchangeCount = 0;
+            }
+        } else {
+            $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
+            $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
+        }
+
+        // Regla única en el servidor: impedir cantidades positivas simultáneas
+        if ($fixedCount > 0 && $exchangeCount > 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
+            ]);
+        }
 
         // Regla: Debe proporcionarse al menos el nombre o el apodo para identificar al cliente particular
         if (empty(trim((string)($validated['name'] ?? ''))) && empty(trim((string)($validated['nickname'] ?? '')))) {
@@ -231,7 +260,7 @@ class CustomerController extends Controller
                 ->get();
         }
 
-        $customer = DB::transaction(function () use ($validated) {
+        $customer = DB::transaction(function () use ($validated, $fixedCount, $exchangeCount) {
             // El modelo Customer se encarga automáticamente de generar el código CLI-XXXX en el hook creating.
             // Se fuerza user_id = null ya que este es el registro administrativo para clientes sin cuenta de acceso.
             return Customer::create([
@@ -241,8 +270,8 @@ class CustomerController extends Controller
                 'phone' => !empty($validated['phone']) ? trim($validated['phone']) : null,
                 'secondary_phone' => !empty($validated['secondary_phone']) ? trim($validated['secondary_phone']) : null,
                 'email' => !empty($validated['email']) ? trim($validated['email']) : null,
-                'fixed_bottles_count' => (int) $validated['fixed_bottles_count'],
-                'exchange_bottles_count' => (int) $validated['exchange_bottles_count'],
+                'fixed_bottles_count' => $fixedCount,
+                'exchange_bottles_count' => $exchangeCount,
                 'notes' => !empty($validated['notes']) ? trim($validated['notes']) : null,
             ]);
         });
@@ -342,7 +371,10 @@ class CustomerController extends Controller
                 'addresses' => $addressData ? [$addressData] : [],
                 'addresses_count' => $addressData ? 1 : 0,
 
-                // Botellones del cliente (Fijos y de Cambio)
+                // Botellones del cliente (Fijos o de Cambio)
+                'bottle_type' => $customer->bottle_type,
+                'bottle_type_label' => $customer->bottle_type_label,
+                'assigned_bottles_count' => $customer->assigned_bottles_count,
                 'fixed_bottles_count' => $fixedCount,
                 'exchange_bottles_count' => $exchangeCount,
                 'total_bottles' => $fixedCount + $exchangeCount,
@@ -374,6 +406,9 @@ class CustomerController extends Controller
                 'secondary_phone' => $customer->secondary_phone ?? '',
                 'email' => $customer->email ?? '',
                 'notes' => $customer->notes ?? '',
+                'bottle_type' => $customer->bottle_type,
+                'bottle_type_label' => $customer->bottle_type_label,
+                'assigned_bottles_count' => $customer->assigned_bottles_count,
                 'fixed_bottles_count' => (int) ($customer->fixed_bottles_count ?? 0),
                 'exchange_bottles_count' => (int) ($customer->exchange_bottles_count ?? 0),
                 'has_account' => !is_null($customer->user_id),
@@ -401,10 +436,36 @@ class CustomerController extends Controller
             'phone' => ['nullable', 'string', 'max:25'],
             'secondary_phone' => ['nullable', 'string', 'max:25'],
             'email' => ['nullable', 'email', 'max:120'],
-            'fixed_bottles_count' => ['required', 'integer', 'min:0'],
-            'exchange_bottles_count' => ['required', 'integer', 'min:0'],
+            'bottle_type' => ['nullable', 'string', 'in:fixed,exchange,none'],
+            'bottles_count' => ['nullable', 'integer', 'min:0'],
+            'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],
+            'exchange_bottles_count' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // Determinar cantidades según selector exclusivo
+        if (isset($validated['bottle_type'])) {
+            if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
+                $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
+                $exchangeCount = 0;
+            } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
+                $fixedCount = 0;
+                $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
+            } else {
+                $fixedCount = 0;
+                $exchangeCount = 0;
+            }
+        } else {
+            $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
+            $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
+        }
+
+        // Regla única en el servidor: impedir cantidades positivas simultáneas
+        if ($fixedCount > 0 && $exchangeCount > 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
+            ]);
+        }
 
         // Regla: Debe proporcionarse al menos el nombre o el apodo para identificar al cliente
         if (empty(trim((string)($validated['name'] ?? ''))) && empty(trim((string)($validated['nickname'] ?? '')))) {
@@ -414,6 +475,47 @@ class CustomerController extends Controller
             ]);
         }
 
+        // Verificación de cambio de modalidad del cliente (ej. de fijos a cambios o viceversa)
+        $previousType = $customer->bottle_type;
+        $newType = ($fixedCount > 0) ? Customer::BOTTLE_TYPE_FIXED : (($exchangeCount > 0) ? Customer::BOTTLE_TYPE_EXCHANGE : Customer::BOTTLE_TYPE_UNASSIGNED);
+
+        if ($previousType !== Customer::BOTTLE_TYPE_UNASSIGNED && $newType !== Customer::BOTTLE_TYPE_UNASSIGNED && $previousType !== $newType) {
+            // 1. Revisar envases bajo custodia pendientes de devolución física
+            $unreturnedFixed = \App\Models\OrderItem::whereHas('order', function ($q) use ($customer) {
+                    $q->where('customer_id', $customer->id);
+                })
+                ->where('type', \App\Models\OrderItem::TYPE_FIXED)
+                ->where('collected_quantity', '>', 0)
+                ->whereRaw('(returned_empty_quantity + delivered_quantity) < collected_quantity')
+                ->with('order')
+                ->get();
+
+            if ($unreturnedFixed->isNotEmpty()) {
+                $folios = $unreturnedFixed->map(fn($i) => $i->order?->folio)->filter()->unique()->implode(', ');
+                $pendingQty = $unreturnedFixed->sum(fn($i) => $i->collected_quantity - ($i->returned_empty_quantity + $i->delivered_quantity));
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'bottle_type' => "No se puede cambiar el tipo de botellón del cliente porque tiene {$pendingQty} botellón(es) fijo(s) bajo custodia en Planta o camión pendientes de entrega o devolución (pedidos: {$folios}). Concluya o devuelva dichos envases antes de modificar la modalidad.",
+                ]);
+            }
+
+            // 2. Revisar pedidos activos en curso
+            $activeOrders = $customer->orders()
+                ->whereIn('status', [
+                    \App\Models\Order::STATUS_PENDING,
+                    \App\Models\Order::STATUS_CONFIRMED,
+                    \App\Models\Order::STATUS_IN_ROUTE,
+                    \App\Models\Order::STATUS_IN_PROCESS,
+                ])
+                ->get();
+
+            if ($activeOrders->isNotEmpty()) {
+                $folios = $activeOrders->pluck('folio')->implode(', ');
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'bottle_type' => "El cliente cuenta con pedido(s) activo(s) en curso ({$folios}). Concluya o cancele los pedidos pendientes antes de cambiar la modalidad de botellón.",
+                ]);
+            }
+        }
+
         // Protegemos explícitamente id, code, user_id y cualquier credencial de acceso
         $customer->update([
             'name' => !empty($validated['name']) ? trim($validated['name']) : null,
@@ -421,8 +523,8 @@ class CustomerController extends Controller
             'phone' => !empty($validated['phone']) ? trim($validated['phone']) : null,
             'secondary_phone' => !empty($validated['secondary_phone']) ? trim($validated['secondary_phone']) : null,
             'email' => !empty($validated['email']) ? trim($validated['email']) : null,
-            'fixed_bottles_count' => (int) $validated['fixed_bottles_count'],
-            'exchange_bottles_count' => (int) $validated['exchange_bottles_count'],
+            'fixed_bottles_count' => $fixedCount,
+            'exchange_bottles_count' => $exchangeCount,
             'notes' => !empty($validated['notes']) ? trim($validated['notes']) : null,
         ]);
 

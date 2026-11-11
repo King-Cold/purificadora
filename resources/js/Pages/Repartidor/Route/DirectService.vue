@@ -31,16 +31,40 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.errors?.direct || null);
 
 // -------------------------------------------------------------------------
-// 1. ELECCIÓN DE SERVICIO: 'fijos' O 'cambios' (inician sin seleccionar)
+// 1. CLIENTE: BÚSQUEDA O NUEVO RÁPIDO
 // -------------------------------------------------------------------------
-const selectedService = ref(null); // null, 'fijos', 'cambios'
+const clientMode = ref('search'); // 'search' o 'new'
+
+// Búsqueda de cliente existente
+const searchQuery = ref(props.initialCustomer?.nickname || '');
+const searchResults = ref([]);
+const isSearching = ref(false);
+const selectedCustomer = ref(props.initialCustomer || null);
+
+// Elección de servicio: 'fijos' O 'cambios'
+const selectedService = ref(
+    props.initialCustomer?.bottle_type === 'fixed'
+        ? 'fijos'
+        : props.initialCustomer?.bottle_type === 'exchange'
+        ? 'cambios'
+        : null
+);
 
 // Cantidad única del servicio seleccionado
 const quantity = ref(1);
 
+const isCustomerLocked = computed(() => {
+    return clientMode.value === 'search' && 
+        selectedCustomer.value && 
+        (selectedCustomer.value.bottle_type === 'fixed' || selectedCustomer.value.bottle_type === 'exchange');
+});
+
+const isCustomerUnassigned = computed(() => {
+    return (clientMode.value === 'search' && selectedCustomer.value && selectedCustomer.value.bottle_type === 'unassigned') || clientMode.value === 'new';
+});
+
 const selectService = (service) => {
     selectedService.value = service;
-    // Al cambiar de servicio, limpia la cantidad anterior
     quantity.value = 1;
 };
 
@@ -75,17 +99,6 @@ const setQuantityValue = (val) => {
     }
 };
 
-// -------------------------------------------------------------------------
-// 2. CLIENTE: BÚSQUEDA O NUEVO RÁPIDO
-// -------------------------------------------------------------------------
-const clientMode = ref('search'); // 'search' o 'new'
-
-// Búsqueda de cliente existente
-const searchQuery = ref(props.initialCustomer?.nickname || '');
-const searchResults = ref([]);
-const isSearching = ref(false);
-const selectedCustomer = ref(props.initialCustomer || null);
-
 let searchTimeout = null;
 const onSearchInput = () => {
     clearTimeout(searchTimeout);
@@ -113,12 +126,43 @@ const selectCustomer = (cust) => {
     selectedCustomer.value = cust;
     searchQuery.value = cust.nickname;
     searchResults.value = [];
+    if (cust.bottle_type === 'fixed') {
+        selectedService.value = 'fijos';
+    } else if (cust.bottle_type === 'exchange') {
+        selectedService.value = 'cambios';
+    } else {
+        selectedService.value = null;
+    }
+    quantity.value = 1;
 };
 
 const clearSelectedCustomer = () => {
     selectedCustomer.value = null;
     searchQuery.value = '';
     searchResults.value = [];
+    selectedService.value = null;
+    quantity.value = 1;
+};
+
+const setClientMode = (mode) => {
+    clientMode.value = mode;
+    if (mode === 'new') {
+        selectedService.value = null;
+        quantity.value = 1;
+    } else {
+        if (selectedCustomer.value) {
+            if (selectedCustomer.value.bottle_type === 'fixed') {
+                selectedService.value = 'fijos';
+            } else if (selectedCustomer.value.bottle_type === 'exchange') {
+                selectedService.value = 'cambios';
+            } else {
+                selectedService.value = null;
+            }
+        } else {
+            selectedService.value = null;
+        }
+        quantity.value = 1;
+    }
 };
 
 // Formulario de nuevo cliente rápido
@@ -146,7 +190,7 @@ const hasActiveOrder = computed(() => {
 });
 
 // -------------------------------------------------------------------------
-// 3. ENVÍO DEL PEDIDO AL PASO
+// 2. ENVÍO DEL PEDIDO AL PASO
 // -------------------------------------------------------------------------
 const form = useForm({
     customer_id: null,
@@ -275,81 +319,12 @@ const submitDirectOrder = () => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 1. ELIGE EL SERVICIO PRIMERO                                              -->
+            <!-- 1. SELECCIÓN DE CLIENTE (Buscar o Alta Rápida)                             -->
             <!-- ========================================================================= -->
-            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3">
-                <div>
-                    <h2 class="text-sm sm:text-base font-black text-slate-900">1. Elige el servicio</h2>
-                    <p class="text-xs text-slate-500">Selecciona qué operación realizarás con el cliente</p>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <!-- BOTÓN FIJOS -->
-                    <button
-                        type="button"
-                        @click="selectService('fijos')"
-                        class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative"
-                        :class="selectedService === 'fijos'
-                            ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
-                    >
-                        <div
-                            class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
-                            :class="selectedService === 'fijos' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
-                        >
-                            <i class="fa-solid fa-bottle-water"></i>
-                        </div>
-                        <div class="flex-1 min-w-0 pr-6">
-                            <div class="text-base font-black text-slate-900">Fijos</div>
-                            <p class="text-xs text-slate-600 mt-0.5 leading-snug">Recoger para llenar en Planta</p>
-                        </div>
-                        <div
-                            v-if="selectedService === 'fijos'"
-                            class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
-                        >
-                            <i class="fa-solid fa-check"></i>
-                        </div>
-                    </button>
-
-                    <!-- BOTÓN CAMBIOS -->
-                    <button
-                        type="button"
-                        @click="selectService('cambios')"
-                        class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative"
-                        :class="selectedService === 'cambios'
-                            ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
-                    >
-                        <div
-                            class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
-                            :class="selectedService === 'cambios' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
-                        >
-                            <i class="fa-solid fa-arrows-rotate"></i>
-                        </div>
-                        <div class="flex-1 min-w-0 pr-6">
-                            <div class="text-base font-black text-slate-900">Cambios</div>
-                            <p class="text-xs text-slate-600 mt-0.5 leading-snug">Cambiar vacíos por llenos</p>
-                        </div>
-                        <div
-                            v-if="selectedService === 'cambios'"
-                            class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
-                        >
-                            <i class="fa-solid fa-check"></i>
-                        </div>
-                    </button>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- 2. BÚSQUEDA / NUEVO CLIENTE (Visible tras elegir servicio)                  -->
-            <!-- ========================================================================= -->
-            <div
-                v-if="selectedService"
-                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4 animate-fade-in"
-            >
+            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
                     <div>
-                        <h2 class="text-sm sm:text-base font-black text-slate-900">2. Cliente</h2>
+                        <h2 class="text-sm sm:text-base font-black text-slate-900">1. Cliente</h2>
                         <p class="text-xs text-slate-500">Busca el cliente o regístralo rápidamente</p>
                     </div>
 
@@ -357,7 +332,7 @@ const submitDirectOrder = () => {
                     <div class="inline-flex p-1 bg-slate-100 rounded-xl gap-1">
                         <button
                             type="button"
-                            @click="clientMode = 'search'"
+                            @click="setClientMode('search')"
                             class="px-3 py-1.5 text-xs font-black rounded-lg transition"
                             :class="clientMode === 'search' ? 'bg-blue-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
                         >
@@ -365,7 +340,7 @@ const submitDirectOrder = () => {
                         </button>
                         <button
                             type="button"
-                            @click="clientMode = 'new'"
+                            @click="setClientMode('new')"
                             class="px-3 py-1.5 text-xs font-black rounded-lg transition"
                             :class="clientMode === 'new' ? 'bg-blue-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
                         >
@@ -404,6 +379,9 @@ const submitDirectOrder = () => {
                                 <div>
                                     <span class="font-bold text-slate-900 text-sm block">{{ c.nickname }}</span>
                                     <span v-if="c.name" class="text-slate-500 text-[11px]">{{ c.name }}</span>
+                                    <span v-if="c.bottle_type_label" class="text-slate-500 text-[10px] block mt-0.5">
+                                        {{ c.bottle_type_label }} ({{ c.assigned_bottles_count }})
+                                    </span>
                                 </div>
                                 <span class="text-[11px] font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{{ c.code }}</span>
                             </button>
@@ -418,10 +396,35 @@ const submitDirectOrder = () => {
                                 <span class="text-base font-black text-blue-950 block">{{ selectedCustomer.nickname }}</span>
                                 <span v-if="selectedCustomer.name" class="text-slate-600 text-[11px] block">{{ selectedCustomer.name }}</span>
                                 <span v-if="selectedCustomer.phone" class="text-slate-500 text-[11px] block"><i class="fa-solid fa-phone text-[10px]"></i> {{ selectedCustomer.phone }}</span>
-                                <span v-if="selectedCustomer.address?.zone_label" class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100/70 px-2 py-0.5 rounded-md mt-1">
-                                    <i class="fa-solid fa-location-dot text-[10px]"></i>
-                                    {{ selectedCustomer.address.zone_label }}
-                                </span>
+                                
+                                <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span v-if="selectedCustomer.address?.zone_label" class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100/70 px-2 py-0.5 rounded-md">
+                                        <i class="fa-solid fa-location-dot text-[10px]"></i>
+                                        {{ selectedCustomer.address.zone_label }}
+                                    </span>
+
+                                    <!-- Etiqueta de modalidad exclusiva -->
+                                    <span
+                                        v-if="selectedCustomer.bottle_type === 'fixed'"
+                                        class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-md"
+                                    >
+                                        <i class="fa-solid fa-bottle-water"></i>
+                                        Fijos ({{ selectedCustomer.assigned_bottles_count }})
+                                    </span>
+                                    <span
+                                        v-else-if="selectedCustomer.bottle_type === 'exchange'"
+                                        class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md"
+                                    >
+                                        <i class="fa-solid fa-arrows-rotate"></i>
+                                        Cambios ({{ selectedCustomer.assigned_bottles_count }})
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md"
+                                    >
+                                        Sin botellones asignados
+                                    </span>
+                                </div>
                             </div>
                             <button
                                 @click="clearSelectedCustomer"
@@ -519,196 +522,294 @@ const submitDirectOrder = () => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 3. CANTIDAD DEL SERVICIO (Visible tras elegir servicio)                    -->
+            <!-- 2. SERVICIO Y CANTIDAD                                                    -->
             <!-- ========================================================================= -->
 
-            <!-- CASO A: SI ELIGE FIJOS -->
+            <!-- Si está en modo búsqueda y no hay cliente seleccionado -->
             <div
-                v-if="selectedService === 'fijos'"
-                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
+                v-if="clientMode === 'search' && !selectedCustomer"
+                class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs text-center space-y-2 text-slate-400"
             >
-                <div class="border-b border-slate-100 pb-2.5">
-                    <h2 class="text-sm sm:text-base font-black text-slate-900">3. Cantidad</h2>
-                    <p class="text-xs text-slate-500">¿Cuántos fijos recogiste?</p>
-                </div>
-
-                <!-- Campo de cantidad con stepper táctil grande -->
-                <div class="space-y-3 py-2">
-                    <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Botellones fijos de 20 L a recoger:
-                    </label>
-
-                    <div class="flex items-center justify-center gap-4">
-                        <!-- Botón Menos (>= 48x48px) -->
-                        <button
-                            type="button"
-                            @click="decrementQty"
-                            :disabled="quantity <= 1"
-                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs"
-                        >
-                            <i class="fa-solid fa-minus"></i>
-                        </button>
-
-                        <!-- Input / Visualizador de Cantidad -->
-                        <div class="text-center">
-                            <input
-                                :value="quantity"
-                                @input="setQuantityValue($event.target.value)"
-                                type="number"
-                                min="1"
-                                class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
-                            />
-                            <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
-                                {{ quantity === 1 ? 'Botellón fijo' : 'Botellones fijos' }}
-                            </span>
-                        </div>
-
-                        <!-- Botón Más (>= 48x48px) -->
-                        <button
-                            type="button"
-                            @click="incrementQty"
-                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 transition flex items-center justify-center shadow-sm"
-                        >
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
-                    </div>
-
-                    <p class="text-[11px] text-center text-slate-500 pt-1">
-                        Esta operación se puede registrar aunque el camión tenga cero cambios llenos. Las unidades pasan directamente a <strong>Planta → Por recibir</strong>.
-                    </p>
-                </div>
-
-                <!-- Resumen previo al botón -->
-                <div class="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-center font-bold text-blue-950 text-xs sm:text-sm">
-                    Recoges {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }} para enviar a Planta
-                </div>
-
-                <!-- Botón de Confirmación Principal -->
-                <button
-                    type="button"
-                    @click="submitDirectOrder"
-                    :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
-                    class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
-                >
-                    <i class="fa-solid fa-check"></i>
-                    <span>Registrar recogida de {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }}</span>
-                </button>
+                <i class="fa-solid fa-user-tag text-3xl text-slate-300"></i>
+                <p class="text-xs font-bold text-slate-600">Busca y selecciona un cliente o elige "Nuevo rápido" para configurar el servicio y la cantidad.</p>
             </div>
 
-            <!-- CASO B: SI ELIGE CAMBIOS -->
-            <div
-                v-if="selectedService === 'cambios'"
-                class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
-            >
-                <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <!-- Bloque de configuración del servicio -->
+            <div v-else class="space-y-4">
+
+                <!-- Si el cliente es nuevo o no tiene botellones asignados: Ofrecer selector Fijos / Cambios -->
+                <div
+                    v-if="isCustomerUnassigned"
+                    class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3"
+                >
                     <div>
-                        <h2 class="text-sm sm:text-base font-black text-slate-900">3. Cantidad</h2>
-                        <p class="text-xs text-slate-500">¿Cuántos cambios vas a hacer?</p>
+                        <h2 class="text-sm sm:text-base font-black text-slate-900">2. Elige el tipo de servicio</h2>
+                        <p class="text-xs text-slate-500">Define la modalidad de botellones para este cliente</p>
                     </div>
 
-                    <!-- Llenos disponibles en el camión -->
-                    <div
-                        class="px-3 py-1.5 rounded-full text-xs font-black inline-flex items-center gap-1.5"
-                        :class="truck.exchange_full_available > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'"
-                    >
-                        <i class="fa-solid fa-truck"></i>
-                        <span>{{ truck.exchange_full_available }} llenos en camión</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- BOTÓN FIJOS -->
+                        <button
+                            type="button"
+                            @click="selectService('fijos')"
+                            class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative cursor-pointer"
+                            :class="selectedService === 'fijos'
+                                ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
+                        >
+                            <div
+                                class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
+                                :class="selectedService === 'fijos' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
+                            >
+                                <i class="fa-solid fa-bottle-water"></i>
+                            </div>
+                            <div class="flex-1 min-w-0 pr-6">
+                                <div class="text-base font-black text-slate-900">Fijos</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">Recoger para llenar en Planta</p>
+                            </div>
+                            <div
+                                v-if="selectedService === 'fijos'"
+                                class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
+                            >
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                        </button>
+
+                        <!-- BOTÓN CAMBIOS -->
+                        <button
+                            type="button"
+                            @click="selectService('cambios')"
+                            class="p-4 rounded-2xl border-2 text-left transition-all duration-150 flex items-start gap-3.5 active:scale-98 relative cursor-pointer"
+                            :class="selectedService === 'cambios'
+                                ? 'border-blue-900 bg-blue-50/70 shadow-sm ring-2 ring-blue-900/20'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'"
+                        >
+                            <div
+                                class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition"
+                                :class="selectedService === 'cambios' ? 'bg-blue-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600'"
+                            >
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </div>
+                            <div class="flex-1 min-w-0 pr-6">
+                                <div class="text-base font-black text-slate-900">Cambios</div>
+                                <p class="text-xs text-slate-600 mt-0.5 leading-snug">Cambiar vacíos por llenos</p>
+                            </div>
+                            <div
+                                v-if="selectedService === 'cambios'"
+                                class="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs shadow-2xs"
+                            >
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Aviso si camión tiene 0 cambios llenos -->
+                <!-- Si el cliente ya tiene modalidad exclusiva asignada: Mostrar tarjeta informativa fija -->
                 <div
-                    v-if="truck.exchange_full_available <= 0"
-                    class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2"
+                    v-else-if="isCustomerLocked"
+                    class="bg-blue-50/60 rounded-2xl p-4 border border-blue-200/80 flex items-center justify-between gap-3"
                 >
-                    <div class="flex items-center gap-2 font-black text-amber-900 text-sm">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-700"></i>
-                        <span>No tienes cambios llenos disponibles</span>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-900 text-white flex items-center justify-center text-base shrink-0">
+                            <i :class="selectedService === 'fijos' ? 'fa-solid fa-bottle-water' : 'fa-solid fa-arrows-rotate'"></i>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700 block">Modalidad exclusiva</span>
+                            <span class="text-sm font-black text-blue-950">
+                                {{ selectedService === 'fijos' ? 'Botellones Fijos' : 'Botellones de Cambio' }}
+                            </span>
+                            <span class="text-xs text-slate-600 block">
+                                {{ selectedService === 'fijos' ? 'Recogida física para llenar en Planta' : 'Intercambio inmediato en ruta' }}
+                            </span>
+                        </div>
                     </div>
-                    <p class="text-amber-800 leading-relaxed">
-                        Tu camión no cuenta con botellones de cambio llenos para entregar en este momento. Puedes seguir atendiendo al cliente cambiando al servicio de <strong>Fijos</strong> para recoger sus envases y llevarlos a Planta.
-                    </p>
+                    <span class="text-xs font-bold text-blue-800 bg-white border border-blue-200 px-3 py-1 rounded-xl shadow-2xs">
+                        {{ selectedCustomer.assigned_bottles_count }} reg.
+                    </span>
+                </div>
+
+                <!-- CASO A: SI EL SERVICIO ES FIJOS -->
+                <div
+                    v-if="selectedService === 'fijos'"
+                    class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
+                >
+                    <div class="border-b border-slate-100 pb-2.5">
+                        <h2 class="text-sm sm:text-base font-black text-slate-900">Cantidad</h2>
+                        <p class="text-xs text-slate-500">¿Cuántos fijos recogiste?</p>
+                    </div>
+
+                    <!-- Campo de cantidad con stepper táctil grande -->
+                    <div class="space-y-3 py-2">
+                        <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Botellones fijos de 20 L a recoger:
+                        </label>
+
+                        <div class="flex items-center justify-center gap-4">
+                            <!-- Botón Menos (>= 48x48px) -->
+                            <button
+                                type="button"
+                                @click="decrementQty"
+                                :disabled="quantity <= 1"
+                                class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs cursor-pointer"
+                            >
+                                <i class="fa-solid fa-minus"></i>
+                            </button>
+
+                            <!-- Input / Visualizador de Cantidad -->
+                            <div class="text-center">
+                                <input
+                                    :value="quantity"
+                                    @input="setQuantityValue($event.target.value)"
+                                    type="number"
+                                    min="1"
+                                    class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
+                                />
+                                <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                    {{ quantity === 1 ? 'Botellón fijo' : 'Botellones fijos' }}
+                                </span>
+                            </div>
+
+                            <!-- Botón Más (>= 48x48px) -->
+                            <button
+                                type="button"
+                                @click="incrementQty"
+                                class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 transition flex items-center justify-center shadow-sm cursor-pointer"
+                            >
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+
+                        <p class="text-[11px] text-center text-slate-500 pt-1">
+                            Esta operación se puede registrar aunque el camión tenga cero cambios llenos. Las unidades pasan directamente a <strong>Planta → Por recibir</strong>.
+                        </p>
+                    </div>
+
+                    <!-- Resumen previo al botón -->
+                    <div class="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-center font-bold text-blue-950 text-xs sm:text-sm">
+                        Recoges {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }} para enviar a Planta
+                    </div>
+
+                    <!-- Botón de Confirmación Principal -->
                     <button
                         type="button"
-                        @click="selectService('fijos')"
-                        class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs active:scale-95 transition inline-flex items-center gap-1.5"
+                        @click="submitDirectOrder"
+                        :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
+                        class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                     >
-                        <i class="fa-solid fa-bottle-water"></i> Cambiar a Fijos
+                        <i class="fa-solid fa-check"></i>
+                        <span>Registrar recogida de {{ quantity }} {{ quantity === 1 ? 'fijo' : 'fijos' }}</span>
                     </button>
                 </div>
 
-                <!-- Campo de cantidad con stepper táctil si hay existencias -->
-                <div v-else class="space-y-3 py-2">
-                    <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Cantidad de cambios a realizar:
-                    </label>
-
-                    <div class="flex items-center justify-center gap-4">
-                        <!-- Botón Menos (>= 48x48px) -->
-                        <button
-                            type="button"
-                            @click="decrementQty"
-                            :disabled="quantity <= 1"
-                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs"
-                        >
-                            <i class="fa-solid fa-minus"></i>
-                        </button>
-
-                        <!-- Input / Visualizador de Cantidad -->
-                        <div class="text-center">
-                            <input
-                                :value="quantity"
-                                @input="setQuantityValue($event.target.value)"
-                                type="number"
-                                min="1"
-                                :max="truck.exchange_full_available"
-                                class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
-                            />
-                            <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
-                                {{ quantity === 1 ? 'Cambio' : 'Cambios' }}
-                            </span>
+                <!-- CASO B: SI EL SERVICIO ES CAMBIOS -->
+                <div
+                    v-if="selectedService === 'cambios'"
+                    class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4"
+                >
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <div>
+                            <h2 class="text-sm sm:text-base font-black text-slate-900">Cantidad</h2>
+                            <p class="text-xs text-slate-500">¿Cuántos cambios vas a hacer?</p>
                         </div>
 
-                        <!-- Botón Más (>= 48x48px) -->
-                        <button
-                            type="button"
-                            @click="incrementQty"
-                            :disabled="quantity >= truck.exchange_full_available"
-                            class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-sm"
+                        <!-- Llenos disponibles en el camión -->
+                        <div
+                            class="px-3 py-1.5 rounded-full text-xs font-black inline-flex items-center gap-1.5"
+                            :class="truck.exchange_full_available > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'"
                         >
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
+                            <i class="fa-solid fa-truck"></i>
+                            <span>{{ truck.exchange_full_available }} llenos en camión</span>
+                        </div>
                     </div>
 
-                    <p class="text-[11px] text-center text-slate-400">
-                        Máximo disponible en camión: {{ truck.exchange_full_available }} unidades
-                    </p>
+                    <!-- Aviso si camión tiene 0 cambios llenos -->
+                    <div
+                        v-if="truck.exchange_full_available <= 0"
+                        class="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2"
+                    >
+                        <div class="flex items-center gap-2 font-black text-amber-900 text-sm">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-700"></i>
+                            <span>No tienes cambios llenos disponibles</span>
+                        </div>
+                        <p class="text-amber-800 leading-relaxed">
+                            Tu camión no cuenta con botellones de cambio llenos para entregar en este momento.
+                        </p>
+                    </div>
+
+                    <!-- Campo de cantidad con stepper táctil si hay existencias -->
+                    <div v-else class="space-y-3 py-2">
+                        <label class="block text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Cantidad de cambios a realizar:
+                        </label>
+
+                        <div class="flex items-center justify-center gap-4">
+                            <!-- Botón Menos (>= 48x48px) -->
+                            <button
+                                type="button"
+                                @click="decrementQty"
+                                :disabled="quantity <= 1"
+                                class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-2xl text-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-2xs cursor-pointer"
+                            >
+                                <i class="fa-solid fa-minus"></i>
+                            </button>
+
+                            <!-- Input / Visualizador de Cantidad -->
+                            <div class="text-center">
+                                <input
+                                    :value="quantity"
+                                    @input="setQuantityValue($event.target.value)"
+                                    type="number"
+                                    min="1"
+                                    :max="truck.exchange_full_available"
+                                    class="w-24 sm:w-28 text-center text-3xl sm:text-4xl font-black text-blue-950 bg-slate-50 border-2 border-slate-200 rounded-2xl py-2.5 focus:border-blue-900 focus:bg-white transition"
+                                />
+                                <span class="block text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                    {{ quantity === 1 ? 'Cambio' : 'Cambios' }}
+                                </span>
+                            </div>
+
+                            <!-- Botón Más (>= 48x48px) -->
+                            <button
+                                type="button"
+                                @click="incrementQty"
+                                :disabled="quantity >= truck.exchange_full_available"
+                                class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-900 hover:bg-blue-800 font-black text-2xl text-white active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center shadow-sm cursor-pointer"
+                            >
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+
+                        <p class="text-[11px] text-center text-slate-400">
+                            Máximo disponible en camión: {{ truck.exchange_full_available }} unidades
+                        </p>
+                    </div>
+
+                    <!-- Resumen automático inmediatamente arriba del botón -->
+                    <div
+                        v-if="truck.exchange_full_available > 0"
+                        class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center space-y-1"
+                    >
+                        <p class="text-sm sm:text-base font-black text-blue-950">
+                            Entregas {{ quantity }} {{ quantity === 1 ? 'lleno' : 'llenos' }} · Recibes {{ quantity }} {{ quantity === 1 ? 'vacío' : 'vacíos' }}
+                        </p>
+                        <p class="text-xs text-blue-800 font-bold">
+                            {{ quantity }} × ${{ unit_price }} = ${{ Math.round(quantity * unit_price * 100) / 100 }} MXN
+                        </p>
+                    </div>
+
+                    <!-- Botón de Confirmación Principal -->
+                    <button
+                        v-if="truck.exchange_full_available > 0"
+                        type="button"
+                        @click="submitDirectOrder"
+                        :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
+                        class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                    >
+                        <i class="fa-solid fa-check"></i>
+                        <span>Confirmar {{ quantity }} {{ quantity === 1 ? 'cambio' : 'cambios' }}</span>
+                    </button>
                 </div>
 
-                <!-- Resumen automático inmediatamente arriba del botón -->
-                <div
-                    v-if="truck.exchange_full_available > 0"
-                    class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center space-y-1"
-                >
-                    <p class="text-sm sm:text-base font-black text-blue-950">
-                        Entregas {{ quantity }} {{ quantity === 1 ? 'lleno' : 'llenos' }} · Recibes {{ quantity }} {{ quantity === 1 ? 'vacío' : 'vacíos' }}
-                    </p>
-                    <p class="text-xs text-blue-800 font-bold">
-                        {{ quantity }} × ${{ unit_price }} = ${{ Math.round(quantity * unit_price * 100) / 100 }} MXN
-                    </p>
-                </div>
-
-                <!-- Botón de Confirmación Principal -->
-                <button
-                    v-if="truck.exchange_full_available > 0"
-                    type="button"
-                    @click="submitDirectOrder"
-                    :disabled="form.processing || hasActiveOrder || (clientMode === 'search' && !selectedCustomer) || (clientMode === 'new' && !newCustomer.nickname.trim())"
-                    class="w-full py-4 rounded-2xl text-base font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-98 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
-                >
-                    <i class="fa-solid fa-check"></i>
-                    <span>Confirmar {{ quantity }} {{ quantity === 1 ? 'cambio' : 'cambios' }}</span>
-                </button>
             </div>
 
         </div>

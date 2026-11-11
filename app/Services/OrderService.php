@@ -397,6 +397,32 @@ class OrderService
             throw new OrderBusinessRuleException('Debe solicitarse al menos un botellón en el pedido.', 'quantity', 422);
         }
 
+        // Regla de Exclusividad: rechazar pedidos combinados (fijos y cambios a la vez) en el servidor
+        if ($fixedQuantity > 0 && $exchangeQuantity > 0) {
+            throw new OrderBusinessRuleException(
+                'No se permiten pedidos combinados de botellones fijos y de cambio. Cada cliente maneja exclusivamente una modalidad.',
+                'quantity',
+                422
+            );
+        }
+
+        // Regla de Exclusividad: rechazar pedidos con modalidad distinta a la registrada del cliente
+        if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQuantity > 0) {
+            throw new OrderBusinessRuleException(
+                'El cliente está registrado exclusivamente para botellones fijos.',
+                'exchange_quantity',
+                422
+            );
+        }
+
+        if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQuantity > 0) {
+            throw new OrderBusinessRuleException(
+                'El cliente está registrado exclusivamente para botellones de cambio.',
+                'fixed_quantity',
+                422
+            );
+        }
+
         // Límite de botellones fijos registrados del cliente
         $clientFixedLimit = (int) ($customer->fixed_bottles_count ?? 0);
         if ($fixedQuantity > $clientFixedLimit) {

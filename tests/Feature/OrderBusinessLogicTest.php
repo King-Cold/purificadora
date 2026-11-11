@@ -79,7 +79,7 @@ class OrderBusinessLogicTest extends TestCase
             'name' => 'María Pech',
             'phone' => '9991234567',
             'fixed_bottles_count' => 3,
-            'exchange_bottles_count' => 2,
+            'exchange_bottles_count' => 0,
         ]);
 
         $this->clientAddress = CustomerAddress::create([
@@ -105,8 +105,8 @@ class OrderBusinessLogicTest extends TestCase
             'code' => 'CLI-0002',
             'name' => 'José Canché',
             'phone' => '9997654321',
-            'fixed_bottles_count' => 1,
-            'exchange_bottles_count' => 1,
+            'fixed_bottles_count' => 0,
+            'exchange_bottles_count' => 2,
         ]);
 
         $this->otherClientAddress = CustomerAddress::create([
@@ -126,7 +126,7 @@ class OrderBusinessLogicTest extends TestCase
             'name' => 'Don Chucho Sin Cuenta',
             'phone' => '9998889999',
             'fixed_bottles_count' => 4,
-            'exchange_bottles_count' => 5,
+            'exchange_bottles_count' => 0,
         ]);
 
         $this->customerWithoutAccountAddress = CustomerAddress::create([
@@ -171,7 +171,7 @@ class OrderBusinessLogicTest extends TestCase
      */
     public function test_can_create_order_with_only_exchange_bottles(): void
     {
-        $order = $this->orderService->createOrder($this->clientUser, [
+        $order = $this->orderService->createOrder($this->otherClientUser, [
             'exchange_quantity' => 1,
         ], $this->validOrderTime);
 
@@ -185,20 +185,17 @@ class OrderBusinessLogicTest extends TestCase
     }
 
     /**
-     * 3. Creación de pedido mixto (fijos y de cambio).
+     * 3. Rechazo estricto de pedidos mixtos (combinación de fijos y cambio).
      */
     public function test_can_create_order_with_mixed_bottles(): void
     {
-        $order = $this->orderService->createOrder($this->clientUser, [
+        $this->expectException(OrderBusinessRuleException::class);
+        $this->expectExceptionMessage('No se permiten pedidos combinados');
+
+        $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 2,
             'exchange_quantity' => 2,
         ], $this->validOrderTime);
-
-        $this->assertEquals(Order::STATUS_PENDING, $order->status);
-        $this->assertEquals(2, $order->fixed_quantity);
-        $this->assertEquals(2, $order->exchange_quantity);
-        $this->assertEquals(4, $order->total_bottles);
-        $this->assertCount(2, $order->items);
     }
 
     /**
@@ -206,15 +203,14 @@ class OrderBusinessLogicTest extends TestCase
      */
     public function test_can_order_exact_registered_limit_quantities(): void
     {
-        // María tiene 3 fijos y 2 de cambio
+        // María tiene 3 fijos
         $order = $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 3,
-            'exchange_quantity' => 2,
         ], $this->validOrderTime);
 
-        $this->assertEquals(5, $order->total_bottles);
+        $this->assertEquals(3, $order->total_bottles);
         $this->assertEquals(3, $order->fixed_quantity);
-        $this->assertEquals(2, $order->exchange_quantity);
+        $this->assertEquals(0, $order->exchange_quantity);
     }
 
     /**
@@ -228,7 +224,6 @@ class OrderBusinessLogicTest extends TestCase
         // María solo tiene 3 fijos, pide 4
         $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 4,
-            'exchange_quantity' => 1,
         ], $this->validOrderTime);
     }
 
@@ -240,9 +235,8 @@ class OrderBusinessLogicTest extends TestCase
         $this->expectException(OrderBusinessRuleException::class);
         $this->expectExceptionMessage('supera los botellones de cambio registrados');
 
-        // María solo tiene 2 de cambio, pide 3
-        $this->orderService->createOrder($this->clientUser, [
-            'fixed_quantity' => 1,
+        // José solo tiene 2 de cambio, pide 3
+        $this->orderService->createOrder($this->otherClientUser, [
             'exchange_quantity' => 3,
         ], $this->validOrderTime);
     }
@@ -317,7 +311,7 @@ class OrderBusinessLogicTest extends TestCase
             'code' => 'CLI-0004',
             'name' => 'Sin Casa',
             'fixed_bottles_count' => 2,
-            'exchange_bottles_count' => 2,
+            'exchange_bottles_count' => 0,
         ]);
 
         try {
@@ -554,7 +548,6 @@ class OrderBusinessLogicTest extends TestCase
         $order = $this->orderService->createOrder($this->adminUser, [
             'customer_id' => $this->customerWithoutAccount->id,
             'fixed_quantity' => 2,
-            'exchange_quantity' => 1,
         ], $this->validOrderTime);
 
         // 1. Confirmar
@@ -640,7 +633,6 @@ class OrderBusinessLogicTest extends TestCase
         // 1. Crear
         $order = $this->orderService->createOrder($this->clientUser, [
             'fixed_quantity' => 2,
-            'exchange_quantity' => 1,
         ], $this->validOrderTime);
 
         $this->assertEquals($initialFixed, $this->clientCustomer->fresh()->fixed_bottles_count);

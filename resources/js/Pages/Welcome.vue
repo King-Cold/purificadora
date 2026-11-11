@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     canLogin: {
@@ -80,9 +80,9 @@ const activeSection = ref('inicio');
 
 const navItems = [
     { id: 'inicio', label: 'Inicio' },
-    { id: 'catalogo', label: 'Catálogo' },
-    { id: 'como-funciona', label: '¿Cómo funciona?' },
-    { id: 'comentarios', label: 'Comentarios' },
+    { id: 'catalogo', label: 'Precios' },
+    { id: 'como-funciona', label: 'Cómo funciona' },
+    { id: 'comentarios', label: 'Opiniones' },
     { id: 'sucursal', label: 'Sucursal' },
     { id: 'preguntas', label: 'Preguntas' },
     { id: 'contacto', label: 'Contacto' },
@@ -94,57 +94,79 @@ let scrollTimeout = null;
 const scrollToSection = (e, id) => {
     if (e) e.preventDefault();
     mobileMenuOpen.value = false;
-    const el = document.getElementById(id);
-    if (el) {
-        // Marcamos la sección inmediatamente y bloqueamos el listener de scroll durante la animación
-        activeSection.value = id;
-        isManualScrolling = true;
 
+    // Si es inicio, desplazar directamente a la parte superior absoluta
+    if (id === 'inicio') {
+        activeSection.value = 'inicio';
+        isManualScrolling = true;
         if (scrollTimeout) clearTimeout(scrollTimeout);
 
-        const headerOffset = 80;
-        const bodyRect = document.body.getBoundingClientRect().top;
-        const elementRect = el.getBoundingClientRect().top;
-        const elementPosition = elementRect - bodyRect;
-        const offsetPosition = elementPosition - headerOffset;
-
         window.scrollTo({
-            top: offsetPosition,
+            top: 0,
             behavior: 'smooth',
         });
 
-        // Liberamos el bloqueo una vez terminada la animación de scroll suave
         scrollTimeout = setTimeout(() => {
             isManualScrolling = false;
         }, 800);
+        return;
     }
+
+    const targetId = id === 'precios' ? 'catalogo' : id;
+    const el = document.getElementById(targetId) || document.getElementById(id);
+    if (!el) return;
+
+    activeSection.value = id;
+    isManualScrolling = true;
+    if (scrollTimeout) clearTimeout(scrollTimeout);
+
+    // Usar nextTick para calcular la posición con el estado de cierre ya procesado
+    nextTick(() => {
+        const headerOffset = 64; // Altura exacta del header fijo (h-16)
+        const scrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || 0;
+        const rect = el.getBoundingClientRect();
+        const targetPosition = Math.max(0, Math.round(rect.top + scrollY - headerOffset));
+
+        window.scrollTo({
+            top: targetPosition,
+            behavior: 'smooth',
+        });
+
+        scrollTimeout = setTimeout(() => {
+            isManualScrolling = false;
+        }, 800);
+    });
 };
 
 onMounted(() => {
     let ticking = false;
 
     const handleScroll = () => {
-        // Si el desplazamiento fue iniciado por un clic en el menú, no interferir con la selección
         if (isManualScrolling) return;
 
         if (!ticking) {
             window.requestAnimationFrame(() => {
-                // Si el usuario está casi al final del documento, activar la sección 'contacto'
-                if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
+                const scrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || 0;
+
+                // Si está cerca del final de la página, marcar contacto
+                if (window.innerHeight + scrollY >= document.documentElement.scrollHeight - 80) {
                     activeSection.value = 'contacto';
                     ticking = false;
                     return;
                 }
 
-                const scrollPosition = window.scrollY + 140;
+                const checkPosition = scrollY + 80;
                 const sectionIds = ['inicio', 'catalogo', 'como-funciona', 'comentarios', 'sucursal', 'preguntas', 'contacto'];
 
                 for (let i = sectionIds.length - 1; i >= 0; i--) {
                     const el = document.getElementById(sectionIds[i]);
-                    if (el && scrollPosition >= el.offsetTop) {
-                        activeSection.value = sectionIds[i];
-                        ticking = false;
-                        return;
+                    if (el) {
+                        const elTop = el.getBoundingClientRect().top + scrollY;
+                        if (checkPosition >= elTop) {
+                            activeSection.value = sectionIds[i];
+                            ticking = false;
+                            return;
+                        }
                     }
                 }
                 activeSection.value = 'inicio';
@@ -168,32 +190,36 @@ const toggleFaq = (index) => {
     openFaq.value = openFaq.value === index ? null : index;
 };
 
+const expandedComments = ref({});
+const toggleComment = (index) => {
+    expandedComments.value[index] = !expandedComments.value[index];
+};
+
 const faqs = computed(() => [
     {
-        q: '¿Cómo realizo un pedido por primera vez?',
-        a: 'Es muy sencillo: solo debes hacer clic en "Pedir agua ahora" o "Crear cuenta", indicar tu dirección de entrega en Hocabá y la cantidad de garrafones que necesitas. Te confirmaremos de inmediato vía WhatsApp y en la app.',
+        q: '¿Cómo hago mi primer pedido?',
+        a: 'Crea tu cuenta, indica tu dirección en Hocabá y los garrafones que necesitas. Te confirmaremos al instante en pantalla y por WhatsApp.',
     },
     {
-        q: '¿Cuáles son los horarios de atención y entrega a domicilio?',
-        a: `Atendemos de ${formattedScheduleDisplay.value.days} de ${formattedScheduleDisplay.value.opening} a ${formattedScheduleDisplay.value.closing}.`,
+        q: '¿Cuál es el horario de entrega?',
+        a: `Entregamos de ${formattedScheduleDisplay.value.days} de ${formattedScheduleDisplay.value.opening} a ${formattedScheduleDisplay.value.closing}. La recepción de pedidos cierra a las ${props.schedule?.order_cutoff_time ? format12h(props.schedule.order_cutoff_time) : '6:00 PM'}.`,
     },
     {
-        q: '¿Aceptan garrafones de otras marcas al momento del cambio?',
-        a: 'Sí, aceptamos garrafones comerciales estándar en buen estado físico (limpios, sin perforaciones o rajaduras). Cada garrafón pasa por nuestro proceso de lavado a presión antes de ser llenado.',
+        q: '¿Aceptan garrafones de otras marcas?',
+        a: 'Sí, aceptamos garrafones estándar de 20 litros limpios y en buen estado estructural para la modalidad de cambio.',
     },
     {
-        q: '¿Qué formas de pago puedo utilizar?',
-        a: 'Aceptamos pago en efectivo contra entrega (nuestros repartidores cuentan con cambio), transferencias electrónicas y pagos directos desde la plataforma.',
+        q: '¿Cómo puedo pagar?',
+        a: 'Puedes pagar en efectivo al momento de recibir tus garrafones o mediante transferencia bancaria.',
     },
 ]);
 
-// Comentarios de clientes en Hocabá
 const comments = [
     {
         name: 'María Elena Pech',
         role: 'Clienta en Hocabá',
         avatarText: 'MP',
-        avatarBg: 'bg-blue-600',
+        avatarBg: 'bg-[#0076E8]',
         rating: 5,
         time: 'Hace 2 días',
         comment: 'Excelente servicio y puntualidad. Antes tenía que esperar a que pasara el camión o salir a buscar garrafón. Ahora pido por el celular y llega directo a mi casa en minutos.',
@@ -213,7 +239,7 @@ const comments = [
         name: 'Rosaura May',
         role: 'Madre de familia',
         avatarText: 'RM',
-        avatarBg: 'bg-cyan-600',
+        avatarBg: 'bg-teal-600',
         rating: 5,
         time: 'Hace 2 semanas',
         comment: 'La atención de los repartidores es muy amable y los garrafones siempre vienen impecablemente sellados y limpios. Recomiendo totalmente a Puritronic.',
@@ -221,7 +247,6 @@ const comments = [
     },
 ];
 
-// Catálogo oficial de presentaciones de garrafones y tarifas reactivas
 const formatPrice = (val, fallback = null) => {
     if (val === null || val === undefined || val === '') return fallback;
     const num = Number(val);
@@ -232,9 +257,7 @@ const formatPrice = (val, fallback = null) => {
 const bottleProducts = computed(() => {
     const db20L = props.presentations?.find(p => p.capacity === 20 || p.name?.includes('20')) || props.presentations?.[0];
 
-    // Disponibilidad de servicio a domicilio para el botellón de 20 litros
     const is20Available = db20L ? Boolean(db20L.is_available_for_delivery) : true;
-
     const p20Home = db20L ? formatPrice(db20L.refill_price) : '15';
     const p20Store = db20L ? formatPrice(db20L.store_price) : '10';
     const p20New = db20L ? formatPrice(db20L.new_bottle_price) : '95';
@@ -256,69 +279,69 @@ const bottleProducts = computed(() => {
 </script>
 
 <template>
-    <Head title="Puritronic - Agua pura, directo hasta su hogar" />
+    <Head title="Puritronic Hocabá - Agua pura, directo hasta su hogar" />
 
-    <div class="min-h-screen bg-white font-['Poppins',sans-serif] text-slate-800 antialiased selection:bg-[#0084ff] selection:text-white">
+    <div class="min-h-screen bg-white font-['Poppins',sans-serif] text-[#10233F] antialiased selection:bg-[#0076E8] selection:text-white">
         
-        <!-- ================= NAVBAR ================= -->
-        <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 transition-all duration-200">
+        <!-- ========================================================================= -->
+        <!-- 1. ENCABEZADO (BARRA COMPACTA h-16 / 64px)                                -->
+        <!-- ========================================================================= -->
+        <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 transition-all duration-200">
             <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-20 gap-4">
+                <div class="flex items-center justify-between h-16 gap-4">
                     
                     <!-- LOGO PURITRONIC -->
-                    <a href="#" class="flex items-center shrink-0 group mr-2 sm:mr-4">
+                    <a href="#inicio" @click="scrollToSection($event, 'inicio')" class="flex items-center shrink-0 group mr-2 sm:mr-4">
                         <img
                             src="/images/logo.png"
                             alt="Puritronic Agua Purificada"
-                            class="h-10 sm:h-11 md:h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                            class="h-9 sm:h-10 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02]"
                         />
                     </a>
 
-                    <!-- NAVEGACIÓN DESKTOP (REACTIVA A LA SECCIÓN ACTIVA CON LÍNEA ROJA DE LA MARCA) -->
-                    <nav class="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8">
+                    <!-- NAVEGACIÓN DESKTOP: TEXTO AZUL MARINO (#10233F) Y LÍNEA ACTIVA ROJO VINO (#9C3550) DE 2px -->
+                    <nav class="hidden lg:flex items-center gap-5 xl:gap-7">
                         <a
                             v-for="item in navItems"
                             :key="item.id"
                             :href="`#${item.id}`"
                             @click="scrollToSection($event, item.id)"
                             :class="[
-                                'text-xs xl:text-sm whitespace-nowrap transition-all duration-200 py-1.5 px-0.5 relative',
+                                'text-xs xl:text-sm whitespace-nowrap transition-colors duration-150 py-1.5 px-0.5 relative',
                                 activeSection === item.id
-                                    ? 'font-bold text-[#0E1E42] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2.5px] after:bg-[#AF143C] after:rounded-full'
-                                    : 'font-medium text-slate-600 hover:text-[#0E1E42]'
+                                    ? 'font-bold text-[#10233F] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-[#9C3550] after:rounded-full'
+                                    : 'font-medium text-slate-600 hover:text-[#10233F]'
                             ]"
                         >
                             {{ item.label }}
                         </a>
                     </nav>
 
-                    <!-- BOTONES DE ACCIÓN (AUTH) -->
-                    <div class="hidden lg:flex items-center gap-2.5 xl:gap-3 shrink-0 ml-2 sm:ml-4">
+                    <!-- ACCIONES DE CUENTA: CREAR CUENTA DESTACADO EN AZUL #0076E8, INICIAR SESIÓN SECUNDARIO -->
+                    <div class="hidden lg:flex items-center gap-3 shrink-0 ml-2 sm:ml-4">
                         <template v-if="$page.props.auth?.user">
                             <Link
                                 :href="route('dashboard')"
-                                class="px-5 xl:px-6 py-2.5 text-xs xl:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all flex items-center gap-2 whitespace-nowrap"
+                                class="px-5 py-2 text-xs xl:text-sm font-semibold text-white bg-[#0076E8] hover:bg-[#0060be] rounded-xl shadow-xs hover:shadow transition-all flex items-center gap-2 whitespace-nowrap min-h-[40px]"
                             >
                                 <span>Ir a mi Panel</span>
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                </svg>
+                                <i class="fa-solid fa-arrow-right text-xs"></i>
                             </Link>
                         </template>
                         <template v-else>
                             <Link
                                 v-if="canLogin"
                                 :href="route('login')"
-                                class="px-4 xl:px-5 py-2.5 text-xs xl:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-[#0084ff] transition-all shadow-xs whitespace-nowrap"
+                                class="px-3.5 py-2 text-xs xl:text-sm font-semibold text-[#10233F] hover:text-[#0076E8] hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap min-h-[40px] inline-flex items-center"
                             >
-                                Iniciar Sesión
+                                Iniciar sesión
                             </Link>
                             <Link
                                 v-if="canRegister"
                                 :href="route('register')"
-                                class="px-5 xl:px-6 py-2.5 text-xs xl:text-sm font-semibold text-white bg-[#0084ff] hover:bg-[#0070dc] rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all whitespace-nowrap"
+                                class="px-5 py-2 text-xs xl:text-sm font-semibold text-white bg-[#0076E8] hover:bg-[#0060be] rounded-xl shadow-xs hover:shadow hover:-translate-y-0.5 transition-all whitespace-nowrap min-h-[40px] inline-flex items-center"
                             >
-                                Crear Cuenta
+                                Crear cuenta
                             </Link>
                         </template>
                     </div>
@@ -328,154 +351,156 @@ const bottleProducts = computed(() => {
                         <button
                             @click="mobileMenuOpen = !mobileMenuOpen"
                             type="button"
-                            class="w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition-colors focus:outline-none"
-                            aria-label="Menú principal"
+                            class="w-11 h-11 rounded-xl flex items-center justify-center text-[#10233F] hover:text-black bg-slate-100 hover:bg-slate-200/80 transition-colors focus:outline-none"
+                            aria-label="Menú principal de navegación"
                         >
                             <i :class="mobileMenuOpen ? 'fa-solid fa-xmark text-lg' : 'fa-solid fa-bars text-lg'"></i>
                         </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- MENU MÓVIL DESPLEGABLE (< lg) -->
-                <div v-show="mobileMenuOpen" class="lg:hidden border-t border-slate-100 py-4 space-y-2 bg-white">
-                    <a
-                        v-for="item in navItems"
-                        :key="item.id"
-                        :href="`#${item.id}`"
-                        @click="scrollToSection($event, item.id)"
-                        :class="[
-                            'block px-3 py-2 text-sm rounded-lg transition-colors',
-                            activeSection === item.id
-                                ? 'font-bold text-[#AF143C] bg-red-50/70 border-l-2 border-[#AF143C]'
-                                : 'font-medium text-slate-600 hover:text-[#0E1E42] hover:bg-slate-50'
-                        ]"
-                    >
-                        {{ item.label }}
-                    </a>
-                    <div class="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                        <template v-if="$page.props.auth?.user">
-                            <Link
-                                :href="route('dashboard')"
-                                class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0084ff] rounded-full shadow-md shadow-blue-500/20"
-                            >
-                                Ir a mi Panel
-                            </Link>
-                        </template>
-                        <template v-else>
-                            <Link
-                                v-if="canLogin"
-                                :href="route('login')"
-                                class="w-full text-center py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:text-[#0084ff]"
-                            >
-                                Iniciar Sesión
-                            </Link>
-                            <Link
-                                v-if="canRegister"
-                                :href="route('register')"
-                                class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0084ff] rounded-full shadow-md shadow-blue-500/20"
-                            >
-                                Crear Cuenta
-                            </Link>
-                        </template>
-                    </div>
+            <!-- BACKDROP MÓVIL AL ABRIR EL MENÚ -->
+            <div
+                v-show="mobileMenuOpen"
+                @click="mobileMenuOpen = false"
+                class="lg:hidden fixed inset-0 top-16 bg-black/20 backdrop-blur-xs z-40 transition-opacity"
+                aria-hidden="true"
+            ></div>
+
+            <!-- MENÚ MÓVIL DESPLEGABLE COMO OVERLAY FLOTANTE (< lg) -->
+            <div
+                v-show="mobileMenuOpen"
+                class="lg:hidden absolute top-16 left-0 right-0 bg-white border-b border-slate-200/90 shadow-xl py-3 px-4 sm:px-6 space-y-1.5 z-50 max-h-[calc(100vh-5rem)] overflow-y-auto"
+            >
+                <a
+                    v-for="item in navItems"
+                    :key="item.id"
+                    :href="`#${item.id}`"
+                    @click="scrollToSection($event, item.id)"
+                    :class="[
+                        'block px-3 py-2 text-sm rounded-xl transition-colors',
+                        activeSection === item.id
+                            ? 'font-bold text-[#10233F] bg-[#EAF5FF] border-l-4 border-[#9C3550]'
+                            : 'font-medium text-slate-600 hover:text-[#10233F] hover:bg-slate-50'
+                    ]"
+                >
+                    {{ item.label }}
+                </a>
+                <div class="pt-3 mt-2 border-t border-slate-100 flex flex-col gap-2">
+                    <template v-if="$page.props.auth?.user">
+                        <Link
+                            :href="route('dashboard')"
+                            class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0076E8] hover:bg-[#0060be] rounded-xl shadow-xs"
+                        >
+                            Ir a mi Panel
+                        </Link>
+                    </template>
+                    <template v-else>
+                        <Link
+                            v-if="canLogin"
+                            :href="route('login')"
+                            class="w-full text-center py-2.5 text-sm font-semibold text-[#10233F] bg-slate-50 border border-slate-200/80 rounded-xl hover:bg-slate-100"
+                        >
+                            Iniciar sesión
+                        </Link>
+                        <Link
+                            v-if="canRegister"
+                            :href="route('register')"
+                            class="w-full text-center py-2.5 text-sm font-semibold text-white bg-[#0076E8] hover:bg-[#0060be] rounded-xl shadow-xs"
+                        >
+                            Crear cuenta
+                        </Link>
+                    </template>
                 </div>
             </div>
         </header>
 
-        <!-- ================= HERO SECTION ================= -->
-        <section id="inicio" class="scroll-mt-20 relative pt-10 pb-16 lg:pt-16 lg:pb-24 overflow-hidden bg-gradient-to-b from-blue-50/30 via-white to-white">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+        <!-- ========================================================================= -->
+        <!-- 2. PORTADA / HERO (FONDO CELESTE SUAVE #EAF5FF, ESPACIADO COMPACTO)       -->
+        <!-- ========================================================================= -->
+        <section id="inicio" class="scroll-mt-16 relative py-8 sm:py-12 lg:py-14 bg-[#EAF5FF] border-b border-blue-100/60 overflow-hidden">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
                     
-                    <!-- COLUMNA IZQUIERDA: TEXTO Y CTA -->
-                    <div class="lg:col-span-6 space-y-6 text-center lg:text-left">
+                    <!-- COLUMNA IZQUIERDA EN ESCRITORIO: TÍTULO Y BOTONES (EN MÓVIL VA PRIMERO) -->
+                    <div class="lg:col-span-7 space-y-5 text-center lg:text-left order-1">
                         
-                        <!-- Badge Servicio a domicilio -->
-                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-[#0084ff] text-xs font-semibold shadow-xs">
+                        <!-- Indicador de Servicio Activo en Hocabá -->
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-blue-200/70 text-[#0076E8] text-xs font-semibold shadow-2xs">
                             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <i class="fa-solid fa-location-dot text-xs"></i>
+                            <i class="fa-solid fa-location-dot text-[11px]"></i>
                             <span>Servicio a domicilio en Hocabá</span>
                         </div>
 
-                        <!-- Título Principal -->
-                        <h1 class="text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold text-[#0e1c2e] tracking-tight leading-[1.12]">
+                        <!-- Título Principal en Azul Marino #10233F con acento Azul #0076E8 -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#10233F] tracking-tight leading-[1.14]">
                             Agua pura,<br />
-                            <span class="bg-gradient-to-r from-[#0084ff] to-[#00b4d8] bg-clip-text text-transparent">
-                                directo hasta su hogar.
-                            </span>
+                            <span class="text-[#0076E8]">hasta tu hogar.</span>
                         </h1>
 
-                        <!-- Descripción -->
-                        <p class="text-base sm:text-lg text-slate-500 max-w-lg mx-auto lg:mx-0 leading-relaxed font-normal">
-                            Solicita tus garrafones de agua de manera rápida, sencilla y sin complicaciones desde tu celular.
+                        <!-- Descripción concisa -->
+                        <p class="text-sm sm:text-base text-slate-600 max-w-lg mx-auto lg:mx-0 leading-relaxed font-normal">
+                            Pide desde tu celular y recibe agua purificada en Hocabá.
                         </p>
 
-                        <!-- Botón CTA Primario -->
-                        <div class="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+                        <!-- Botones de Acción: "Pedir agua" y "Pedir por WhatsApp" -->
+                        <div class="pt-1 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
                             <Link
                                 :href="route('auth.portal')"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold uppercase tracking-wider text-white text-sm bg-[#0084ff] hover:bg-[#0070dc] shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/35 hover:-translate-y-0.5 transition-all group"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-white text-xs sm:text-sm bg-[#0076E8] hover:bg-[#0060be] shadow-sm hover:shadow hover:-translate-y-0.5 transition-all group min-h-[44px]"
                             >
-                                <span>PEDIR AGUA AHORA</span>
+                                <span>Pedir agua</span>
                                 <i class="fa-solid fa-chevron-right text-xs group-hover:translate-x-1 transition-transform"></i>
                             </Link>
 
                             <a
                                 href="https://wa.me/529991404397?text=Hola,%20quisiera%20pedir%20un%20garrafón%20de%20agua%20a%20domicilio"
                                 target="_blank"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl font-semibold text-slate-700 hover:text-emerald-700 bg-white hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all text-sm group"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-[#10233F] hover:text-[#0076E8] bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all text-xs sm:text-sm min-h-[44px]"
                             >
-                                <i class="fa-brands fa-whatsapp text-lg text-emerald-600 group-hover:scale-110 transition-transform"></i>
+                                <i class="fa-brands fa-whatsapp text-base text-emerald-600"></i>
                                 <span>Pedir por WhatsApp</span>
                             </a>
                         </div>
 
-                        <!-- Mini Features / Garantías del Hero -->
-                        <div class="pt-8 border-t border-slate-100 grid grid-cols-3 gap-3 sm:gap-4 text-left">
+                        <!-- FILA COMPACTA DE BENEFICIOS: ICONO + FRASE ÚNICA -->
+                        <div class="pt-5 border-t border-blue-200/60 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-left">
                             
-                            <!-- Entrega a domicilio -->
-                            <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-2.5 sm:gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors">
-                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Beneficio 1: Entrega a domicilio -->
+                            <div class="bg-white/85 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-blue-100 shadow-2xs flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-[#EAF5FF] text-[#0076E8] flex items-center justify-center shrink-0 text-xs">
                                     <i class="fa-solid fa-truck-fast"></i>
                                 </div>
-                                <div>
-                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Entrega</h4>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-medium">A domicilio</p>
-                                </div>
+                                <span class="text-xs sm:text-sm font-semibold text-[#10233F]">Entrega a domicilio</span>
                             </div>
 
-                            <!-- Fácil desde tu celular -->
-                            <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-2.5 sm:gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors">
-                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Beneficio 2: Pedido fácil -->
+                            <div class="bg-white/85 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-blue-100 shadow-2xs flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-[#EAF5FF] text-[#0076E8] flex items-center justify-center shrink-0 text-xs">
                                     <i class="fa-solid fa-mobile-screen"></i>
                                 </div>
-                                <div>
-                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Fácil</h4>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-medium">Desde tu celular</p>
-                                </div>
+                                <span class="text-xs sm:text-sm font-semibold text-[#10233F]">Pedido fácil</span>
                             </div>
 
-                            <!-- Seguimiento de tu pedido -->
-                            <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-2.5 sm:gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors">
-                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Beneficio 3: Sigue tu pedido -->
+                            <div class="bg-white/85 backdrop-blur-xs px-3.5 py-2.5 rounded-xl border border-blue-100 shadow-2xs flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-[#EAF5FF] text-[#0076E8] flex items-center justify-center shrink-0 text-xs">
                                     <i class="fa-solid fa-location-crosshairs"></i>
                                 </div>
-                                <div>
-                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Seguimiento</h4>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-medium">De tu pedido</p>
-                                </div>
+                                <span class="text-xs sm:text-sm font-semibold text-[#10233F]">Sigue tu pedido</span>
                             </div>
 
                         </div>
                     </div>
 
-                    <!-- COLUMNA DERECHA: ILUSTRACIÓN VECTORIAL LIMPIA -->
-                    <div class="lg:col-span-6 relative flex items-center justify-center">
-                        <div class="w-full max-w-lg lg:max-w-xl relative flex justify-center">
+                    <!-- COLUMNA DERECHA EN ESCRITORIO: ILUSTRACIÓN DE INICIO (EN MÓVIL VA DESPUÉS DE LOS BOTONES) -->
+                    <div class="lg:col-span-5 relative flex items-center justify-center order-2">
+                        <div class="w-full max-w-sm sm:max-w-md lg:max-w-none flex justify-center">
                             <img
                                 src="/images/hero-drinking-water.svg"
-                                alt="Persona tomando agua purificada fresca Puritronic"
-                                class="w-full h-auto max-h-[480px] object-contain mx-auto hover:scale-[1.01] transition-transform duration-300"
+                                alt="Agua pura hasta tu hogar - Puritronic"
+                                class="w-full h-auto max-h-[340px] sm:max-h-[380px] lg:max-h-[420px] object-contain drop-shadow-sm mx-auto"
                             />
                         </div>
                     </div>
@@ -484,100 +509,88 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= PRESENTACIONES Y PRECIOS ================= -->
-        <section id="catalogo" class="scroll-mt-20 py-14 sm:py-16 bg-slate-50/60 border-t border-slate-100">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- ========================================================================= -->
+        <!-- 3. PRESENTACIONES Y PRECIOS (FONDO AZUL GRISÁCEO #F2F6FA, COMPACTO)       -->
+        <!-- ========================================================================= -->
+        <section id="catalogo" class="scroll-mt-16 py-10 sm:py-12 lg:py-14 bg-[#F2F6FA] border-b border-slate-200/80">
+            <span id="precios" class="sr-only"></span>
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <!-- Encabezado de la sección -->
-                <div class="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
-                    <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#0e1c2e] tracking-tight">
+                <!-- Encabezado sin etiquetas redundantes -->
+                <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+                    <h2 class="text-2xl sm:text-[30px] lg:text-[32px] font-bold text-[#10233F] tracking-tight">
                         Presentaciones y precios
                     </h2>
-                    <p class="mt-1.5 text-xs sm:text-sm font-medium text-slate-500">
-                        Precios en MXN
+                    <div class="w-12 h-[3px] bg-[#9C3550] rounded-full mx-auto mt-2.5" aria-hidden="true"></div>
+                    <p class="mt-3 text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
+                        Consulta nuestros precios en sucursal y a domicilio.
                     </p>
                 </div>
 
-                <!-- Grid de Presentación Oficial y Modalidades Operativas de 20 Litros -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto items-stretch">
+                <!-- Grid de Garrafón de 20 Litros junto al Bloque de Modalidades -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6 max-w-4xl mx-auto items-stretch">
                     
+                    <!-- Tarjeta 1: Garrafón de 20 Litros (Tarjeta blanca sobre fondo suave) -->
                     <div
                         v-for="product in bottleProducts"
                         :key="product.id"
-                        class="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 transition-all"
+                        class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 transition-all"
                     >
                         <div>
-                            <!-- Imagen reducida -->
-                            <div class="flex items-center justify-center py-2 mb-3">
+                            <!-- Imagen centrada y limpia -->
+                            <div class="flex items-center justify-center py-2 mb-2">
                                 <img
                                     :src="product.image"
                                     :alt="product.imageAlt"
-                                    class="h-36 sm:h-40 w-auto object-contain drop-shadow-xs transition-transform duration-200 hover:scale-105"
+                                    class="h-32 sm:h-36 w-auto object-contain drop-shadow-2xs transition-transform duration-200 hover:scale-105"
                                     loading="lazy"
                                 />
                             </div>
 
-                            <!-- Nombre con capacidad y disponibilidad -->
-                            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                                <div>
-                                    <h3 class="text-base sm:text-lg font-bold text-[#0e1c2e] tracking-tight">
-                                        {{ product.name }}
-                                    </h3>
-                                    <span class="text-xs text-blue-600 font-semibold block">Capacidad única: 20 Litros</span>
-                                </div>
-                                <span
-                                    v-if="product.isAvailableForDelivery"
-                                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100"
-                                >
-                                    <i class="fa-solid fa-truck-fast text-[10px]"></i>
-                                    {{ product.availabilityLabel }}
-                                </span>
-                                <span
-                                    v-else
-                                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200"
-                                >
-                                    <i class="fa-solid fa-store text-[10px]"></i>
-                                    {{ product.availabilityLabel }}
+                            <!-- Nombre y referencia de moneda MXN una sola vez -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <h3 class="text-base sm:text-lg font-bold text-[#10233F] tracking-tight">
+                                    Garrafón de 20 litros
+                                </h3>
+                                <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/70">
+                                    Precios en MXN
                                 </span>
                             </div>
 
-                            <!-- Filas simples de precios -->
-                            <div class="border-t border-slate-100 pt-3 pb-1 space-y-2 text-sm">
-                                <!-- Precio del servicio a domicilio -->
+                            <!-- Lista alineada de precios para lectura inmediata -->
+                            <div class="border-t border-slate-100 pt-3 pb-1 space-y-2.5 text-sm">
                                 <div
                                     v-if="product.isAvailableForDelivery && product.homePrice"
                                     class="flex items-center justify-between gap-2 text-slate-700"
                                 >
-                                    <span class="text-slate-600">Servicio a domicilio</span>
-                                    <span class="font-bold text-slate-900 shrink-0">${{ product.homePrice }} MXN</span>
+                                    <span class="text-slate-600 font-medium">A domicilio</span>
+                                    <span class="font-extrabold text-[#10233F] shrink-0 text-base">${{ product.homePrice }}</span>
                                 </div>
 
-                                <!-- Precio de llenado en planta -->
                                 <div
                                     v-if="product.storePrice"
                                     class="flex items-center justify-between gap-2 text-slate-700"
                                 >
-                                    <span class="text-slate-600">Llenado en planta / sucursal</span>
-                                    <span class="font-bold text-slate-900 shrink-0">${{ product.storePrice }} MXN</span>
+                                    <span class="text-slate-600 font-medium">Llenado en sucursal</span>
+                                    <span class="font-extrabold text-[#10233F] shrink-0 text-base">${{ product.storePrice }}</span>
                                 </div>
 
-                                <!-- Envase nuevo -->
                                 <div
                                     v-if="product.newBottlePrice"
                                     class="flex items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100"
                                 >
-                                    <span class="text-slate-500">Envase nuevo (opcional)</span>
-                                    <span class="font-semibold text-slate-700 shrink-0">${{ product.newBottlePrice }} MXN</span>
+                                    <span>Envase nuevo</span>
+                                    <span class="font-semibold text-slate-800 shrink-0">${{ product.newBottlePrice }}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Acciones correspondientes -->
+                        <!-- Acciones -->
                         <div class="pt-4 mt-auto border-t border-slate-100">
-                            <div v-if="product.isAvailableForDelivery" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                                 <Link
                                     :href="route('auth.portal')"
-                                    class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#0084ff] hover:bg-[#0070dc] shadow-sm hover:shadow transition-all text-center"
+                                    class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#0076E8] hover:bg-[#0060be] shadow-xs hover:shadow transition-all text-center min-h-[42px]"
                                 >
                                     <i class="fa-solid fa-cart-shopping text-xs"></i>
                                     <span>Pedir a domicilio</span>
@@ -586,72 +599,62 @@ const bottleProducts = computed(() => {
                                 <a
                                     href="#sucursal"
                                     @click="scrollToSection($event, 'sucursal')"
-                                    class="inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#0084ff] transition-colors text-center"
+                                    class="inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#0076E8] transition-colors text-center"
                                 >
                                     <i class="fa-solid fa-location-dot text-xs text-slate-400"></i>
                                     <span>Ver sucursal</span>
                                 </a>
                             </div>
-
-                            <div v-else>
-                                <a
-                                    href="#sucursal"
-                                    @click="scrollToSection($event, 'sucursal')"
-                                    class="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all text-center"
-                                >
-                                    <i class="fa-solid fa-location-dot text-xs text-slate-500"></i>
-                                    <span>Ver sucursal</span>
-                                </a>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- Tarjeta Informativa de Modalidades (Fijos vs Cambio) -->
-                    <div class="bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl border border-slate-200/90 p-5 sm:p-6 flex flex-col justify-between shadow-xs">
-                        <div class="space-y-4">
+                    <!-- Tarjeta 2: Modalidades de servicio -->
+                    <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between shadow-xs">
+                        <div class="space-y-3.5">
                             <div>
-                                <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/70 px-2.5 py-1 rounded-md inline-block mb-1.5">
-                                    Mismo Botellón de 20 Litros
-                                </span>
-                                <h3 class="text-base sm:text-lg font-bold text-slate-900">
-                                    Modalidades de Servicio
+                                <h3 class="text-base sm:text-lg font-bold text-[#10233F]">
+                                    Modalidades de servicio
                                 </h3>
                                 <p class="text-xs text-slate-600 mt-1">
-                                    Puritronic opera exclusivamente con garrafones de 20L bajo dos modalidades según tu preferencia:
+                                    Dos modalidades para tus garrafones de 20 litros.
                                 </p>
                             </div>
 
                             <div class="space-y-3 text-xs">
-                                <!-- Botellón Fijo -->
-                                <div class="p-3 bg-white rounded-xl border border-slate-200/70 shadow-2xs space-y-1">
-                                    <div class="flex items-center gap-2 font-bold text-slate-900">
-                                        <i class="fa-solid fa-tag text-blue-600 text-sm"></i>
-                                        <span>Botellones Fijos (Propiedad del Cliente)</span>
+                                <!-- Modalidad Fijos -->
+                                <div class="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-1">
+                                    <div class="flex items-center gap-2 font-bold text-[#10233F]">
+                                        <div class="w-6 h-6 rounded-md bg-blue-100/70 text-[#0076E8] flex items-center justify-center text-xs shrink-0">
+                                            <i class="fa-solid fa-tag"></i>
+                                        </div>
+                                        <span class="text-xs sm:text-sm">Fijos · Tus propios envases</span>
                                     </div>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        Envases etiquetados a tu nombre. El repartidor los recoge en tu domicilio, se lavan y llenan en planta, y se te entregan tus mismos envases.
+                                    <p class="text-slate-600 leading-relaxed pl-8">
+                                        Recogemos tus garrafones, los llenamos y te devolvemos los mismos.
                                     </p>
                                 </div>
 
-                                <!-- Botellón de Cambio -->
-                                <div class="p-3 bg-white rounded-xl border border-slate-200/70 shadow-2xs space-y-1">
-                                    <div class="flex items-center gap-2 font-bold text-slate-900">
-                                        <i class="fa-solid fa-repeat text-emerald-600 text-sm"></i>
-                                        <span>Botellones de Cambio (Intercambio Inmediato)</span>
+                                <!-- Modalidad Cambios -->
+                                <div class="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-1">
+                                    <div class="flex items-center gap-2 font-bold text-[#10233F]">
+                                        <div class="w-6 h-6 rounded-md bg-emerald-100/70 text-emerald-600 flex items-center justify-center text-xs shrink-0">
+                                            <i class="fa-solid fa-arrows-rotate"></i>
+                                        </div>
+                                        <span class="text-xs sm:text-sm">Cambios · Intercambio en tu domicilio</span>
                                     </div>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        Entrega inmediata en tu puerta. Entregas tu botellón de 20L vacío en buen estado y recibes uno lleno y precintado en la misma visita.
+                                    <p class="text-slate-600 leading-relaxed pl-8">
+                                        Entregas un garrafón vacío y recibes uno lleno en la misma visita.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="pt-4 mt-4 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
-                            <span class="flex items-center gap-1.5 font-medium">
-                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                                Tarifa idéntica por rellenado
+                        <div class="pt-3.5 mt-auto border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                            <span class="flex items-center gap-1.5 font-medium text-slate-600">
+                                <i class="fa-solid fa-circle-check text-emerald-600 text-xs"></i>
+                                Mismo precio de llenado en ambas modalidades
                             </span>
-                            <span class="font-bold text-slate-700">20L Estándar</span>
+                            <span class="font-bold text-[#10233F]">20 Litros</span>
                         </div>
                     </div>
 
@@ -660,140 +663,139 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= CÓMO FUNCIONA / PROCESO ================= -->
-        <section id="como-funciona" class="scroll-mt-20 py-20 lg:py-24 bg-white">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- ========================================================================= -->
+        <!-- 4. CÓMO FUNCIONA (FONDO MENTA SUAVE #E8F7F2, BLOQUE COMPACTO)             -->
+        <!-- ========================================================================= -->
+        <section id="como-funciona" class="scroll-mt-16 py-10 sm:py-12 lg:py-14 bg-[#E8F7F2] border-b border-emerald-100/60">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <!-- Títulos -->
-                <div class="text-center max-w-2xl mx-auto mb-20 space-y-3">
-                    <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 px-3 py-1 rounded-full">
-                        Paso a Paso
-                    </span>
-                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0e1c2e] tracking-tight">
-                        Pedir agua nunca <span class="text-[#0084ff]">fue tan sencillo.</span>
+                <!-- Encabezado sin introducción redundante -->
+                <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+                    <h2 class="text-2xl sm:text-[30px] lg:text-[32px] font-bold text-[#10233F] tracking-tight">
+                        Pide en tres pasos
                     </h2>
-                    <p class="text-sm sm:text-base text-slate-500 font-normal">
-                        Sigue estos tres sencillos pasos para recibir agua purificada y fresca en tu hogar.
-                    </p>
+                    <div class="w-12 h-[3px] bg-[#9C3550] rounded-full mx-auto mt-2.5" aria-hidden="true"></div>
                 </div>
 
-                <!-- Pasos 01, 02, 03 con conector dashed minimalista -->
-                <div class="relative grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-8 items-start">
+                <!-- TRES PASOS REUNIDOS EN BLOQUE COMPACTO -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 max-w-4xl mx-auto items-stretch">
                     
-                    <!-- Línea dashed conectora en desktop -->
-                    <div class="hidden md:block absolute top-[94px] left-[20%] right-[20%] h-0.5 border-t-2 border-dashed border-slate-200 z-0">
-                        <i class="fa-solid fa-chevron-right text-slate-400 text-xs absolute -right-1 -top-2 bg-white pl-1"></i>
-                    </div>
-
                     <!-- PASO 1 -->
-                    <div class="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl hover:bg-slate-50/60 transition-colors">
-                        <div class="w-11 h-11 rounded-full bg-[#0052cc] text-white font-extrabold text-sm flex items-center justify-center mb-6 shadow-md shadow-blue-500/25">
-                            01
-                        </div>
-                        <div class="w-20 h-20 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-3xl mb-6 shadow-xs">
+                    <div class="bg-white rounded-2xl p-5 border border-emerald-100/80 shadow-xs flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-xl bg-[#EAF5FF] text-[#0076E8] flex items-center justify-center text-xl mb-3 shadow-2xs">
                             <i class="fa-solid fa-mobile-screen"></i>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Haz tu pedido</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 max-w-xs leading-relaxed">
-                            Solicita la cantidad de garrafones que necesitas fácilmente en pocos clics.
+                        <span class="text-[11px] font-bold text-[#0076E8] uppercase tracking-wider mb-1">Paso 1</span>
+                        <h3 class="text-base font-bold text-[#10233F] mb-1.5">Haz tu pedido</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                            Indica cuántos garrafones necesitas.
                         </p>
                     </div>
 
                     <!-- PASO 2 -->
-                    <div class="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl hover:bg-slate-50/60 transition-colors">
-                        <div class="w-11 h-11 rounded-full bg-[#0084ff] text-white font-extrabold text-sm flex items-center justify-center mb-6 shadow-md shadow-blue-400/25">
-                            02
+                    <div class="bg-white rounded-2xl p-5 border border-emerald-100/80 shadow-xs flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-3 shadow-2xs">
+                            <i class="fa-solid fa-circle-check"></i>
                         </div>
-                        <div class="w-20 h-20 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-3xl mb-6 shadow-xs">
-                            <i class="fa-solid fa-truck-fast"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Confirmamos tu pedido</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 max-w-xs leading-relaxed">
-                            Recibirás información en vivo sobre el estado y preparación de tu solicitud.
+                        <span class="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Paso 2</span>
+                        <h3 class="text-base font-bold text-[#10233F] mb-1.5">Confirmación automática</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                            Recibe la confirmación y consulta el estado de tu pedido.
                         </p>
                     </div>
 
                     <!-- PASO 3 -->
-                    <div class="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl hover:bg-slate-50/60 transition-colors">
-                        <div class="w-11 h-11 rounded-full bg-emerald-500 text-white font-extrabold text-sm flex items-center justify-center mb-6 shadow-md shadow-emerald-500/25">
-                            03
+                    <div class="bg-white rounded-2xl p-5 border border-emerald-100/80 shadow-xs flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl mb-3 shadow-2xs">
+                            <i class="fa-solid fa-truck-fast"></i>
                         </div>
-                        <div class="w-20 h-20 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl mb-6 shadow-xs">
-                            <i class="fa-solid fa-calendar-check"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-900 mb-2">Recibe tu agua</h3>
-                        <p class="text-xs sm:text-sm text-slate-500 max-w-xs leading-relaxed">
-                            Nuestro repartidor llegará directamente hasta la puerta de tu hogar en Hocabá.
+                        <span class="text-[11px] font-bold text-teal-600 uppercase tracking-wider mb-1">Paso 3</span>
+                        <h3 class="text-base font-bold text-[#10233F] mb-1.5">Recibe tu agua</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                            Realizamos la entrega según tu modalidad de servicio.
                         </p>
                     </div>
 
                 </div>
+
             </div>
         </section>
 
-        <!-- ================= SECCIÓN DE COMENTARIOS / OPINIONES ================= -->
-        <section id="comentarios" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- ========================================================================= -->
+        <!-- 5. COMENTARIOS (FONDO AZUL GRISÁCEO #F2F6FA, TARJETAS BLANCAS)           -->
+        <!-- ========================================================================= -->
+        <section id="comentarios" class="scroll-mt-16 py-10 sm:py-12 lg:py-14 bg-[#F2F6FA] border-b border-slate-200/80">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <!-- Títulos -->
-                <div class="text-center max-w-2xl mx-auto mb-16 space-y-3">
-                    <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 px-3 py-1 rounded-full">
-                        Comentarios
-                    </span>
-                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0e1c2e] tracking-tight">
-                        Lo que dicen <span class="text-[#0084ff]">nuestros clientes</span>
+                <!-- Encabezado con Calificación -->
+                <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+                    <h2 class="text-2xl sm:text-[30px] lg:text-[32px] font-bold text-[#10233F] tracking-tight">
+                        Nuestros clientes opinan
                     </h2>
-                    <p class="text-sm sm:text-base text-slate-500 font-normal">
-                        La satisfacción de las familias y negocios de Hocabá que disfrutan de Puritronic todos los días.
-                    </p>
+                    <div class="w-12 h-[3px] bg-[#9C3550] rounded-full mx-auto mt-2.5" aria-hidden="true"></div>
 
-                    <!-- Calificación general -->
-                    <div class="inline-flex items-center gap-2 pt-2 px-4 py-1.5 bg-white rounded-full border border-slate-200/80 shadow-xs">
-                        <div class="flex text-amber-400 text-xs gap-1">
+                    <!-- Calificación destacada compacta -->
+                    <div class="inline-flex items-center gap-2 mt-4 px-3 py-1 bg-white rounded-full border border-slate-200/80 shadow-2xs">
+                        <div class="flex text-amber-400 text-xs gap-0.5">
                             <i class="fa-solid fa-star"></i>
                             <i class="fa-solid fa-star"></i>
                             <i class="fa-solid fa-star"></i>
                             <i class="fa-solid fa-star"></i>
                             <i class="fa-solid fa-star"></i>
                         </div>
-                        <span class="text-xs font-bold text-slate-700">5.0 de 5 estrellas</span>
+                        <span class="text-xs font-bold text-[#10233F]">5.0 de 5 estrellas</span>
                     </div>
                 </div>
 
-                <!-- Grid de Comentarios -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Grid de Reseñas en Tarjetas Blancas -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 max-w-5xl mx-auto items-stretch">
                     <div
                         v-for="(item, index) in comments"
                         :key="index"
-                        class="bg-white rounded-3xl p-8 border border-slate-100 shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
+                        class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between"
                     >
                         <div>
-                            <!-- Estrellas y Fecha -->
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex text-amber-400 text-xs gap-1">
-                                    <i v-for="s in item.rating" :key="s" class="fa-solid fa-star"></i>
-                                </div>
-                                <span class="text-[11px] font-medium text-slate-400">{{ item.time }}</span>
+                            <!-- Estrellas destacadas -->
+                            <div class="flex items-center text-amber-400 text-xs gap-1 mb-2.5">
+                                <i v-for="s in item.rating" :key="s" class="fa-solid fa-star"></i>
                             </div>
 
-                            <!-- Texto del Comentario -->
-                            <p class="text-slate-600 text-xs sm:text-sm leading-relaxed mb-6 font-normal">
+                            <!-- Comentario con extracto de 3 líneas y Leer más -->
+                            <p
+                                :class="[
+                                    'text-slate-700 text-xs sm:text-sm leading-relaxed mb-1.5 font-normal',
+                                    !expandedComments[index] ? 'line-clamp-3' : ''
+                                ]"
+                            >
                                 “{{ item.comment }}”
                             </p>
+                            <button
+                                v-if="item.comment && item.comment.length > 110"
+                                @click="toggleComment(index)"
+                                type="button"
+                                class="text-[11px] font-semibold text-[#0076E8] hover:text-[#005bb5] focus:outline-none mb-3 inline-block"
+                            >
+                                {{ expandedComments[index] ? 'Leer menos' : 'Leer más' }}
+                            </button>
                         </div>
 
-                        <!-- Información del Usuario -->
-                        <div class="pt-4 border-t border-slate-100 flex items-center gap-3">
-                            <div :class="`w-10 h-10 rounded-full ${item.avatarBg} text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs`">
-                                {{ item.avatarText }}
+                        <!-- Autor destacado y fecha legible -->
+                        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div :class="`w-8 h-8 rounded-full ${item.avatarBg} text-white font-bold text-xs flex items-center justify-center shrink-0`">
+                                    {{ item.avatarText }}
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="text-xs sm:text-sm font-bold text-[#10233F] truncate flex items-center gap-1">
+                                        <span>{{ item.name }}</span>
+                                        <i v-if="item.verified" class="fa-solid fa-circle-check text-[#0076E8] text-[10px]" title="Cliente verificado"></i>
+                                    </h4>
+                                    <p class="text-[11px] text-slate-500 truncate">{{ item.role }}</p>
+                                </div>
                             </div>
-                            <div class="min-w-0">
-                                <h4 class="text-xs sm:text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
-                                    <span>{{ item.name }}</span>
-                                    <i v-if="item.verified" class="fa-solid fa-circle-check text-blue-500 text-xs" title="Cliente verificado"></i>
-                                </h4>
-                                <p class="text-[11px] text-slate-500 truncate">{{ item.role }}</p>
-                            </div>
+                            
+                            <!-- Fecha legible -->
+                            <span class="text-[11px] text-slate-400 font-normal shrink-0">{{ item.time }}</span>
                         </div>
                     </div>
                 </div>
@@ -801,168 +803,139 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= SECCIÓN NUESTRA SUCURSAL ================= -->
-        <section id="sucursal" class="scroll-mt-20 py-16 sm:py-20 lg:py-24 bg-white border-t border-slate-100">
+        <!-- ========================================================================= -->
+        <!-- 6. SUCURSAL (VISÍTANOS EN HOCABÁ)                                         -->
+        <!-- ========================================================================= -->
+        <section id="sucursal" class="scroll-mt-16 py-10 sm:py-12 lg:py-14 bg-white border-b border-slate-200/80">
             <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-6 items-stretch">
+                <!-- Encabezado centrado con línea rojo vino #9C3550 -->
+                <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+                    <h2 class="text-2xl sm:text-[30px] lg:text-[32px] font-bold text-[#10233F] tracking-tight">
+                        Visítanos en Hocabá
+                    </h2>
+                    <div class="w-12 h-[3px] bg-[#9C3550] rounded-full mx-auto mt-2.5" aria-hidden="true"></div>
+                    <p class="mt-3 text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
+                        Recarga tus garrafones o compra tus envases en sucursal.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6 items-stretch max-w-6xl mx-auto">
                     
-                    <!-- COLUMNA 1: INFORMACIÓN DE SUCURSAL -->
-                    <div class="md:col-span-2 lg:col-span-5 flex flex-col justify-between space-y-6 text-center lg:text-left">
+                    <!-- BLOQUE 1: DATOS CON ETIQUETAS DIRECCIÓN, HORARIO, TELÉFONO -->
+                    <div class="bg-slate-50/90 rounded-2xl border border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between space-y-4">
+                        
                         <div class="space-y-4">
-                            <!-- Badge -->
-                            <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 border border-blue-100 px-3.5 py-1.5 rounded-full">
-                                NUESTRA SUCURSAL
-                            </span>
+                            <!-- Estado de Apertura -->
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="w-2.5 h-2.5 rounded-full"
+                                        :class="isStoreOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
+                                    ></span>
+                                    <span class="text-xs font-bold text-[#10233F]">Atención en planta</span>
+                                </div>
+                                <span
+                                    class="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                                    :class="isStoreOpen ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60' : 'text-slate-600 bg-slate-100 border border-slate-200/60'"
+                                >
+                                    {{ isStoreOpen ? 'Abierto hoy' : 'Cerrado' }}
+                                </span>
+                            </div>
 
-                            <!-- Título principal -->
-                            <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#0e1c2e] leading-tight">
-                                Visítanos en<br class="hidden sm:inline">
-                                <span class="text-[#0084ff]"> Hocabá, Yucatán</span>
-                            </h2>
-
-                            <!-- Descripción -->
-                            <p class="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed max-w-lg mx-auto lg:mx-0">
-                                También puedes visitarnos en nuestra sucursal para atención personalizada, recargas y más servicios de agua purificada.
-                            </p>
-                        </div>
-
-                        <!-- Grid 2x2 de datos -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2 max-w-md mx-auto lg:max-w-none lg:mx-0 text-left">
-                            <!-- Dirección -->
-                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Etiqueta: Dirección -->
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-50 text-[#0076E8] flex items-center justify-center shrink-0 text-xs mt-0.5">
                                     <i class="fa-solid fa-location-dot"></i>
                                 </div>
                                 <div class="min-w-0">
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                                        Dirección
-                                    </h3>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
-                                        Calle 20 #102, Centro<br>
-                                        Hocabá, Yucatán
+                                    <h4 class="text-xs font-bold text-[#10233F]">Dirección</h4>
+                                    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed mt-0.5">
+                                        Calle 20 #102, Centro · Hocabá, Yucatán
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Horario de atención Dinámico -->
-                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Etiqueta: Horario -->
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-50 text-[#0076E8] flex items-center justify-center shrink-0 text-xs mt-0.5">
                                     <i class="fa-regular fa-clock"></i>
                                 </div>
                                 <div class="min-w-0">
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                                        Horario de atención
-                                    </h3>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
-                                        {{ formattedScheduleDisplay.days }}<br>
+                                    <h4 class="text-xs font-bold text-[#10233F]">Horario</h4>
+                                    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed mt-0.5">
+                                        {{ formattedScheduleDisplay.days }}<br />
                                         {{ formattedScheduleDisplay.hours }}
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Teléfono -->
-                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 text-base shadow-xs">
+                            <!-- Etiqueta: Teléfono -->
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-50 text-[#0076E8] flex items-center justify-center shrink-0 text-xs mt-0.5">
                                     <i class="fa-solid fa-phone"></i>
                                 </div>
                                 <div class="min-w-0">
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                                        Teléfono
-                                    </h3>
+                                    <h4 class="text-xs font-bold text-[#10233F]">Teléfono</h4>
                                     <a
                                         href="tel:9991404397"
-                                        class="text-[11px] sm:text-xs text-slate-500 hover:text-[#0084ff] font-medium leading-relaxed mt-0.5 inline-block transition-colors"
+                                        class="text-xs sm:text-sm text-[#0076E8] font-bold hover:underline leading-relaxed mt-0.5 inline-block"
                                     >
                                         9991 40 43 97
                                     </a>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- También atendemos -->
-                            <div class="flex items-start gap-3.5 p-3.5 sm:p-0 rounded-2xl bg-slate-50/70 sm:bg-transparent border border-slate-100 sm:border-0">
-                                <div class="w-11 h-11 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center flex-shrink-0 text-base shadow-xs">
-                                    <i class="fa-regular fa-star"></i>
-                                </div>
-                                <div class="min-w-0">
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                                        También atendemos
-                                    </h3>
-                                    <p class="text-[11px] sm:text-xs text-slate-500 font-normal leading-relaxed mt-0.5">
-                                        Pedidos a domicilio
-                                    </p>
-                                </div>
-                            </div>
+                    </div>
+
+                    <!-- BLOQUE 2: FOTOGRAFÍA REAL DE LA FACHADA -->
+                    <div class="rounded-2xl overflow-hidden shadow-xs border border-slate-200/80 bg-slate-100 relative min-h-[260px] sm:min-h-[280px]">
+                        <img
+                            src="/images/sucursal-real.jpg"
+                            alt="Fachada de Sucursal Puritronic Hocabá"
+                            class="w-full h-full object-cover transition-transform duration-500 ease-out hover:scale-105"
+                            loading="lazy"
+                        />
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"></div>
+                        <div class="absolute bottom-3 left-3 right-3 py-2 px-3 rounded-xl bg-white/95 backdrop-blur-md border border-white/60 shadow-xs text-xs font-bold text-[#10233F]">
+                            Fachada de la sucursal
                         </div>
                     </div>
 
-                    <!-- COLUMNA 2: FOTOGRAFÍA DE LA SUCURSAL -->
-                    <div class="md:col-span-1 lg:col-span-4 min-h-[300px] sm:min-h-[360px] flex">
-                        <div class="relative w-full rounded-3xl overflow-hidden shadow-lg border border-slate-100 group min-h-[300px]">
-                            <img
-                                src="/images/sucursal-real.jpg"
-                                alt="Sucursal Puritronic Hocabá, Yucatán"
-                                class="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                            />
-                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent pointer-events-none"></div>
-                            
-                            <!-- Badge dinámico sobre la foto -->
-                            <div class="absolute bottom-4 left-4 right-4 py-2.5 px-4 rounded-2xl bg-white/95 backdrop-blur-md border border-white/60 shadow-md flex items-center justify-between">
-                                <div class="flex items-center gap-2.5">
-                                    <span
-                                        class="w-2.5 h-2.5 rounded-full"
-                                        :class="isStoreOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
-                                    ></span>
-                                    <span class="text-xs font-bold text-slate-800">Planta & Sucursal Hocabá</span>
+                    <!-- BLOQUE 3: MAPA CON BOTÓN «Cómo llegar» -->
+                    <div class="rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-100 flex flex-col justify-end relative min-h-[260px] sm:min-h-[280px] md:col-span-2 lg:col-span-1">
+                        <iframe
+                            src="https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3729.429274512127!2d-89.249962!3d20.814365!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMjDCsDQ4JzUxLjciTiA4OcKwMTQnNTkuOSJX!5e0!3m2!1ses-419!2smx!4v1792245980366!5m2!1ses-419!2smx"
+                            class="absolute inset-0 w-full h-full border-0"
+                            allowfullscreen=""
+                            loading="lazy"
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            title="Ubicación de Puritronic en Google Maps"
+                        ></iframe>
+
+                        <!-- Botón del mapa: «Cómo llegar» -->
+                        <div class="relative z-10 p-3">
+                            <a
+                                href="https://maps.app.goo.gl/dxB7hkU2R1xbzGr6A"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="w-full bg-white/95 backdrop-blur-md rounded-xl py-2.5 px-3.5 shadow-md border border-slate-200/90 hover:border-[#0076E8] hover:shadow-lg transition-all flex items-center justify-between group/map cursor-pointer min-h-[42px]"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/>
+                                        <path d="M12 2C8.13 2 5 5.13 5 9c0 2.22 1.25 4.9 2.76 7.42L12 9V2z" fill="#EA4335"/>
+                                        <path d="M12 9l4.24 7.42C17.75 13.9 19 11.22 19 9c0-3.87-3.13-7-7-7v7z" fill="#FBBC05"/>
+                                        <path d="M7.76 16.42L12 22l4.24-5.58C14.88 18.2 13.48 20 12 20s-2.88-1.8-4.24-3.58z" fill="#34A853"/>
+                                        <circle cx="12" cy="9" r="2.8" fill="#FFFFFF"/>
+                                    </svg>
+                                    <span class="text-xs font-bold text-[#10233F] group-hover/map:text-[#0076E8] transition-colors">
+                                        Cómo llegar
+                                    </span>
                                 </div>
-                                <span
-                                    class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
-                                    :class="isStoreOpen ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60' : 'text-slate-600 bg-slate-100 border border-slate-200/60'"
-                                >
-                                    {{ isStoreOpen ? 'Abierto' : 'Cerrado' }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- COLUMNA 3: GOOGLE MAPS IFRAME REAL Y BOTÓN CÓMO LLEGAR -->
-                    <div class="md:col-span-1 lg:col-span-3 min-h-[300px] sm:min-h-[360px] flex">
-                        <div class="relative w-full rounded-3xl overflow-hidden border border-slate-200/90 shadow-md bg-slate-100 flex flex-col justify-end min-h-[300px]">
-                            
-                            <!-- Google Maps Iframe proporcionado por el usuario -->
-                            <iframe
-                                src="https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3729.429274512127!2d-89.249962!3d20.814365!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMjDCsDQ4JzUxLjciTiA4OcKwMTQnNTkuOSJX!5e0!3m2!1ses-419!2smx!4v1792245980366!5m2!1ses-419!2smx"
-                                class="absolute inset-0 w-full h-full border-0"
-                                allowfullscreen=""
-                                loading="lazy"
-                                referrerpolicy="strict-origin-when-cross-origin"
-                            ></iframe>
-
-                            <!-- Botón flotante inferior "Cómo llegar" con link directo de Google Maps -->
-                            <div class="relative z-10 p-3.5 sm:p-4">
-                                <a
-                                    href="https://maps.app.goo.gl/dxB7hkU2R1xbzGr6A"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="w-full bg-white/95 backdrop-blur-md rounded-2xl py-3 px-4 shadow-xl border border-slate-200/80 hover:border-blue-300 hover:shadow-2xl transition-all duration-300 flex items-center justify-between group/btn cursor-pointer"
-                                >
-                                    <div class="flex items-center gap-2.5">
-                                        <!-- Logo icono Google Maps -->
-                                        <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/>
-                                            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.22 1.25 4.9 2.76 7.42L12 9V2z" fill="#EA4335"/>
-                                            <path d="M12 9l4.24 7.42C17.75 13.9 19 11.22 19 9c0-3.87-3.13-7-7-7v7z" fill="#FBBC05"/>
-                                            <path d="M7.76 16.42L12 22l4.24-5.58C14.88 18.2 13.48 20 12 20s-2.88-1.8-4.24-3.58z" fill="#34A853"/>
-                                            <circle cx="12" cy="9" r="2.8" fill="#FFFFFF"/>
-                                        </svg>
-                                        <span class="text-xs sm:text-sm font-bold text-slate-800 group-hover/btn:text-[#0084ff] transition-colors">
-                                            Cómo llegar
-                                        </span>
-                                    </div>
-                                    <i class="fa-solid fa-chevron-right text-xs text-[#0084ff] group-hover/btn:translate-x-1 transition-transform"></i>
-                                </a>
-                            </div>
-
+                                <i class="fa-solid fa-chevron-right text-xs text-[#0076E8] group-hover/map:translate-x-1 transition-transform"></i>
+                            </a>
                         </div>
                     </div>
 
@@ -970,56 +943,56 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= PREGUNTAS FRECUENTES (FAQ) ================= -->
-        <section id="preguntas" class="scroll-mt-20 py-20 lg:py-24 bg-slate-50/60 border-t border-slate-100">
+        <!-- ========================================================================= -->
+        <!-- 7. PREGUNTAS FRECUENTES (RESUELVE TUS DUDAS)                              -->
+        <!-- ========================================================================= -->
+        <section id="preguntas" class="scroll-mt-16 py-10 sm:py-12 lg:py-14 bg-slate-50/60 border-b border-slate-200/80">
             <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                 
-                <!-- Títulos -->
-                <div class="text-center mb-16 space-y-3">
-                    <span class="inline-block text-xs font-bold uppercase tracking-wider text-[#0084ff] bg-blue-50 px-3 py-1 rounded-full">
-                        Dudas Frecuentes
-                    </span>
-                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0e1c2e] tracking-tight">
-                        Preguntas <span class="text-[#0084ff]">Frecuentes</span>
+                <!-- Encabezado con línea rojo vino #9C3550 -->
+                <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+                    <h2 class="text-2xl sm:text-[30px] lg:text-[32px] font-bold text-[#10233F] tracking-tight">
+                        Resuelve tus dudas
                     </h2>
-                    <p class="text-sm sm:text-base text-slate-500">
-                        Resolvemos las preguntas más comunes sobre el servicio, los pedidos y las entregas.
-                    </p>
+                    <div class="w-12 h-[3px] bg-[#9C3550] rounded-full mx-auto mt-2.5" aria-hidden="true"></div>
                 </div>
 
-                <!-- Lista de Acordeón con Cambio de Color Dinámico al Abrir -->
-                <div class="space-y-3.5">
+                <!-- Acordeón compacto con fondo celeste suave #EAF5FF en la pregunta abierta -->
+                <div class="space-y-3">
                     <div
                         v-for="(faq, index) in faqs"
                         :key="index"
                         :class="[
-                            'rounded-2xl border transition-all duration-300 overflow-hidden',
+                            'rounded-2xl border transition-all duration-200 overflow-hidden',
                             openFaq === index
-                                ? 'bg-blue-50/80 border-blue-200 shadow-md shadow-blue-500/5'
-                                : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-xs'
+                                ? 'bg-[#EAF5FF] border-blue-200 shadow-2xs'
+                                : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'
                         ]"
                     >
                         <button
                             @click="toggleFaq(index)"
                             type="button"
-                            class="w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none gap-4"
+                            class="w-full px-5 py-4 flex items-center justify-between text-left focus:outline-none gap-3 min-h-[44px]"
+                            :aria-expanded="openFaq === index"
                         >
-                            <span :class="['text-sm sm:text-base font-semibold transition-colors duration-200', openFaq === index ? 'text-[#0084ff]' : 'text-slate-800']">
+                            <span :class="['text-xs sm:text-sm font-semibold transition-colors duration-150', openFaq === index ? 'text-[#0076E8]' : 'text-[#10233F]']">
                                 {{ faq.q }}
                             </span>
+                            
+                            <!-- Control visible para expandir o cerrar (+ / - o chevron con estado visual claro) -->
                             <div :class="[
-                                'w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all duration-300 flex-shrink-0',
+                                'w-7 h-7 rounded-full flex items-center justify-center text-xs transition-transform duration-200 shrink-0',
                                 openFaq === index
-                                    ? 'bg-[#0084ff] text-white rotate-180 shadow-xs'
+                                    ? 'bg-[#0076E8] text-white rotate-180 shadow-2xs'
                                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                             ]">
-                                <i class="fa-solid fa-chevron-down"></i>
+                                <i class="fa-solid fa-chevron-down text-[10px]"></i>
                             </div>
                         </button>
                         
                         <div
                             v-show="openFaq === index"
-                            class="px-6 pb-6 pt-1 text-slate-600 text-xs sm:text-sm border-t border-blue-100/60 leading-relaxed font-normal"
+                            class="px-5 pb-4 pt-0 text-slate-600 text-xs sm:text-sm border-t border-blue-100/60 leading-relaxed font-normal"
                         >
                             {{ faq.a }}
                         </div>
@@ -1029,121 +1002,119 @@ const bottleProducts = computed(() => {
             </div>
         </section>
 
-        <!-- ================= BANNER CTA AZUL MINIMALISTA ================= -->
-        <section class="py-12 bg-white">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="relative overflow-hidden rounded-3xl sm:rounded-[2.5rem] bg-gradient-to-r from-[#0084ff] via-[#0096f2] to-[#00b4d8] p-8 sm:p-12 lg:p-16 shadow-xl shadow-blue-500/15">
-                    
-                    <!-- Elementos decorativos de fondo sutiles -->
-                    <div class="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
-                    <div class="absolute -left-16 -bottom-16 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
-
-                    <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <!-- ========================================================================= -->
+        <!-- 8. CIERRE (FONDO AZUL SÓLIDO #0076E8)                                     -->
+        <!-- ========================================================================= -->
+        <section class="py-8 sm:py-10 bg-white">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+                
+                <div class="relative overflow-hidden rounded-2xl bg-[#0076E8] p-6 sm:p-8 lg:p-10 shadow-md text-white">
+                    <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                         
-                        <!-- Columna izquierda: Logo y texto -->
-                        <div class="lg:col-span-7 space-y-4 text-white text-center lg:text-left">
-                            
-                            <!-- Logo -->
-                            <div>
-                                <img
-                                    src="/images/logo.png"
-                                    alt="Puritronic"
-                                    class="h-10 sm:h-12 w-auto object-contain mx-auto lg:mx-0 drop-shadow-md"
-                                />
-                            </div>
-
-                            <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">
+                        <!-- Columna izquierda: Información y llamado -->
+                        <div class="lg:col-span-7 space-y-2 text-center lg:text-left">
+                            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight">
                                 ¿Necesitas agua?
                             </h2>
-                            <p class="text-white/90 text-sm sm:text-base max-w-md mx-auto lg:mx-0 font-light">
-                                Crea tu cuenta y realiza tu pedido en pocos minutos.
+                            <p class="text-white/90 text-sm sm:text-base font-normal leading-relaxed max-w-md mx-auto lg:mx-0">
+                                Crea tu cuenta y haz tu pedido.
                             </p>
                         </div>
 
                         <!-- Columna derecha: Botones de acción -->
-                        <div class="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-3.5 lg:items-end justify-center">
+                        <div class="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-2.5 lg:items-end justify-center">
                             <Link
                                 :href="route('register')"
-                                class="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-white text-slate-800 font-bold hover:bg-slate-50 transition-all shadow-md group text-xs sm:text-sm w-full sm:w-auto lg:w-64"
+                                class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white text-[#10233F] hover:bg-slate-100 font-bold transition-all shadow-xs group text-xs sm:text-sm w-full sm:w-auto lg:w-56 min-h-[44px]"
                             >
                                 <span>Crear mi cuenta</span>
-                                <i class="fa-solid fa-chevron-right text-xs text-slate-400 group-hover:translate-x-1 transition-transform"></i>
+                                <i class="fa-solid fa-chevron-right text-xs text-[#0076E8] group-hover:translate-x-1 transition-transform"></i>
                             </Link>
 
                             <Link
                                 :href="route('login')"
-                                class="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-[#0e1c2e] hover:bg-[#1a2d42] text-white font-bold transition-all shadow-md group text-xs sm:text-sm w-full sm:w-auto lg:w-64"
+                                class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#10233F] hover:bg-[#162C5B] text-white font-semibold transition-all shadow-xs text-xs sm:text-sm w-full sm:w-auto lg:w-56 min-h-[44px]"
                             >
-                                <span>Ya tengo cuenta</span>
-                                <i class="fa-solid fa-chevron-right text-xs text-white/50 group-hover:translate-x-1 transition-transform"></i>
+                                <span>Iniciar sesión</span>
                             </Link>
                         </div>
 
                     </div>
                 </div>
+
             </div>
         </section>
 
-        <!-- ================= FOOTER OSCURO MINIMALISTA ================= -->
-        <footer id="contacto" class="scroll-mt-20 bg-[#0e1c2e] text-white pt-16 pb-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-12 pb-12 border-b border-white/10">
+        <!-- ========================================================================= -->
+        <!-- 9. PIE DE PÁGINA (FONDO AZUL MARINO #10233F)                              -->
+        <!-- ========================================================================= -->
+        <footer id="contacto" class="scroll-mt-16 bg-[#10233F] text-white pt-12 pb-8 border-t border-slate-800">
+            <div class="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 pb-10 border-b border-white/10">
                     
-                    <!-- Columna 1: Marca y descripción -->
-                    <div class="space-y-4">
-                        <div>
-                            <img
-                                src="/images/logo.png"
-                                alt="Puritronic Agua Purificada"
-                                class="h-11 sm:h-12 w-auto object-contain"
-                            />
-                        </div>
-                        <p class="text-slate-400 text-xs sm:text-sm max-w-sm leading-relaxed">
-                            Agua purificada de calidad y máxima higiene, directo hasta tu hogar.
+                    <!-- Grupo 1: Identidad y propuesta -->
+                    <div class="space-y-3">
+                        <img
+                            src="/images/logo.png"
+                            alt="Puritronic Agua Purificada"
+                            class="h-9 sm:h-10 w-auto object-contain"
+                        />
+                        <p class="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-sm">
+                            Agua purificada a domicilio en Hocabá.
                         </p>
                     </div>
 
-                    <!-- Columna 2: Contacto e información local -->
-                    <div class="space-y-4">
-                        <h3 class="text-sm font-bold text-white tracking-wider uppercase">
+                    <!-- Grupo 2: Navegación -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-white tracking-wider uppercase">
+                            Navegación
+                        </h3>
+                        <ul class="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                            <li><a href="#inicio" @click="scrollToSection($event, 'inicio')" class="hover:text-white transition-colors">Inicio</a></li>
+                            <li><a href="#catalogo" @click="scrollToSection($event, 'catalogo')" class="hover:text-white transition-colors">Precios</a></li>
+                            <li><a href="#como-funciona" @click="scrollToSection($event, 'como-funciona')" class="hover:text-white transition-colors">Cómo funciona</a></li>
+                            <li><a href="#comentarios" @click="scrollToSection($event, 'comentarios')" class="hover:text-white transition-colors">Opiniones</a></li>
+                            <li><a href="#sucursal" @click="scrollToSection($event, 'sucursal')" class="hover:text-white transition-colors">Sucursal</a></li>
+                            <li><a href="#preguntas" @click="scrollToSection($event, 'preguntas')" class="hover:text-white transition-colors">Preguntas</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- Grupo 3: Contacto -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-white tracking-wider uppercase">
                             Contacto
                         </h3>
-                        <ul class="space-y-3 text-xs sm:text-sm text-slate-300">
-                            <!-- Ubicación -->
-                            <li class="flex items-center gap-3">
-                                <div class="w-6 flex justify-center text-slate-400">
-                                    <i class="fa-solid fa-location-dot"></i>
-                                </div>
-                                <span>Calle 20 #102, Centro · Hocabá, Yucatán</span>
+                        <ul class="space-y-2 text-xs text-slate-300">
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-location-dot text-[#0076E8] mt-0.5 text-xs"></i>
+                                <span>Calle 20 #102, Centro · Hocabá</span>
                             </li>
-                            <!-- Horarios -->
-                            <li class="flex items-center gap-3">
-                                <div class="w-6 flex justify-center text-slate-400">
-                                    <i class="fa-regular fa-clock"></i>
-                                </div>
-                                <span class="text-slate-200 font-medium">{{ formattedScheduleDisplay.fullText }}</span>
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-regular fa-clock text-[#0076E8] mt-0.5 text-xs"></i>
+                                <span>{{ formattedScheduleDisplay.fullText }}</span>
                             </li>
-                            <!-- Servicio a domicilio -->
-                            <li class="flex items-center gap-3">
-                                <div class="w-6 flex justify-center text-slate-400">
-                                    <i class="fa-solid fa-phone"></i>
-                                </div>
-                                <span>Tel. 9991 40 43 97 · Pedidos a domicilio</span>
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-phone text-[#0076E8] mt-0.5 text-xs"></i>
+                                <span>Tel. <a href="tel:9991404397" class="hover:underline text-white font-medium">9991 40 43 97</a></span>
                             </li>
                         </ul>
                     </div>
 
                 </div>
 
-                <!-- Copyright final -->
-                <div class="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-                    <p>© {{ new Date().getFullYear() }} Puritronic. Todos los derechos reservados.</p>
-                    <div class="flex items-center gap-6">
-                        <a href="#inicio" @click="scrollToSection($event, 'inicio')" class="hover:text-slate-300 transition-colors">Volver arriba</a>
-                        <a href="#sucursal" @click="scrollToSection($event, 'sucursal')" class="hover:text-slate-300 transition-colors">Nuestra Sucursal</a>
-                        <Link :href="$page.props.auth?.user ? route('dashboard') : route('login')" class="hover:text-slate-300 transition-colors">{{ $page.props.auth?.user ? 'Mi Panel' : 'Acceso Clientes' }}</Link>
+                <!-- Copyright y acciones finales -->
+                <div class="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                    <p>© {{ new Date().getFullYear() }} Puritronic Hocabá. Todos los derechos reservados.</p>
+                    <div class="flex items-center gap-5">
+                        <a href="#inicio" @click="scrollToSection($event, 'inicio')" class="hover:text-white transition-colors">Volver arriba</a>
+                        <a href="#sucursal" @click="scrollToSection($event, 'sucursal')" class="hover:text-white transition-colors">Sucursal</a>
+                        <Link :href="$page.props.auth?.user ? route('dashboard') : route('login')" class="hover:text-white transition-colors font-semibold">
+                            {{ $page.props.auth?.user ? 'Mi Panel' : 'Iniciar sesión' }}
+                        </Link>
                     </div>
                 </div>
+
             </div>
         </footer>
 

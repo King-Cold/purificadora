@@ -35,21 +35,37 @@ const props = defineProps({
     },
 });
 
+const registeredFixed = computed(() => Number(props.customer?.fixed_bottles_count ?? 0));
+const registeredExchange = computed(() => Number(props.customer?.exchange_bottles_count ?? 0));
+const totalRegistered = computed(() => Number(props.customer?.total_bottles ?? 0));
+const customerBottleType = computed(() => props.customer?.bottle_type);
+
 const form = useForm({
     fixed_quantity: 0,
     exchange_quantity: 0,
     notes: '',
 });
 
-const registeredFixed = computed(() => Number(props.customer?.fixed_bottles_count ?? 0));
-const registeredExchange = computed(() => Number(props.customer?.exchange_bottles_count ?? 0));
-const totalRegistered = computed(() => Number(props.customer?.total_bottles ?? 0));
+// Preseleccionar 1 garrafón del tipo registrado si está habilitado
+if (props.canOrder) {
+    if (customerBottleType.value === 'fixed' && registeredFixed.value > 0) {
+        form.fixed_quantity = 1;
+    } else if (customerBottleType.value === 'exchange' && registeredExchange.value > 0) {
+        form.exchange_quantity = 1;
+    }
+}
 
 const totalSelected = computed(() => {
     return Number(form.fixed_quantity || 0) + Number(form.exchange_quantity || 0);
 });
 
 const hasValidQuantity = computed(() => {
+    if (customerBottleType.value === 'fixed') {
+        return Number(form.fixed_quantity || 0) > 0 && Number(form.fixed_quantity || 0) <= registeredFixed.value;
+    }
+    if (customerBottleType.value === 'exchange') {
+        return Number(form.exchange_quantity || 0) > 0 && Number(form.exchange_quantity || 0) <= registeredExchange.value;
+    }
     return totalSelected.value > 0 &&
         Number(form.fixed_quantity || 0) <= registeredFixed.value &&
         Number(form.exchange_quantity || 0) <= registeredExchange.value;
@@ -208,7 +224,7 @@ const submitOrder = () => {
 
                 <!-- Errores de validación backend -->
                 <div
-                    v-if="form.errors.schedule || form.errors.active_order || form.errors.address || form.errors.customer || form.errors.quantity"
+                    v-if="form.errors.schedule || form.errors.active_order || form.errors.address || form.errors.customer || form.errors.quantity || form.errors.fixed_quantity || form.errors.exchange_quantity"
                     class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1"
                 >
                     <p v-if="form.errors.schedule" class="font-medium">{{ form.errors.schedule }}</p>
@@ -216,6 +232,8 @@ const submitOrder = () => {
                     <p v-if="form.errors.address" class="font-medium">{{ form.errors.address }}</p>
                     <p v-if="form.errors.customer" class="font-medium">{{ form.errors.customer }}</p>
                     <p v-if="form.errors.quantity" class="font-medium">{{ form.errors.quantity }}</p>
+                    <p v-if="form.errors.fixed_quantity" class="font-medium">{{ form.errors.fixed_quantity }}</p>
+                    <p v-if="form.errors.exchange_quantity" class="font-medium">{{ form.errors.exchange_quantity }}</p>
                 </div>
 
                 <!-- 3. ESTRUCTURA PRINCIPAL EN 2 COLUMNAS (FORMULARIO A LA IZQUIERDA, RESUMEN A LA DERECHA) -->
@@ -225,24 +243,27 @@ const submitOrder = () => {
                         <!-- COLUMNA IZQUIERDA: FORMULARIO -->
                         <div class="lg:col-span-7 space-y-5">
 
-                            <!-- TARJETA: ¿CUÁNTOS NECESITAS? -->
+                            <!-- TARJETA: ¿CUÁNTOS NECESITAS? (MODALIDAD EXCLUSIVA) -->
                             <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
-                                <div class="border-b border-slate-100 pb-3">
+                                <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
                                     <h2 class="text-base font-semibold text-slate-900">
                                         ¿Cuántos necesitas?
                                     </h2>
+                                    <span v-if="customerBottleType" class="text-xs px-2.5 py-0.5 rounded-full font-bold"
+                                        :class="customerBottleType === 'fixed' ? 'bg-blue-100 text-blue-900' : 'bg-sky-100 text-sky-900'">
+                                        Modalidad: {{ customerBottleType === 'fixed' ? 'Fijos' : 'Cambios' }}
+                                    </span>
                                 </div>
 
-                                <!-- Lista de Modalidades de 20L -->
+                                <!-- Únicamente la Modalidad Registrada del Cliente -->
                                 <div class="space-y-3.5">
 
-                                    <!-- 1. Botellones Fijos -->
-                                    <div class="p-4 rounded-xl border border-slate-200/90 bg-slate-50/40">
-                                        <!-- Si tiene botellones registrados -->
+                                    <!-- 1. Si el cliente tiene Fijos -->
+                                    <div v-if="customerBottleType === 'fixed'" class="p-4 rounded-xl border border-blue-200 bg-blue-50/30">
                                         <div v-if="registeredFixed > 0" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                             <div class="space-y-1">
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-sm font-semibold text-slate-900">Fijos</span>
+                                                    <span class="text-sm font-semibold text-slate-900">Botellones Fijos</span>
                                                     <span class="text-xs text-slate-500">({{ registeredFixed }} registrados)</span>
                                                 </div>
                                                 <button
@@ -260,7 +281,7 @@ const submitOrder = () => {
                                                 <button
                                                     type="button"
                                                     @click="decrementFixed"
-                                                    :disabled="form.fixed_quantity <= 0 || !props.canOrder"
+                                                    :disabled="form.fixed_quantity <= 1 || !props.canOrder"
                                                     class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
                                                     title="Disminuir fijos"
                                                     aria-label="Disminuir fijos"
@@ -270,11 +291,11 @@ const submitOrder = () => {
 
                                                 <input
                                                     type="number"
-                                                    min="0"
+                                                    min="1"
                                                     :max="registeredFixed"
                                                     v-model.number="form.fixed_quantity"
                                                     :disabled="!props.canOrder"
-                                                    class="h-11 w-14 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
+                                                    class="h-11 w-16 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
                                                     aria-label="Cantidad de botellones fijos"
                                                 />
 
@@ -291,7 +312,6 @@ const submitOrder = () => {
                                             </div>
                                         </div>
 
-                                        <!-- Si tiene 0 registrados: fila compacta legible -->
                                         <div v-else class="flex items-center justify-between py-1">
                                             <span class="text-sm font-semibold text-slate-700">Fijos</span>
                                             <span class="text-xs text-slate-500 font-normal">Sin botellones registrados</span>
@@ -300,20 +320,19 @@ const submitOrder = () => {
                                         <InputError :message="form.errors.fixed_quantity" class="mt-1" />
                                     </div>
 
-                                    <!-- 2. Botellones de Cambio -->
-                                    <div class="p-4 rounded-xl border border-slate-200/90 bg-slate-50/40">
-                                        <!-- Si tiene botellones registrados -->
+                                    <!-- 2. Si el cliente tiene Cambios -->
+                                    <div v-else-if="customerBottleType === 'exchange'" class="p-4 rounded-xl border border-sky-200 bg-sky-50/30">
                                         <div v-if="registeredExchange > 0" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                             <div class="space-y-1">
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-sm font-semibold text-slate-900">De cambio</span>
+                                                    <span class="text-sm font-semibold text-slate-900">Botellones de Cambio</span>
                                                     <span class="text-xs text-slate-500">({{ registeredExchange }} registrados)</span>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     @click="setAllExchange"
                                                     :disabled="!props.canOrder || form.exchange_quantity === registeredExchange"
-                                                    class="text-xs font-medium text-blue-900 hover:text-blue-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer underline"
+                                                    class="text-xs font-medium text-sky-900 hover:text-sky-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer underline"
                                                 >
                                                     Pedir todos ({{ registeredExchange }})
                                                 </button>
@@ -324,7 +343,7 @@ const submitOrder = () => {
                                                 <button
                                                     type="button"
                                                     @click="decrementExchange"
-                                                    :disabled="form.exchange_quantity <= 0 || !props.canOrder"
+                                                    :disabled="form.exchange_quantity <= 1 || !props.canOrder"
                                                     class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
                                                     title="Disminuir de cambio"
                                                     aria-label="Disminuir de cambio"
@@ -334,11 +353,11 @@ const submitOrder = () => {
 
                                                 <input
                                                     type="number"
-                                                    min="0"
+                                                    min="1"
                                                     :max="registeredExchange"
                                                     v-model.number="form.exchange_quantity"
                                                     :disabled="!props.canOrder"
-                                                    class="h-11 w-14 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
+                                                    class="h-11 w-16 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
                                                     aria-label="Cantidad de botellones de cambio"
                                                 />
 
@@ -355,7 +374,6 @@ const submitOrder = () => {
                                             </div>
                                         </div>
 
-                                        <!-- Si tiene 0 registrados: fila compacta legible -->
                                         <div v-else class="flex items-center justify-between py-1">
                                             <span class="text-sm font-semibold text-slate-700">De cambio</span>
                                             <span class="text-xs text-slate-500 font-normal">Sin botellones registrados</span>
@@ -364,6 +382,10 @@ const submitOrder = () => {
                                         <InputError :message="form.errors.exchange_quantity" class="mt-1" />
                                     </div>
 
+                                    <!-- 3. Sin botellones -->
+                                    <div v-else class="p-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-xs text-center">
+                                        No tienes botellones registrados en tu cuenta.
+                                    </div>
                                 </div>
 
                                 <!-- Ayuda desplegable accesible -->

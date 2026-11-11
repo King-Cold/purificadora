@@ -70,6 +70,11 @@ const selectCustomer = (cust) => {
     form.customer_id = cust.id;
     form.fixed_quantity = 0;
     form.exchange_quantity = 0;
+    if (cust.bottle_type === 'fixed' && Number(cust.fixed_bottles_count) > 0) {
+        form.fixed_quantity = 1;
+    } else if (cust.bottle_type === 'exchange' && Number(cust.exchange_bottles_count) > 0) {
+        form.exchange_quantity = 1;
+    }
     form.clearErrors();
     searchQuery.value = '';
     searchResults.value = [];
@@ -90,6 +95,7 @@ const clearCustomerSelection = () => {
 const registeredFixed = computed(() => Number(selectedCustomer.value?.fixed_bottles_count ?? 0));
 const registeredExchange = computed(() => Number(selectedCustomer.value?.exchange_bottles_count ?? 0));
 const totalRegistered = computed(() => Number(selectedCustomer.value?.total_bottles ?? 0));
+const customerBottleType = computed(() => selectedCustomer.value?.bottle_type);
 
 // Cantidad total seleccionada en el formulario
 const totalSelected = computed(() => {
@@ -103,6 +109,12 @@ const hasNoBottles = computed(() => selectedCustomer.value && totalRegistered.va
 const isScheduleClosed = computed(() => !props.scheduleStatus?.can_receive);
 
 const hasValidQuantity = computed(() => {
+    if (customerBottleType.value === 'fixed') {
+        return Number(form.fixed_quantity || 0) > 0 && Number(form.fixed_quantity || 0) <= registeredFixed.value;
+    }
+    if (customerBottleType.value === 'exchange') {
+        return Number(form.exchange_quantity || 0) > 0 && Number(form.exchange_quantity || 0) <= registeredExchange.value;
+    }
     return totalSelected.value > 0 &&
         Number(form.fixed_quantity || 0) <= registeredFixed.value &&
         Number(form.exchange_quantity || 0) <= registeredExchange.value;
@@ -427,22 +439,30 @@ const submitOrder = () => {
                             El cliente no tiene botellones de 20 litros registrados en su inventario. Actualiza su inventario en la sección de clientes antes de registrar pedidos.
                         </div>
 
-                        <!-- 5. INVENTARIO DISPONIBLE DEL CLIENTE -->
-                        <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                            <div class="p-3 rounded-xl bg-blue-50/60 border border-blue-200/70 text-center">
-                                <span class="text-[11px] font-bold text-blue-900 uppercase tracking-wider block">Fijos Registrados</span>
-                                <span class="text-lg font-black text-blue-950 mt-0.5 block">{{ registeredFixed }}</span>
-                                <span class="text-[10px] text-blue-800">20 Litros</span>
+                        <!-- 5. MODALIDAD EXCLUSIVA REGISTRADA DEL CLIENTE -->
+                        <div v-else class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
+                                    :class="customerBottleType === 'fixed' ? 'bg-blue-100 text-blue-900' : 'bg-sky-100 text-sky-900'"
+                                >
+                                    <i :class="customerBottleType === 'fixed' ? 'fa-solid fa-tag' : 'fa-solid fa-arrows-rotate'"></i>
+                                </div>
+                                <div>
+                                    <span class="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                                        Modalidad Exclusiva: {{ customerBottleType === 'fixed' ? 'Botellones Fijos (Rotulados)' : 'Botellones de Cambio (Intercambiables)' }}
+                                    </span>
+                                    <span class="text-xs text-slate-500">
+                                        {{ customerBottleType === 'fixed' ? 'Envases propios del cliente para llenado en Planta.' : 'Intercambio directo de garrafones en camión.' }}
+                                    </span>
+                                </div>
                             </div>
-                            <div class="p-3 rounded-xl bg-sky-50/60 border border-sky-200/70 text-center">
-                                <span class="text-[11px] font-bold text-sky-900 uppercase tracking-wider block">Cambio Registrados</span>
-                                <span class="text-lg font-black text-sky-950 mt-0.5 block">{{ registeredExchange }}</span>
-                                <span class="text-[10px] text-sky-800">20 Litros</span>
-                            </div>
-                            <div class="col-span-2 sm:col-span-1 p-3 rounded-xl bg-slate-100/70 border border-slate-200 text-center">
-                                <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">Total en Posesión</span>
-                                <span class="text-lg font-black text-slate-900 mt-0.5 block">{{ totalRegistered }}</span>
-                                <span class="text-[10px] text-slate-600">Botellones de 20L</span>
+                            <div class="text-right self-start sm:self-auto">
+                                <span class="text-xs text-slate-500 font-semibold block">Registrados</span>
+                                <span class="text-xl font-black font-mono" :class="customerBottleType === 'fixed' ? 'text-blue-950' : 'text-sky-950'">
+                                    {{ customerBottleType === 'fixed' ? registeredFixed : registeredExchange }}
+                                    <span class="text-xs font-normal text-slate-600">u. (20L)</span>
+                                </span>
                             </div>
                         </div>
 
@@ -452,7 +472,7 @@ const submitOrder = () => {
                 </div>
 
                 <!-- ========================================================================= -->
-                <!-- 3. SELECCIÓN DE CANTIDADES (BOTELLONES DE 20 LITROS) -->
+                <!-- 3. CAPTURA DE CANTIDAD (MODALIDAD EXCLUSIVA DEL CLIENTE) -->
                 <!-- ========================================================================= -->
                 <div v-if="selectedCustomer && !hasActiveOrder && hasAddress && !hasNoBottles" class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/80 space-y-6">
                     <div class="flex items-center justify-between pb-4 border-b border-slate-100">
@@ -461,132 +481,131 @@ const submitOrder = () => {
                                 2
                             </div>
                             <h3 class="text-base font-bold text-slate-900">
-                                Cantidades solicitadas (Botellones 20 Litros)
+                                Cantidad a solicitar ({{ customerBottleType === 'fixed' ? 'Botellones Fijos' : 'Botellones de Cambio' }})
                             </h3>
                         </div>
-                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                            Total seleccionado: {{ totalSelected }}
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-mono">
+                            Solicitando: {{ totalSelected }}
                         </span>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Captura única según la modalidad registrada -->
+                    <div class="max-w-xl mx-auto">
 
-                        <!-- A. Botellón Fijo (20L) -->
-                        <div class="p-4 sm:p-5 rounded-2xl border transition"
-                            :class="registeredFixed > 0 ? 'bg-white border-slate-200 hover:border-blue-300' : 'bg-slate-50/60 border-slate-200/60 opacity-60'"
+                        <!-- A. Si el cliente maneja Fijos -->
+                        <div
+                            v-if="customerBottleType === 'fixed'"
+                            class="p-5 sm:p-6 rounded-2xl border bg-white border-blue-200 space-y-4"
                         >
-                            <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h4 class="text-sm font-bold text-slate-900">Botellón Fijo</h4>
+                                        <h4 class="text-base font-bold text-slate-900">Botellones Fijos (20L)</h4>
                                         <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-100 text-blue-900">
-                                            20L
+                                            Rotulados
                                         </span>
                                     </div>
-                                    <p class="text-xs text-slate-500 mt-0.5">
-                                        Máximo permitido: <span class="font-bold text-slate-800">{{ registeredFixed }}</span>
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        Máximo permitido según ficha: <strong class="text-slate-800">{{ registeredFixed }}</strong> garrafones
                                     </p>
                                 </div>
                                 <button
-                                    v-if="registeredFixed > 0"
                                     type="button"
                                     @click="setMaxFixed"
-                                    class="text-[11px] font-bold text-blue-900 hover:text-blue-700 transition cursor-pointer px-2 py-1 rounded bg-blue-50"
+                                    class="text-xs font-bold text-blue-900 hover:text-blue-700 transition cursor-pointer px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200"
                                 >
-                                    Solicitar todos
+                                    Solicitar todos ({{ registeredFixed }})
                                 </button>
                             </div>
 
-                            <div v-if="registeredFixed > 0" class="flex items-center gap-3">
+                            <div class="flex items-center justify-center gap-3 pt-2">
                                 <button
                                     type="button"
                                     @click="decrementFixed"
-                                    :disabled="form.fixed_quantity <= 0"
-                                    class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex items-center justify-center transition cursor-pointer"
+                                    :disabled="form.fixed_quantity <= 1"
+                                    class="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex items-center justify-center transition cursor-pointer text-base"
+                                    aria-label="Disminuir cantidad"
                                 >
                                     <i class="fa-solid fa-minus text-xs"></i>
                                 </button>
                                 <input
                                     type="number"
                                     v-model.number="form.fixed_quantity"
-                                    min="0"
+                                    min="1"
                                     :max="registeredFixed"
-                                    class="w-20 text-center font-bold text-base py-2 rounded-xl border-slate-200 focus:border-blue-900 focus:ring-blue-900"
+                                    class="w-24 text-center font-bold text-xl py-2 rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-mono"
+                                    aria-label="Cantidad de botellones fijos"
                                 />
                                 <button
                                     type="button"
                                     @click="incrementFixed"
                                     :disabled="form.fixed_quantity >= registeredFixed"
-                                    class="h-10 w-10 rounded-xl bg-blue-900 hover:bg-blue-800 disabled:opacity-40 text-white font-bold flex items-center justify-center transition cursor-pointer"
+                                    class="h-11 w-11 rounded-xl bg-blue-900 hover:bg-blue-800 disabled:opacity-40 text-white font-bold flex items-center justify-center transition cursor-pointer text-base"
+                                    aria-label="Aumentar cantidad"
                                 >
                                     <i class="fa-solid fa-plus text-xs"></i>
                                 </button>
                             </div>
 
-                            <div v-else class="text-xs text-slate-500 italic mt-2">
-                                El cliente no cuenta con botellones fijos registrados.
-                            </div>
-
-                            <InputError :message="form.errors.fixed_quantity" class="mt-2" />
+                            <InputError :message="form.errors.fixed_quantity" class="mt-2 text-center" />
                         </div>
 
-                        <!-- B. Botellón de Cambio (20L) -->
-                        <div class="p-4 sm:p-5 rounded-2xl border transition"
-                            :class="registeredExchange > 0 ? 'bg-white border-slate-200 hover:border-sky-300' : 'bg-slate-50/60 border-slate-200/60 opacity-60'"
+                        <!-- B. Si el cliente maneja Cambios -->
+                        <div
+                            v-else-if="customerBottleType === 'exchange'"
+                            class="p-5 sm:p-6 rounded-2xl border bg-white border-sky-200 space-y-4"
                         >
-                            <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h4 class="text-sm font-bold text-slate-900">Botellón de Cambio</h4>
+                                        <h4 class="text-base font-bold text-slate-900">Botellones de Cambio (20L)</h4>
                                         <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-sky-100 text-sky-900">
-                                            20L
+                                            Intercambio
                                         </span>
                                     </div>
-                                    <p class="text-xs text-slate-500 mt-0.5">
-                                        Máximo permitido: <span class="font-bold text-slate-800">{{ registeredExchange }}</span>
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        Máximo permitido según ficha: <strong class="text-slate-800">{{ registeredExchange }}</strong> garrafones
                                     </p>
                                 </div>
                                 <button
-                                    v-if="registeredExchange > 0"
                                     type="button"
                                     @click="setMaxExchange"
-                                    class="text-[11px] font-bold text-sky-900 hover:text-sky-700 transition cursor-pointer px-2 py-1 rounded bg-sky-50"
+                                    class="text-xs font-bold text-sky-900 hover:text-sky-700 transition cursor-pointer px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200"
                                 >
-                                    Solicitar todos
+                                    Solicitar todos ({{ registeredExchange }})
                                 </button>
                             </div>
 
-                            <div v-if="registeredExchange > 0" class="flex items-center gap-3">
+                            <div class="flex items-center justify-center gap-3 pt-2">
                                 <button
                                     type="button"
                                     @click="decrementExchange"
-                                    :disabled="form.exchange_quantity <= 0"
-                                    class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex items-center justify-center transition cursor-pointer"
+                                    :disabled="form.exchange_quantity <= 1"
+                                    class="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex items-center justify-center transition cursor-pointer text-base"
+                                    aria-label="Disminuir cantidad"
                                 >
                                     <i class="fa-solid fa-minus text-xs"></i>
                                 </button>
                                 <input
                                     type="number"
                                     v-model.number="form.exchange_quantity"
-                                    min="0"
+                                    min="1"
                                     :max="registeredExchange"
-                                    class="w-20 text-center font-bold text-base py-2 rounded-xl border-slate-200 focus:border-blue-900 focus:ring-blue-900"
+                                    class="w-24 text-center font-bold text-xl py-2 rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-mono"
+                                    aria-label="Cantidad de botellones de cambio"
                                 />
                                 <button
                                     type="button"
                                     @click="incrementExchange"
                                     :disabled="form.exchange_quantity >= registeredExchange"
-                                    class="h-10 w-10 rounded-xl bg-blue-900 hover:bg-blue-800 disabled:opacity-40 text-white font-bold flex items-center justify-center transition cursor-pointer"
+                                    class="h-11 w-11 rounded-xl bg-blue-900 hover:bg-blue-800 disabled:opacity-40 text-white font-bold flex items-center justify-center transition cursor-pointer text-base"
+                                    aria-label="Aumentar cantidad"
                                 >
                                     <i class="fa-solid fa-plus text-xs"></i>
                                 </button>
                             </div>
 
-                            <div v-else class="text-xs text-slate-500 italic mt-2">
-                                El cliente no cuenta con botellones de cambio registrados.
-                            </div>
-
-                            <InputError :message="form.errors.exchange_quantity" class="mt-2" />
+                            <InputError :message="form.errors.exchange_quantity" class="mt-2 text-center" />
                         </div>
                     </div>
 
