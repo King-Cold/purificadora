@@ -136,63 +136,6 @@ class OrderCustodyService
     }
 
     /**
-     * Registro de lavado y llenado concluido en planta por cliente.
-     */
-    public function recordFixedBottlesPrepared(
-        Order $order,
-        int $quantity,
-        User $operator,
-        ?string $notes = null
-    ): void {
-        if ($quantity <= 0) {
-            throw new OrderBusinessRuleException('La cantidad debe ser mayor a cero.', 'quantity', 422);
-        }
-
-        DB::transaction(function () use ($order, $quantity, $operator, $notes) {
-            $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
-            $fixedItem = $lockedOrder->items()->where('type', OrderItem::TYPE_FIXED)->lockForUpdate()->firstOrFail();
-
-            $pendingToPrepare = $fixedItem->received_at_plant_quantity - $fixedItem->prepared_quantity - $fixedItem->damaged_quantity;
-            if ($quantity > $pendingToPrepare) {
-                throw new OrderBusinessRuleException("Cantidad excede lo pendiente de preparar ({$pendingToPrepare}).", 'quantity', 422);
-            }
-
-            $newPreparedQty = $fixedItem->prepared_quantity + $quantity;
-            $allEligiblePrepared = $newPreparedQty >= ($fixedItem->received_at_plant_quantity - $fixedItem->damaged_quantity);
-
-            $fixedItem->update([
-                'prepared_quantity' => $newPreparedQty,
-                'status' => $allEligiblePrepared ? OrderItem::STATUS_READY_FOR_DELIVERY : OrderItem::STATUS_WASHING,
-            ]);
-
-            BottleCustodyMovement::create([
-                'order_id' => $lockedOrder->id,
-                'order_item_id' => $fixedItem->id,
-                'customer_id' => $lockedOrder->customer_id,
-                'user_id' => $operator->id,
-                'movement_type' => BottleCustodyMovement::TYPE_PLANT_PREPARED_FIXED,
-                'bottle_type' => OrderItem::TYPE_FIXED,
-                'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
-                'quantity' => $quantity,
-                'origin' => 'plant',
-                'destination' => 'plant',
-                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
-                'notes' => $notes ?: 'Llenado finalizado - Listo para entregar',
-                'created_at' => now(),
-            ]);
-
-            OrderStatusHistory::create([
-                'order_id' => $lockedOrder->id,
-                'previous_status' => $lockedOrder->status,
-                'new_status' => $lockedOrder->status,
-                'user_id' => $operator->id,
-                'reason' => "Fijos preparados y llenados ({$quantity} u.) - Listos para entrega",
-                'created_at' => now(),
-            ]);
-        });
-    }
-
-    /**
      * Registro de carga al camión por el repartidor para segunda vuelta.
      */
     public function recordFixedBottlesLoadedOnTruck(

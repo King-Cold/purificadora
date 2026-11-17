@@ -35,8 +35,6 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.flash?.error);
 
 // Formulario de un solo campo editable: cantidad
 const form = useForm({
@@ -122,271 +120,360 @@ const deleteRefill = () => {
     <Head title="Planta · Llenado Rápido" />
 
     <AuthenticatedLayout>
-        <div class="py-6 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="py-6 sm:py-7 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-5">
 
-            <!-- Mensajes Flash de confirmación -->
-            <transition
-                enter-active-class="transition duration-200 ease-out"
-                enter-from-class="opacity-0 -translate-y-2"
-                enter-to-class="opacity-100 translate-y-0"
-                leave-active-class="transition duration-150 ease-in"
-                leave-from-class="opacity-100 translate-y-0"
-                leave-to-class="opacity-0 -translate-y-2"
-            >
-                <div
-                    v-if="flashSuccess"
-                    class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 shadow-2xs"
-                    role="alert"
-                >
-                    <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-circle-check text-lg"></i>
+            <!-- ===================================================================== -->
+            <!-- 1. FILA DE ESTADÍSTICAS COMPACTAS (ARRIBA EN DESKTOP, DEBAJO EN MÓVIL)-->
+            <!-- ===================================================================== -->
+            <div class="order-2 lg:order-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- Tarjeta 1: Total mostrador hoy (Verde salvia con texto verde oscuro) -->
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-[#34785A] shrink-0"></span>
+                            <span class="text-xs font-medium text-[#747181] truncate">Total mostrador hoy</span>
+                        </div>
+                        <div class="mt-1.5 flex items-baseline gap-1.5">
+                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
+                                ${{ Number(todaySummary.total_amount).toFixed(2) }}
+                            </span>
+                            <span class="text-xs font-semibold text-[#34785A]">MXN</span>
+                        </div>
                     </div>
-                    <div class="flex-1">
-                        <p class="text-sm font-bold">{{ flashSuccess }}</p>
-                        <p class="text-xs text-emerald-700">Listo para registrar la siguiente atención.</p>
+                    <div class="h-11 w-11 rounded-xl bg-[#E8F2EC] text-[#34785A] flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-money-bill-wave text-base"></i>
                     </div>
                 </div>
-            </transition>
 
-            <div
-                v-if="flashError"
-                class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 shadow-2xs"
-                role="alert"
-            >
-                <div class="h-10 w-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                <!-- Tarjeta 2: Llenados hoy (Azul niebla con detalles azul corporativo) -->
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-[#0071BA] shrink-0"></span>
+                            <span class="text-xs font-medium text-[#747181] truncate">Llenados hoy</span>
+                        </div>
+                        <div class="mt-1.5 flex items-baseline gap-2">
+                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
+                                {{ todaySummary.bottles_refilled }}
+                            </span>
+                            <span class="text-xs font-medium text-[#A6A3B2]">garrafones {{ capacity }}L</span>
+                        </div>
+                    </div>
+                    <div class="h-11 w-11 rounded-xl bg-[#E9F3F8] text-[#0071BA] flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-bottle-water text-base"></i>
+                    </div>
                 </div>
-                <div class="flex-1">
-                    <p class="text-sm font-bold">{{ flashError }}</p>
+
+                <!-- Tarjeta 3: Atenciones registradas (Lavanda suave con detalles morados) -->
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-[#1E1545] shrink-0"></span>
+                            <span class="text-xs font-medium text-[#747181] truncate">Atenciones registradas</span>
+                        </div>
+                        <div class="mt-1.5 flex items-baseline gap-2">
+                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
+                                {{ todaySummary.services_count }}
+                            </span>
+                            <span class="text-xs font-medium text-[#A6A3B2]">servicios hoy</span>
+                        </div>
+                    </div>
+                    <div class="h-11 w-11 rounded-xl bg-[#DAD6E8]/70 text-[#1E1545] flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-users text-base"></i>
+                    </div>
                 </div>
             </div>
 
-            <!-- MÓDULO PRINCIPAL: LLENADO RÁPIDO DE MOSTRADOR -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-8 space-y-6">
-                <!-- Encabezado de la tarea -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-                    <div class="flex items-center gap-3.5">
-                        <div class="h-12 w-12 rounded-2xl bg-blue-900 text-white flex items-center justify-center shadow-2xs shrink-0">
-                            <i class="fa-solid fa-bolt text-xl text-sky-400"></i>
+            <!-- ===================================================================== -->
+            <!-- 2. ÁREA DE TRABAJO PRINCIPAL: FORMULARIO (5 COLS) + HISTORIAL (7 COLS)-->
+            <!-- ===================================================================== -->
+            <div class="order-1 lg:order-2 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+                <!-- COLUMNA IZQUIERDA: FORMULARIO DE LLENADO DE MOSTRADOR -->
+                <div class="lg:col-span-5 bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] overflow-hidden">
+                    <!-- Encabezado limpio del formulario -->
+                    <div class="px-6 py-5 border-b border-[#E9E7F0] flex items-start justify-between gap-3">
+                        <div class="flex items-center gap-3.5 min-w-0">
+                            <div class="h-10 w-10 rounded-xl bg-[#DAD6E8]/75 text-[#1E1545] flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-bolt text-base"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h1 class="text-base sm:text-lg font-bold text-[#292638] tracking-[-0.015em] leading-snug">
+                                    Llenado de mostrador
+                                </h1>
+                                <p class="text-xs text-[#747181] mt-0.5 truncate">
+                                    Clientes particulares · Garrafones de {{ capacity }}L
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                                Llenado de mostrador
-                            </h1>
-                            <p class="text-xs sm:text-sm font-medium text-slate-500">
-                                Clientes particulares en Planta · Garrafones exclusivos de 20L
-                            </p>
+
+                        <!-- Etiqueta elegante de precio vigente -->
+                        <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#E9F3F8] border border-[#DCECF7] shrink-0">
+                            <span class="text-[11px] font-medium text-[#747181]">Precio:</span>
+                            <span class="text-xs font-bold text-[#0071BA] tabular-nums">
+                                ${{ Number(unitPrice).toFixed(2) }}
+                            </span>
                         </div>
                     </div>
 
-                    <!-- Indicador del precio unitario vigente de Planta -->
-                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-700 self-start sm:self-auto">
-                        <i class="fa-solid fa-tag text-blue-900 text-xs"></i>
-                        <span class="text-xs font-semibold text-slate-500">Precio Planta:</span>
-                        <span class="text-sm font-black text-slate-900">${{ Number(unitPrice).toFixed(2) }} MXN</span>
-                    </div>
-                </div>
-
-                <!-- Formulario táctil simplificado (1 solo campo editable: cantidad) -->
-                <form @submit.prevent="submitRefill" class="space-y-6">
-                    <div class="flex flex-col items-center justify-center py-4 bg-slate-50/70 rounded-3xl border border-slate-100 p-6 space-y-5">
-                        <label for="bottle-quantity" class="text-xs font-bold uppercase tracking-wider text-slate-500 text-center">
-                            Cantidad de botellones llenados
-                        </label>
-
-                        <!-- Control numérico táctil de gran tamaño (≥ 44x44 px) -->
-                        <div class="flex items-center justify-center gap-4 sm:gap-6 w-full max-w-md">
-                            <!-- Botón Menos (-) -->
-                            <button
-                                type="button"
-                                @click="decrement(1)"
-                                :disabled="form.quantity <= 1 || form.processing"
-                                class="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-95 transition flex items-center justify-center text-xl sm:text-2xl font-black shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                                aria-label="Restar un botellón"
-                            >
-                                <i class="fa-solid fa-minus"></i>
-                            </button>
-
-                            <!-- Campo numérico editable centrado -->
-                            <div class="relative flex-1 max-w-[160px] text-center">
-                                <input
-                                    id="bottle-quantity"
-                                    v-model.number="form.quantity"
-                                    type="number"
-                                    min="1"
-                                    max="999"
-                                    step="1"
-                                    required
-                                    class="w-full text-center text-4xl sm:text-5xl font-black text-slate-900 bg-white border-2 border-blue-900/30 rounded-2xl py-3 px-2 focus:outline-none focus:ring-4 focus:ring-blue-900/20 focus:border-blue-900 shadow-inner"
-                                />
-                                <span class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">
-                                    Botellones (20L)
+                    <!-- Cuerpo unificado del formulario -->
+                    <form @submit.prevent="submitRefill" class="p-6 space-y-6">
+                        <!-- Zona de selección de cantidad -->
+                        <div class="rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] p-5 space-y-5">
+                            <div class="flex items-center justify-between">
+                                <label for="bottle-quantity" class="text-xs font-semibold text-[#747181]">
+                                    Cantidad de botellones
+                                </label>
+                                <span class="text-xs font-medium text-[#0071BA]">
+                                    {{ capacity }} litros c/u
                                 </span>
                             </div>
 
-                            <!-- Botón Más (+) -->
-                            <button
-                                type="button"
-                                @click="increment(1)"
-                                :disabled="form.processing"
-                                class="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-blue-900 text-white hover:bg-blue-800 active:scale-95 transition flex items-center justify-center text-xl sm:text-2xl font-black shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900/30"
-                                aria-label="Sumar un botellón"
-                            >
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
-                        </div>
+                            <!-- Control numérico táctil -->
+                            <div class="flex items-center justify-center gap-3.5">
+                                <button
+                                    type="button"
+                                    @click="decrement(1)"
+                                    :disabled="form.quantity <= 1 || form.processing"
+                                    class="h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-white hover:bg-[#E9F3F8] text-[#292638] hover:text-[#0071BA] border border-[#DAD6E8] hover:border-[#0071BA]/50 active:scale-95 transition-all duration-150 flex items-center justify-center text-lg disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071BA]/25 shrink-0"
+                                    aria-label="Restar un botellón"
+                                >
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
 
-                        <!-- Botones de acceso rápido táctil -->
-                        <div class="flex items-center gap-2 flex-wrap justify-center pt-1">
-                            <span class="text-xs font-semibold text-slate-400 mr-1">Rápido:</span>
-                            <button
-                                v-for="n in [1, 2, 3, 4, 5, 10]"
-                                :key="n"
-                                type="button"
-                                @click="setQuantity(n)"
-                                :class="[
-                                    'min-h-[44px] min-w-[44px] px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer border',
-                                    form.quantity === n
-                                        ? 'bg-blue-900 text-white border-blue-900 shadow-2xs'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                ]"
-                            >
-                                {{ n }}
-                            </button>
-                        </div>
+                                <div class="flex-1 max-w-[156px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#1E1545] focus-within:ring-2 focus-within:ring-[#DAD6E8] px-3 py-2.5 transition-all">
+                                    <input
+                                        id="bottle-quantity"
+                                        v-model.number="form.quantity"
+                                        type="number"
+                                        min="1"
+                                        max="999"
+                                        step="1"
+                                        required
+                                        class="w-full text-center text-3xl sm:text-4xl font-bold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums leading-none"
+                                    />
+                                    <span class="block text-center text-[11px] font-medium text-[#A6A3B2] mt-1">
+                                        botellones
+                                    </span>
+                                </div>
 
-                        <!-- Desglose de precio y total en tiempo real: «3 × $15 = $45» -->
-                        <div class="pt-3 text-center border-t border-slate-200/60 w-full max-w-sm">
-                            <div class="text-sm font-semibold text-slate-500">
-                                Importe del servicio:
+                                <button
+                                    type="button"
+                                    @click="increment(1)"
+                                    :disabled="form.processing"
+                                    class="h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-[#DCECF7] hover:bg-[#0071BA] text-[#0071BA] hover:text-white border border-[#0071BA]/25 hover:border-[#0071BA] active:scale-95 transition-all duration-150 flex items-center justify-center text-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071BA]/30 disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:border-[#E9E7F0] shrink-0"
+                                    aria-label="Sumar un botellón"
+                                >
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
                             </div>
-                            <div class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 tracking-tight">
-                                <span>{{ form.quantity || 0 }}</span>
-                                <span class="text-slate-400 mx-1.5">×</span>
-                                <span>${{ Number(unitPrice).toFixed(2) }}</span>
-                                <span class="text-slate-400 mx-1.5">=</span>
-                                <span class="text-emerald-700">${{ currentTotal }} MXN</span>
+
+                            <!-- Cantidades rápidas con diferenciación clara -->
+                            <div class="pt-1">
+                                <div class="grid grid-cols-6 gap-1.5">
+                                    <button
+                                        v-for="n in [1, 2, 3, 4, 5, 10]"
+                                        :key="n"
+                                        type="button"
+                                        @click="setQuantity(n)"
+                                        :class="[
+                                            'min-h-[40px] rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer tabular-nums border focus:outline-none focus:ring-2 focus:ring-[#0071BA]/25',
+                                            form.quantity === n
+                                                ? 'bg-[#E82147] text-white border-[#E82147] shadow-xs'
+                                                : 'bg-white text-[#747181] border-[#E9E7F0] hover:border-[#0071BA]/45 hover:text-[#0071BA] hover:bg-[#E9F3F8]/60'
+                                        ]"
+                                    >
+                                        {{ n }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Botón Principal de Acción Táctil (≥ 44x44 px) -->
-                    <button
-                        type="submit"
-                        :disabled="form.processing || isSubmitting"
-                        class="w-full min-h-[56px] rounded-2xl bg-blue-900 hover:bg-blue-800 text-white font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-md hover:shadow-lg active:scale-[0.99] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <i v-if="form.processing || isSubmitting" class="fa-solid fa-circle-notch fa-spin"></i>
-                        <i v-else class="fa-solid fa-check text-sky-400"></i>
-                        <span>Registrar {{ form.quantity }} llenado{{ form.quantity > 1 ? 's' : '' }} (${{ currentTotal }})</span>
-                    </button>
-                </form>
-            </div>
-
-            <!-- RESUMEN DE LA JORNADA EN MOSTRADOR Y ACTIVIDAD RECIENTE -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Métrica 1: Botellones de mostrador hoy -->
-                <div class="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-bottle-water text-lg"></i>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Llenados hoy</span>
-                            <span class="text-2xl font-black text-slate-900">{{ todaySummary.bottles_refilled }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Métrica 2: Total recaudado en mostrador hoy -->
-                <div class="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-money-bill-wave text-lg"></i>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total mostrador hoy</span>
-                            <span class="text-2xl font-black text-emerald-700">${{ Number(todaySummary.total_amount).toFixed(2) }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Métrica 3: Clientes atendidos hoy -->
-                <div class="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 rounded-xl bg-sky-50 text-sky-900 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-users text-lg"></i>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Atenciones registradas</span>
-                            <span class="text-2xl font-black text-slate-900">{{ todaySummary.services_count }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- LISTA COMPACTA DE ATENCIONES DE HOY -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 space-y-4">
-                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-clock-rotate-left text-slate-400 text-sm"></i>
-                        <h2 class="text-sm font-black text-slate-900 uppercase tracking-wider">
-                            Atenciones registradas hoy
-                        </h2>
-                    </div>
-                    <span class="text-xs font-bold text-slate-400">
-                        {{ recentRefills.length }} registro{{ recentRefills.length === 1 ? '' : 's' }}
-                    </span>
-                </div>
-
-                <!-- Estado vacío -->
-                <div v-if="recentRefills.length === 0" class="py-8 text-center text-slate-400">
-                    <i class="fa-solid fa-inbox text-3xl mb-2 text-slate-300"></i>
-                    <p class="text-sm font-semibold">No se han registrado llenados de mostrador el día de hoy.</p>
-                    <p class="text-xs text-slate-400">Usa el formulario superior para registrar el primer servicio.</p>
-                </div>
-
-                <!-- Lista compacta -->
-                <div v-else class="divide-y divide-slate-100">
-                    <div
-                        v-for="item in recentRefills"
-                        :key="item.id"
-                        class="py-3 flex items-center justify-between gap-3 text-sm hover:bg-slate-50/50 rounded-xl px-2 transition"
-                    >
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs font-bold font-mono text-slate-400 w-12">{{ item.time }}</span>
-                            <div class="h-8 w-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center font-black text-xs">
-                                {{ item.quantity }}
-                            </div>
+                        <!-- Importe Calculado con jerarquía tipográfica -->
+                        <div class="pt-4 border-t border-[#E9E7F0] flex items-end justify-between gap-4">
                             <div>
-                                <p class="text-xs font-bold text-slate-800">
-                                    {{ item.quantity }} botellón{{ item.quantity > 1 ? 'es' : '' }} (20L)
-                                </p>
-                                <p class="text-[11px] text-slate-500">
-                                    Atendido por: {{ item.operator_name }}
-                                </p>
+                                <span class="block text-xs font-medium text-[#747181]">
+                                    Importe total
+                                </span>
+                                <span class="block text-xs font-medium text-[#A6A3B2] tabular-nums mt-0.5">
+                                    {{ form.quantity || 0 }} × ${{ Number(unitPrice).toFixed(2) }} MXN
+                                </span>
+                            </div>
+
+                            <div class="text-right">
+                                <span class="text-3xl font-bold tracking-[-0.025em] text-[#34785A] tabular-nums leading-none">
+                                    ${{ currentTotal }}
+                                </span>
+                                <span class="text-xs font-semibold text-[#747181] ml-1">MXN</span>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-3">
-                            <div class="text-right">
-                                <span class="text-sm font-black text-slate-900">${{ Number(item.total_amount).toFixed(2) }} MXN</span>
-                                <span class="block text-[10px] text-slate-400 font-mono">(${{ Number(item.unit_price).toFixed(2) }} c/u)</span>
-                            </div>
+                        <!-- Botón Principal en Morado Profundo -->
+                        <button
+                            type="submit"
+                            :disabled="form.processing || isSubmitting"
+                            class="w-full min-h-[50px] px-5 rounded-xl bg-[#1E1545] hover:bg-[#2B205E] active:bg-[#150E33] text-white font-semibold text-sm sm:text-[15px] flex items-center justify-center gap-2.5 shadow-sm active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:shadow-none disabled:cursor-not-allowed focus:outline-none focus:ring-4 focus:ring-[#DAD6E8]"
+                        >
+                            <i v-if="form.processing || isSubmitting" class="fa-solid fa-circle-notch fa-spin text-sm"></i>
+                            <i v-else class="fa-solid fa-check text-sm text-white/90"></i>
+                            <span class="tabular-nums">
+                                Registrar {{ form.quantity }} llenado{{ form.quantity > 1 ? 's' : '' }} (${{ currentTotal }})
+                            </span>
+                        </button>
+                    </form>
+                </div>
 
-                            <!-- Botón de eliminar registro por equivocación -->
-                            <button
-                                type="button"
-                                @click="confirmDeleteRefill(item)"
-                                class="h-9 w-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition active:scale-95 cursor-pointer shrink-0"
-                                title="Eliminar registro por equivocación"
-                                aria-label="Eliminar registro"
-                            >
-                                <i class="fa-solid fa-trash-can text-xs"></i>
-                            </button>
+                <!-- COLUMNA DERECHA: HISTORIAL DE ATENCIONES REGISTRADAS HOY -->
+                <div class="lg:col-span-7 bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] overflow-hidden">
+                    <!-- Encabezado de la tabla -->
+                    <div class="px-6 py-5 border-b border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-bold text-[#292638] tracking-[-0.015em]">
+                                Atenciones registradas hoy
+                            </h2>
+                            <p class="text-xs text-[#747181] mt-0.5">
+                                Historial cronológico del turno en mostrador
+                            </p>
+                        </div>
+
+                        <span
+                            :class="[
+                                'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border tabular-nums',
+                                recentRefills.length > 0
+                                    ? 'bg-[#E9F3F8] text-[#0071BA] border-[#DCECF7]'
+                                    : 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0]'
+                            ]"
+                        >
+                            <span
+                                class="h-1.5 w-1.5 rounded-full"
+                                :class="recentRefills.length > 0 ? 'bg-[#0071BA]' : 'bg-[#A6A3B2]'"
+                            ></span>
+                            {{ recentRefills.length }} registro{{ recentRefills.length === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+
+                    <!-- Estado Vacío Minimalista y Diseñado -->
+                    <div v-if="recentRefills.length === 0" class="py-14 px-6 text-center">
+                        <div class="relative inline-flex items-center justify-center mb-4">
+                            <div class="h-14 w-14 rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] flex items-center justify-center text-[#1E1545]">
+                                <i class="fa-solid fa-droplet text-xl"></i>
+                            </div>
+                            <span class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-[#DCECF7] border-2 border-white"></span>
+                        </div>
+
+                        <h3 class="text-sm font-semibold text-[#292638]">
+                            No se han registrado llenados hoy
+                        </h3>
+                        <p class="text-xs text-[#747181] max-w-xs mx-auto mt-1.5 leading-relaxed">
+                            Registra la primera atención en el panel de mostrador para visualizar aquí la hora, operador e importe.
+                        </p>
+
+                        <div class="mt-5 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F4F3F8] border border-[#E9E7F0] text-xs font-medium text-[#747181]">
+                            <span class="h-1.5 w-1.5 rounded-full bg-[#34785A]"></span>
+                            <span>Mostrador disponible · ${{ Number(unitPrice).toFixed(2) }} MXN c/u</span>
                         </div>
                     </div>
+
+                    <!-- Tabla Moderna y Minimalista -->
+                    <template v-else>
+                        <div class="hidden sm:block overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-[#F4F3F8] border-b border-[#E9E7F0] text-xs font-medium text-[#747181]">
+                                        <th class="py-3 px-6">Hora</th>
+                                        <th class="py-3 px-4">Cantidad</th>
+                                        <th class="py-3 px-4">Operador</th>
+                                        <th class="py-3 px-4 text-right">Unitario</th>
+                                        <th class="py-3 px-4 text-right">Importe</th>
+                                        <th class="py-3 px-5 text-right"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-[#E9E7F0]/75 text-sm">
+                                    <tr
+                                        v-for="item in recentRefills"
+                                        :key="item.id"
+                                        class="hover:bg-[#F4F3F8]/60 transition-colors"
+                                    >
+                                        <td class="py-3.5 px-6 whitespace-nowrap text-xs font-medium text-[#747181] tabular-nums">
+                                            {{ item.time }}
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <div class="flex items-center gap-2.5">
+                                                <span class="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-lg bg-[#E9F3F8] text-[#0071BA] text-xs font-semibold tabular-nums">
+                                                    {{ item.quantity }}
+                                                </span>
+                                                <span class="text-xs font-medium text-[#292638]">
+                                                    botellón{{ item.quantity > 1 ? 'es' : '' }} ({{ capacity }}L)
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap text-xs text-[#747181]">
+                                            {{ item.operator_name }}
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right whitespace-nowrap text-xs text-[#A6A3B2] tabular-nums">
+                                            ${{ Number(item.unit_price).toFixed(2) }}
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-[#E8F2EC] text-[#34785A] text-xs font-semibold tabular-nums">
+                                                ${{ Number(item.total_amount).toFixed(2) }} MXN
+                                            </span>
+                                        </td>
+                                        <td class="py-3.5 px-5 text-right whitespace-nowrap">
+                                            <button
+                                                type="button"
+                                                @click="confirmDeleteRefill(item)"
+                                                class="h-8 w-8 inline-flex items-center justify-center rounded-lg text-[#A6A3B2] hover:text-[#E82147] hover:bg-[#FCECEF] transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E82147]/20"
+                                                title="Eliminar registro por equivocación"
+                                                aria-label="Eliminar registro"
+                                            >
+                                                <i class="fa-solid fa-trash-can text-xs"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Vista Móvil (< sm) -->
+                        <div class="sm:hidden divide-y divide-[#E9E7F0]/75">
+                            <div
+                                v-for="item in recentRefills"
+                                :key="item.id"
+                                class="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F4F3F8]/60 transition-colors"
+                            >
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <span class="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-[#E9F3F8] text-[#0071BA] text-xs font-semibold tabular-nums shrink-0">
+                                        {{ item.quantity }}
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-[#292638] truncate">
+                                            {{ item.quantity }} botellón{{ item.quantity > 1 ? 'es' : '' }} ({{ capacity }}L)
+                                        </p>
+                                        <p class="text-[11px] text-[#747181] truncate mt-0.5 tabular-nums">
+                                            {{ item.time }} · {{ item.operator_name }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <span class="px-2 py-0.5 rounded-lg bg-[#E8F2EC] text-[#34785A] text-xs font-semibold tabular-nums">
+                                        ${{ Number(item.total_amount).toFixed(2) }}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        @click="confirmDeleteRefill(item)"
+                                        class="h-8 w-8 rounded-lg flex items-center justify-center text-[#A6A3B2] hover:text-[#E82147] hover:bg-[#FCECEF] transition-colors cursor-pointer"
+                                        title="Eliminar registro por equivocación"
+                                        aria-label="Eliminar registro"
+                                    >
+                                        <i class="fa-solid fa-trash-can text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
+
             </div>
 
         </div>
@@ -394,32 +481,32 @@ const deleteRefill = () => {
         <!-- Modal de confirmación para eliminar registro de llenado -->
         <div
             v-if="refillToDelete"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1545]/35 backdrop-blur-[2px]"
             @click.self="cancelDeleteRefill"
         >
-            <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-in">
-                <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-trash-can text-lg"></i>
+            <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-[0_20px_50px_-12px_rgba(30,21,69,0.22)] border border-[#E9E7F0] space-y-4">
+                <div class="flex items-start gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-[#FCECEF] text-[#E82147] flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-trash-can text-base"></i>
                     </div>
                     <div>
-                        <h3 class="text-base font-bold text-slate-900">¿Eliminar registro?</h3>
-                        <p class="text-xs text-slate-500 mt-1">
+                        <h3 class="text-base font-bold text-[#292638]">¿Eliminar registro?</h3>
+                        <p class="text-xs text-[#747181] mt-1 tabular-nums">
                             Hora {{ refillToDelete.time }} · {{ refillToDelete.quantity }} botellón(es) (${{ Number(refillToDelete.total_amount).toFixed(2) }} MXN).
                         </p>
                     </div>
                 </div>
 
-                <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p class="text-xs text-[#747181] bg-[#F4F3F8] p-3.5 rounded-xl border border-[#E9E7F0] leading-relaxed">
                     Se eliminará este registro por equivocación y se descontará del resumen de llenados e importes del día.
                 </p>
 
-                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-[#E9E7F0]">
                     <button
                         type="button"
                         @click="cancelDeleteRefill"
                         :disabled="isDeleting"
-                        class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold text-[#747181] bg-[#F4F3F8] hover:bg-[#E9E7F0] hover:text-[#292638] border border-[#E9E7F0] transition-colors cursor-pointer"
                     >
                         Cancelar
                     </button>
@@ -427,7 +514,7 @@ const deleteRefill = () => {
                         type="button"
                         @click="deleteRefill"
                         :disabled="isDeleting"
-                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#E82147] hover:bg-[#CF1B3E] transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2]"
                     >
                         <i class="fa-solid fa-trash-can text-xs"></i>
                         <span>{{ isDeleting ? 'Eliminando...' : 'Sí, eliminar' }}</span>
@@ -437,4 +524,3 @@ const deleteRefill = () => {
         </div>
     </AuthenticatedLayout>
 </template>
-

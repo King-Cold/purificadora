@@ -262,37 +262,6 @@ const getStageIconClass = (stageKey) => {
                     </div>
                 </div>
 
-                <!-- 1. ALERTAS FLASH -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-xs flex items-start gap-3.5"
-                >
-                    <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <i class="fa-solid fa-circle-check text-lg"></i>
-                    </div>
-                    <div class="flex-1">
-                        <h4 class="text-sm font-bold text-emerald-950">Operación Exitosa</h4>
-                        <p class="text-xs sm:text-sm text-emerald-800 mt-0.5 leading-relaxed font-medium">
-                            {{ $page.props.flash.success }}
-                        </p>
-                    </div>
-                </div>
-
-                <div
-                    v-if="$page.props.flash?.error"
-                    class="p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 shadow-xs flex items-start gap-3.5"
-                >
-                    <div class="h-10 w-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                    </div>
-                    <div class="flex-1">
-                        <h4 class="text-sm font-bold text-rose-950">Atención</h4>
-                        <p class="text-xs sm:text-sm text-rose-800 mt-0.5 leading-relaxed font-medium">
-                            {{ $page.props.flash.error }}
-                        </p>
-                    </div>
-                </div>
-
                 <!-- 2. AVISO DE CANCELACIÓN (SI EL PEDIDO ESTÁ CANCELADO) -->
                 <div
                     v-if="order.is_cancelled"

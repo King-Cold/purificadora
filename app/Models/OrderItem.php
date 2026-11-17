@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,11 +15,6 @@ class OrderItem extends Model
      */
     public const TYPE_FIXED = 'fijo';
     public const TYPE_EXCHANGE = 'cambio';
-
-    public const TYPES = [
-        self::TYPE_FIXED => 'Botellón Fijo',
-        self::TYPE_EXCHANGE => 'Botellón de Cambio',
-    ];
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_TRANSPORTING_TO_PLANT = 'transporting_to_plant';
@@ -151,14 +145,6 @@ class OrderItem extends Model
     }
 
     /**
-     * Alias retrocompatible para daños en almacenamiento de preparados.
-     */
-    public function getDamagedInStorageQuantity(): int
-    {
-        return $this->getDamagedAfterPrepQuantity();
-    }
-
-    /**
      * Cantidad de botellones fijos preparados y listos para proponer en carga al camión.
      * Excluye cargados, reservados en propuestas activas, sin localizar y dañados.
      */
@@ -181,31 +167,5 @@ class OrderItem extends Model
     public function getInTruckQuantity(): int
     {
         return max(0, (int)$this->loaded_quantity - (int)$this->delivered_quantity - $this->getDamagedInTruckQuantity());
-    }
-
-    /**
-     * Comprueba si el detalle corresponde a botellones fijos.
-     */
-    public function isFixed(): bool
-    {
-        return $this->type === self::TYPE_FIXED;
-    }
-
-    /**
-     * Comprueba si el detalle corresponde a botellones de cambio.
-     */
-    public function isExchange(): bool
-    {
-        return $this->type === self::TYPE_EXCHANGE;
-    }
-
-    /**
-     * Etiqueta descriptiva del tipo de botellón.
-     */
-    protected function typeLabel(): Attribute
-    {
-        return Attribute::make(
-            get: fn (): string => self::TYPES[$this->type] ?? $this->type
-        );
     }
 }

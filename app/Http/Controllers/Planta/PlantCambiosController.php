@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Planta;
 
+use App\Exceptions\OrderBusinessRuleException;
 use App\Http\Controllers\Controller;
 use App\Models\BottleCustodyMovement;
 use App\Models\OrderItem;
 use App\Models\User;
 use App\Services\PlantInventoryService;
 use App\Services\TruckInventoryService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,11 +22,8 @@ class PlantCambiosController extends Controller
     ) {}
 
     /**
-     * Pantalla principal de Cambios (Intercambio con el Camión y Preparación de Existencias).
-     * Muestra saldos útiles arriba y dos acciones independientes:
-     * 1. Recibir vacíos (cotejo de descarga del chofer)
-     * 2. Enviar llenos (propuesta de carga al camión)
-     * Acción secundaria: Preparar cambios (lavado/llenado interno de stock)
+     * Pantalla principal simplificada de Cambios (Opción 1: flujo directo de 3 acciones).
+     * Contabiliza en tiempo real Planta + Camión = Total esperado.
      */
     public function index(Request $request): Response
     {
@@ -36,39 +35,18 @@ class PlantCambiosController extends Controller
 
         $invState = $this->plantInventoryService->getInventoryState();
         $supervision = $this->plantInventoryService->getExchangeSupervisionState();
-        $prodState = $this->plantInventoryService->getProductionState();
         $inv = $this->plantInventoryService->getOrCreatePlantInventory();
-        $receptionsData = $this->plantInventoryService->getPendingReceptions();
 
-        // 1. Entregas de vacíos declaradas por choferes pendientes de cotejo en Planta
-        $pendingExchangeReceptions = $receptionsData['exchange_pending'];
+        // Único repartidor activo del circuito
+        $soleDriver = User::role('Repartidor')
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->first()
+            ?? User::role('Repartidor')->orderBy('id')->first();
 
-        // 2. Propuestas de llenos enviadas al camión pendientes de confirmación por el chofer
-        $pendingExchangeProposals = BottleCustodyMovement::with(['user', 'confirmedByUser'])
-            ->where('bottle_type', OrderItem::TYPE_EXCHANGE)
-            ->where('movement_type', BottleCustodyMovement::TYPE_TRUCK_LOAD_EXCHANGE)
-            ->where('status', BottleCustodyMovement::STATUS_PROPOSED)
-            ->where('destination', 'truck')
-            ->orderBy('id', 'desc')
-            ->get()
-            ->map(fn ($m) => [
-                'id' => $m->id,
-                'quantity' => (int) $m->quantity,
-                'driver_id' => $m->user_id,
-                'driver_name' => $m->confirmedByUser?->name ?? 'Repartidor',
-                'initiator_name' => $m->user?->name ?? 'Operador',
-                'notes' => $m->notes,
-                'status' => $m->status,
-                'created_at' => $m->created_at ? date('d/m/Y H:i', strtotime($m->created_at)) : null,
-            ]);
+        $truckInv = $soleDriver ? $this->truckInventoryService->getOrCreateTruckInventory($soleDriver) : null;
 
-        // 3. Choferes disponibles para seleccionar en envíos
-        $drivers = User::role('Repartidor')
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
-
-        // 4. Movimientos recientes de cambios (recepciones de vacíos y envíos de llenos separados)
+        // Últimos movimientos de cambios ya confirmados
         $recentExchangeMovements = BottleCustodyMovement::with(['user', 'confirmedByUser'])
             ->where('bottle_type', OrderItem::TYPE_EXCHANGE)
             ->whereIn('movement_type', [
@@ -85,9 +63,7 @@ class PlantCambiosController extends Controller
                 'id' => $m->id,
                 'type' => $m->movement_type,
                 'quantity' => (int) $m->quantity,
-                'proposed_quantity' => (int) ($m->proposed_quantity ?? $m->quantity),
                 'condition' => $m->bottle_condition,
-                'difference_reason' => $m->difference_reason,
                 'driver_name' => $m->confirmedByUser?->name ?? $m->user?->name ?? 'Repartidor',
                 'operator_name' => $m->user?->name ?? 'Operador',
                 'date' => $m->created_at ? date('d/m/Y H:i', strtotime($m->created_at)) : null,
@@ -103,23 +79,88 @@ class PlantCambiosController extends Controller
                 'exchange_unlocated' => (int) ($inv->exchange_unlocated ?? 0),
                 'exchange_damaged_total' => (int) ($invState['balances']['exchange_damaged_total'] ?? 0),
             ],
+            'truckSummary' => [
+                'driver_id' => $soleDriver?->id,
+                'driver_name' => $soleDriver?->name ?? 'Repartidor',
+                'exchange_full_available' => (int) ($truckInv?->exchange_full_available ?? 0),
+                'exchange_empty_collected' => (int) ($truckInv?->exchange_empty_collected ?? 0),
+            ],
             'supervisionSummary' => $supervision['summary'],
-            'activeBatches' => $prodState['exchange_batches_in_process'] ?? [],
             'initialCountPending' => is_null($inv->initial_count_completed_at),
             'initialCountInfo' => $invState['initial_count_info'] ?? null,
-            'pendingExchangeReceptions' => $pendingExchangeReceptions,
-            'pendingExchangeProposals' => $pendingExchangeProposals,
             'recentExchangeMovements' => $recentExchangeMovements,
-            'drivers' => $drivers,
             'isOperator' => $user->hasRole('Operador Planta') || $user->hasRole('Super Admin'),
             'isAdmin' => $user->hasRole('Administrador') || $user->hasRole('Super Admin'),
         ]);
     }
 
     /**
+     * Acción 1: Recibir vacíos del camión hacia Planta en 1 clic.
+     */
+    public function receiveEmpties(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', 'max:500'],
+            'driver_id' => ['nullable', 'exists:users,id'],
+        ]);
+
+        try {
+            $driver = !empty($validated['driver_id']) ? User::find($validated['driver_id']) : null;
+            $qty = (int) $validated['quantity'];
+
+            $this->plantInventoryService->receiveTruckEmptyDirect($request->user(), $qty, $driver);
+
+            return back()->with('success', "Se recibieron {$qty} botellón(es) vacíos del camión en Planta.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Acción 2: Marcar vacíos de Planta como llenos en 1 clic.
+     */
+    public function fill(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', 'max:500'],
+        ]);
+
+        try {
+            $qty = (int) $validated['quantity'];
+            $this->plantInventoryService->fillExchangeDirect($request->user(), $qty);
+
+            return back()->with('success', "Se llenaron {$qty} botellón(es) de cambio en Planta.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Acción 3: Subir llenos de Planta al camión en 1 clic.
+     */
+    public function loadTruck(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', 'max:500'],
+            'driver_id' => ['nullable', 'exists:users,id'],
+        ]);
+
+        try {
+            $driver = !empty($validated['driver_id']) ? User::find($validated['driver_id']) : null;
+            $qty = (int) $validated['quantity'];
+
+            $this->plantInventoryService->sendFullToTruckDirect($request->user(), $qty, $driver);
+
+            return back()->with('success', "Se subieron {$qty} botellón(es) llenos al camión.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Reporta un inconveniente de botellones de cambio desde Planta → Cambios.
      */
-    public function reportInconvenience(Request $request)
+    public function reportInconvenience(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'quantity' => ['required', 'integer', 'min:1'],
@@ -133,7 +174,7 @@ class PlantCambiosController extends Controller
             $this->plantInventoryService->reportExchangeInconvenience($request->user(), $validated);
 
             return back()->with('success', 'Inconveniente reportado. Las unidades afectadas pasaron a «En revisión».');
-        } catch (\App\Exceptions\OrderBusinessRuleException $e) {
+        } catch (OrderBusinessRuleException $e) {
             return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
         }
     }

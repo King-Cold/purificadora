@@ -1,12 +1,31 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
-import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { toastError } from '@/utils/swal';
+import {
+    AlertTriangle,
+    CheckCircle2,
+    Clock,
+    Coffee,
+    Image as ImageIcon,
+    Minus,
+    Moon,
+    PackagePlus,
+    Plus,
+    RotateCcw,
+    Save,
+    ShieldCheck,
+    ShoppingBag,
+    Store,
+    Sunrise,
+    Tag,
+    Truck,
+    Upload,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     schedule: {
@@ -27,9 +46,11 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
+const breadcrumbs = [
+    { label: 'Administración', href: route('dashboard') },
+    { label: 'Configuración general' },
+];
 
-// Pestañas principales: 'prices' | 'schedule' | 'debt'
 const getInitialTab = () => {
     if (typeof window !== 'undefined') {
         const tab = new URLSearchParams(window.location.search).get('tab');
@@ -37,24 +58,20 @@ const getInitialTab = () => {
     }
     return 'prices';
 };
+
 const activeTab = ref(getInitialTab());
 
-// Mensajes flash con descarte automático
-const flashMessage = computed(() => page.props.flash?.success || null);
-const flashError = computed(() => page.props.flash?.error || null);
-const showFlash = ref(true);
-
-watch([flashMessage, flashError], () => {
-    showFlash.value = true;
-});
-
-const breadcrumbs = [
-    { label: 'Administración', href: route('dashboard') },
-    { label: 'Configuración general' },
-];
+const selectTab = (tab) => {
+    activeTab.value = tab;
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+        window.history.replaceState({}, '', url);
+    }
+};
 
 /* =========================================================================
-   1. PRECIOS DEL BOTELLÓN DE 20 L
+   1. PRECIOS E IMAGEN DEL BOTELLÓN DE 20 L
    ========================================================================= */
 const currentBottle = computed(() => {
     return props.bottlePresentation || props.bottlePresentations?.[0] || {
@@ -75,9 +92,9 @@ const currentBottle = computed(() => {
 
 const bottleForm = useForm({
     name: currentBottle.value.name || 'Botellón 20 Litros',
-    refill_price: currentBottle.value.refill_price !== null ? currentBottle.value.refill_price : '',
-    store_price: currentBottle.value.store_price !== null ? currentBottle.value.store_price : '',
-    new_bottle_price: currentBottle.value.new_bottle_price !== null ? currentBottle.value.new_bottle_price : '',
+    refill_price: currentBottle.value.refill_price ?? '',
+    store_price: currentBottle.value.store_price ?? '',
+    new_bottle_price: currentBottle.value.new_bottle_price ?? '',
     image_path: currentBottle.value.image_path || '/images/garrafon-20l.png',
     image: null,
     is_available_for_delivery: Boolean(currentBottle.value.is_available_for_delivery),
@@ -96,9 +113,7 @@ const useStandardImage = () => {
 };
 
 const triggerImageUpload = () => {
-    if (fileInputRef.value) {
-        fileInputRef.value.click();
-    }
+    fileInputRef.value?.click();
 };
 
 const handleImageUpload = (event) => {
@@ -110,31 +125,61 @@ const handleImageUpload = (event) => {
     }
 };
 
+const resetBottleForm = () => {
+    bottleForm.name = currentBottle.value.name || 'Botellón 20 Litros';
+    bottleForm.refill_price = currentBottle.value.refill_price ?? '';
+    bottleForm.store_price = currentBottle.value.store_price ?? '';
+    bottleForm.new_bottle_price = currentBottle.value.new_bottle_price ?? '';
+    bottleForm.image_path = currentBottle.value.image_path || '/images/garrafon-20l.png';
+    bottleForm.image = null;
+    bottleForm.is_available_for_delivery = Boolean(currentBottle.value.is_available_for_delivery);
+    bottleForm.clearErrors();
+    imagePreview.value = currentBottle.value.image_url || currentBottle.value.image_path || '/images/garrafon-20l.png';
+    if (fileInputRef.value) {
+        fileInputRef.value.value = '';
+    }
+};
+
 const submitBottleForm = () => {
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            bottleForm.image = null;
+            bottleForm.image_path = currentBottle.value.image_path || '/images/garrafon-20l.png';
+            imagePreview.value = currentBottle.value.image_url || currentBottle.value.image_path || '/images/garrafon-20l.png';
+            if (fileInputRef.value) {
+                fileInputRef.value.value = '';
+            }
+        },
+        onError: () => {
+            toastError('Revisa los precios o la imagen antes de guardar.');
+        },
+    };
+
     if (bottleForm.image) {
-        bottleForm.transform(data => ({ ...data, _method: 'PUT' })).post(route('admin.settings.bottle-presentations.update', currentBottle.value.id), {
-            preserveScroll: true,
-        });
+        bottleForm
+            .transform((data) => ({ ...data, _method: 'PUT' }))
+            .post(route('admin.settings.bottle-presentations.update', currentBottle.value.id), options);
     } else {
-        bottleForm.put(route('admin.settings.bottle-presentations.update', currentBottle.value.id), {
-            preserveScroll: true,
-        });
+        bottleForm.put(route('admin.settings.bottle-presentations.update', currentBottle.value.id), options);
     }
 };
 
 const isPriceFormDirty = computed(() => {
-    const origRefill = currentBottle.value.refill_price !== null ? String(currentBottle.value.refill_price) : '';
-    const origStore = currentBottle.value.store_price !== null ? String(currentBottle.value.store_price) : '';
-    const origNew = currentBottle.value.new_bottle_price !== null ? String(currentBottle.value.new_bottle_price) : '';
+    const origRefill = currentBottle.value.refill_price !== null && currentBottle.value.refill_price !== undefined ? String(currentBottle.value.refill_price) : '';
+    const origStore = currentBottle.value.store_price !== null && currentBottle.value.store_price !== undefined ? String(currentBottle.value.store_price) : '';
+    const origNew = currentBottle.value.new_bottle_price !== null && currentBottle.value.new_bottle_price !== undefined ? String(currentBottle.value.new_bottle_price) : '';
     const origDelivery = Boolean(currentBottle.value.is_available_for_delivery);
     const origImg = currentBottle.value.image_path || '/images/garrafon-20l.png';
 
-    return String(bottleForm.refill_price) !== origRefill ||
-           String(bottleForm.store_price) !== origStore ||
-           String(bottleForm.new_bottle_price) !== origNew ||
-           Boolean(bottleForm.is_available_for_delivery) !== origDelivery ||
-           Boolean(bottleForm.image) ||
-           (bottleForm.image_path && bottleForm.image_path !== origImg);
+    return (
+        String(bottleForm.refill_price ?? '') !== origRefill ||
+        String(bottleForm.store_price ?? '') !== origStore ||
+        String(bottleForm.new_bottle_price ?? '') !== origNew ||
+        Boolean(bottleForm.is_available_for_delivery) !== origDelivery ||
+        Boolean(bottleForm.image) ||
+        (Boolean(bottleForm.image_path) && bottleForm.image_path !== origImg)
+    );
 });
 
 /* =========================================================================
@@ -147,6 +192,8 @@ const scheduleForm = useForm({
     closing_time: props.schedule.closing_time || '19:00',
     order_cutoff_advance_minutes: props.schedule.order_cutoff_advance_minutes ?? 60,
 });
+
+const cutoffQuickOptions = [30, 45, 60, 90];
 
 const timeToMinutes = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return null;
@@ -161,6 +208,15 @@ const minutesToTime = (totalMinutes) => {
     const h = Math.floor(normalized / 60);
     const m = normalized % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+const formatDuration = (minutes) => {
+    if (!minutes || minutes <= 0) return '0 min';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h > 0 && m > 0) return `${h} h ${m} min`;
+    if (h > 0) return `${h} h`;
+    return `${m} min`;
 };
 
 const scheduleAnalysis = computed(() => {
@@ -179,7 +235,7 @@ const scheduleAnalysis = computed(() => {
     if (isNaN(advance) || advance < 0) errors.order_cutoff_advance_minutes = 'La anticipación debe ser mayor o igual a 0.';
 
     if (Object.keys(errors).length > 0) {
-        return { isValid: false, errors, cutoffTime: null };
+        return { isValid: false, errors, cutoffTime: '--:--', segments: [] };
     }
 
     if (openMin >= breakStartMin) {
@@ -200,28 +256,73 @@ const scheduleAnalysis = computed(() => {
     }
 
     const isValid = Object.keys(errors).length === 0;
+    const totalSpan = Math.max(1, closeMin - openMin);
+    const morningDuration = Math.max(0, breakStartMin - openMin);
+    const breakDuration = Math.max(0, breakEndMin - breakStartMin);
+    const afternoonOrderDuration = Math.max(0, cutoffMin - breakEndMin);
+    const prepTailDuration = Math.max(0, closeMin - cutoffMin);
 
     return {
         isValid,
         errors,
         cutoffTime,
-        branchService: `${scheduleForm.opening_time}–${scheduleForm.break_start_time} y ${scheduleForm.break_end_time}–${scheduleForm.closing_time}`,
-        breakPeriod: `${scheduleForm.break_start_time}–${scheduleForm.break_end_time}`,
-        orderReception: `${scheduleForm.opening_time}–${scheduleForm.break_start_time} y ${scheduleForm.break_end_time}–${cutoffTime}`,
+        breakDurationText: formatDuration(breakDuration),
+        segments: isValid
+            ? [
+                  {
+                      key: 'morning',
+                      label: 'Mañana',
+                      pct: (morningDuration / totalSpan) * 100,
+                      colorClass: 'bg-[#0071BA]',
+                  },
+                  {
+                      key: 'break',
+                      label: 'Descanso',
+                      pct: (breakDuration / totalSpan) * 100,
+                      colorClass: 'bg-[#D99A27]',
+                  },
+                  {
+                      key: 'afternoon',
+                      label: 'Pedidos tarde',
+                      pct: (afternoonOrderDuration / totalSpan) * 100,
+                      colorClass: 'bg-[#26845B]',
+                  },
+                  {
+                      key: 'prep',
+                      label: 'Solo entregas',
+                      pct: (prepTailDuration / totalSpan) * 100,
+                      colorClass: 'bg-[#1E1545]',
+                  },
+              ].filter((s) => s.pct > 0)
+            : [],
     };
 });
 
 const isScheduleFormDirty = computed(() => {
-    return scheduleForm.opening_time !== (props.schedule.opening_time || '08:00') ||
-           scheduleForm.break_start_time !== (props.schedule.break_start_time || '13:00') ||
-           scheduleForm.break_end_time !== (props.schedule.break_end_time || '15:00') ||
-           scheduleForm.closing_time !== (props.schedule.closing_time || '19:00') ||
-           Number(scheduleForm.order_cutoff_advance_minutes) !== Number(props.schedule.order_cutoff_advance_minutes ?? 60);
+    return (
+        scheduleForm.opening_time !== (props.schedule.opening_time || '08:00') ||
+        scheduleForm.break_start_time !== (props.schedule.break_start_time || '13:00') ||
+        scheduleForm.break_end_time !== (props.schedule.break_end_time || '15:00') ||
+        scheduleForm.closing_time !== (props.schedule.closing_time || '19:00') ||
+        Number(scheduleForm.order_cutoff_advance_minutes) !== Number(props.schedule.order_cutoff_advance_minutes ?? 60)
+    );
 });
+
+const resetScheduleForm = () => {
+    scheduleForm.opening_time = props.schedule.opening_time || '08:00';
+    scheduleForm.break_start_time = props.schedule.break_start_time || '13:00';
+    scheduleForm.break_end_time = props.schedule.break_end_time || '15:00';
+    scheduleForm.closing_time = props.schedule.closing_time || '19:00';
+    scheduleForm.order_cutoff_advance_minutes = props.schedule.order_cutoff_advance_minutes ?? 60;
+    scheduleForm.clearErrors();
+};
 
 const submitSchedule = () => {
     scheduleForm.put(route('admin.settings.schedule.update'), {
         preserveScroll: true,
+        onError: () => {
+            toastError('Verifica las horas ingresadas antes de guardar.');
+        },
     });
 };
 
@@ -232,17 +333,85 @@ const debtLimitForm = useForm({
     max_pending_payment_bottles: props.max_pending_payment_bottles ?? 5,
 });
 
+const debtQuickOptions = [0, 3, 5, 8, 10];
+
+const adjustDebtLimit = (delta) => {
+    const current = parseInt(debtLimitForm.max_pending_payment_bottles, 10) || 0;
+    debtLimitForm.max_pending_payment_bottles = Math.max(0, current + delta);
+};
+
 const isDebtFormDirty = computed(() => {
     return Number(debtLimitForm.max_pending_payment_bottles) !== Number(props.max_pending_payment_bottles ?? 5);
 });
 
+const debtPolicyMeta = computed(() => {
+    const val = parseInt(debtLimitForm.max_pending_payment_bottles, 10);
+    if (isNaN(val) || val <= 0) {
+        return {
+            label: 'Contado estricto',
+            badgeClass: 'bg-[#FCECEF] text-[#B91C3C] border-[#F6C8D2]',
+            boxClass: 'bg-[#FCECEF]/50 border-[#F6C8D2]',
+            description: 'Todo pedido se cobra al entregar; sin adeudos permitidos.',
+        };
+    }
+    if (val <= 3) {
+        return {
+            label: 'Conservador',
+            badgeClass: 'bg-[#FEF5E6] text-[#9A670E] border-[#F5DFB5]',
+            boxClass: 'bg-[#FEF5E6]/60 border-[#F5DFB5]',
+            description: `Hasta ${val} ${val === 1 ? 'botellón fiado' : 'botellones fiados'} por domicilio.`,
+        };
+    }
+    if (val <= 6) {
+        return {
+            label: 'Estándar',
+            badgeClass: 'bg-[#E8F2EC] text-[#26845B] border-[#BBE4CE]',
+            boxClass: 'bg-[#E8F2EC]/60 border-[#BBE4CE]',
+            description: `Hasta ${val} botellones pendientes por cliente sin frenar entregas.`,
+        };
+    }
+    return {
+        label: 'Amplio',
+        badgeClass: 'bg-[#E9F3F8] text-[#0071BA] border-[#BDDDF0]',
+        boxClass: 'bg-[#E9F3F8]/70 border-[#BDDDF0]',
+        description: `Tope extendido de ${val} botellones pendientes para alto consumo.`,
+    };
+});
+
+const resetDebtLimitForm = () => {
+    debtLimitForm.max_pending_payment_bottles = props.max_pending_payment_bottles ?? 5;
+    debtLimitForm.clearErrors();
+};
+
 const submitDebtLimit = () => {
     debtLimitForm.put(route('admin.settings.debt-limit.update'), {
         preserveScroll: true,
+        onError: () => {
+            toastError('Ingresa un número válido igual o mayor a 0.');
+        },
     });
 };
 
-// Formato de moneda MXN
+watch(
+    () => props.schedule,
+    (next) => {
+        if (!next) return;
+        scheduleForm.opening_time = next.opening_time || '08:00';
+        scheduleForm.break_start_time = next.break_start_time || '13:00';
+        scheduleForm.break_end_time = next.break_end_time || '15:00';
+        scheduleForm.closing_time = next.closing_time || '19:00';
+        scheduleForm.order_cutoff_advance_minutes = next.order_cutoff_advance_minutes ?? 60;
+    },
+    { deep: true }
+);
+
+watch(
+    () => props.max_pending_payment_bottles,
+    (next) => {
+        debtLimitForm.max_pending_payment_bottles = next ?? 5;
+    }
+);
+
 const formatCurrency = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const num = parseFloat(val);
@@ -259,220 +428,201 @@ const formatCurrency = (val) => {
 <template>
     <Head title="Configuración general" />
 
-    <AuthenticatedLayout>
-        <div class="py-4 sm:py-6 px-3.5 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-5 sm:space-y-6">
-            <!-- Encabezado sencillo y migas de pan -->
+    <AuthenticatedLayout :wide="true">
+        <div class="py-5 sm:py-7 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-5">
+            <!-- Encabezado compacto -->
             <div>
                 <Breadcrumbs :items="breadcrumbs" />
-                <div class="mt-1 sm:mt-2">
-                    <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                        Configuración general
-                    </h1>
-                    <p class="text-xs sm:text-sm text-slate-600 mt-1">
-                        Administra los precios, el horario y el límite de fiado de Puritronic.
-                    </p>
-                </div>
+                <h1 class="mt-2 text-2xl sm:text-[26px] font-bold text-[#292638] tracking-tight">
+                    Configuración general
+                </h1>
+                <p class="text-xs sm:text-sm text-[#747181] mt-0.5">
+                    Tarifas de 20 L, horario operativo y límite de fiado.
+                </p>
             </div>
 
-            <!-- Aviso flash breve (éxito o error) -->
-            <transition
-                enter-active-class="transition ease-out duration-200"
-                enter-from-class="opacity-0 -translate-y-2"
-                enter-to-class="opacity-100 translate-y-0"
-                leave-active-class="transition ease-in duration-150"
-                leave-from-class="opacity-100 translate-y-0"
-                leave-to-class="opacity-0 -translate-y-2"
-            >
-                <div
-                    v-if="showFlash && (flashMessage || flashError)"
-                    class="rounded-xl border p-3.5 sm:p-4 flex items-start gap-3 shadow-2xs relative"
-                    :class="flashMessage ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'"
+            <!-- 3 tarjetas selectoras compactas y coloridas -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3" role="tablist" aria-label="Secciones de configuración">
+                <!-- Tab 1: Precios -->
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'prices'"
+                    @click="selectTab('prices')"
+                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    :class="activeTab === 'prices'
+                        ? 'bg-white border-[#0071BA] ring-1 ring-[#0071BA]/30 shadow-[0_6px_18px_rgba(0,113,186,0.08)]'
+                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#BDDDF0]'"
                 >
-                    <i
-                        class="text-base mt-0.5 shrink-0"
-                        :class="flashMessage ? 'fa-solid fa-circle-check text-emerald-600' : 'fa-solid fa-triangle-exclamation text-rose-600'"
-                    ></i>
-                    <div class="flex-1 text-xs sm:text-sm font-medium">
-                        {{ flashMessage || flashError }}
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                        :class="activeTab === 'prices' ? 'bg-[#0071BA] text-white' : 'bg-[#E9F3F8] text-[#0071BA]'"
+                    >
+                        <Tag class="w-4 h-4" />
                     </div>
-                    <button
-                        type="button"
-                        @click="showFlash = false"
-                        class="text-slate-400 hover:text-slate-600 transition p-1"
-                        title="Cerrar aviso"
-                    >
-                        <i class="fa-solid fa-xmark text-sm"></i>
-                    </button>
-                </div>
-            </transition>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                                Tarifas y 20 L
+                            </h2>
+                            <span v-if="isPriceFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
+                        </div>
+                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                            {{ formatCurrency(bottleForm.store_price) || '—' }} planta · {{ formatCurrency(bottleForm.refill_price) || '—' }} ruta
+                        </p>
+                    </div>
+                </button>
 
-            <!-- Tres pestañas: Precios, Horario y Fiado -->
-            <div class="border-b border-slate-200 overflow-x-auto">
-                <nav class="flex gap-1 sm:gap-6 min-w-max" aria-label="Secciones de configuración">
-                    <!-- Pestaña: Precios -->
-                    <button
-                        type="button"
-                        @click="activeTab = 'prices'"
-                        :class="[
-                            'pb-3 px-3.5 inline-flex items-center gap-2 text-sm font-semibold border-b-2 transition-all cursor-pointer min-h-[44px]',
-                            activeTab === 'prices'
-                                ? 'border-[#0E1E42] text-[#0E1E42]'
-                                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                        ]"
+                <!-- Tab 2: Horarios -->
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'schedule'"
+                    @click="selectTab('schedule')"
+                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    :class="activeTab === 'schedule'
+                        ? 'bg-white border-[#1E1545] ring-1 ring-[#1E1545]/25 shadow-[0_6px_18px_rgba(30,21,69,0.08)]'
+                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#CBC4DD]'"
+                >
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                        :class="activeTab === 'schedule' ? 'bg-[#1E1545] text-white' : 'bg-[#EEEAF7] text-[#1E1545]'"
                     >
-                        <i class="fa-solid fa-tag text-xs sm:text-sm"></i>
-                        <span>Precios</span>
-                    </button>
+                        <Clock class="w-4 h-4" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                                Horario
+                            </h2>
+                            <span v-if="isScheduleFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
+                        </div>
+                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                            {{ scheduleForm.opening_time }} – {{ scheduleForm.closing_time }} · Corte {{ scheduleAnalysis.cutoffTime }}
+                        </p>
+                    </div>
+                </button>
 
-                    <!-- Pestaña: Horario -->
-                    <button
-                        type="button"
-                        @click="activeTab = 'schedule'"
-                        :class="[
-                            'pb-3 px-3.5 inline-flex items-center gap-2 text-sm font-semibold border-b-2 transition-all cursor-pointer min-h-[44px]',
-                            activeTab === 'schedule'
-                                ? 'border-[#0E1E42] text-[#0E1E42]'
-                                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                        ]"
+                <!-- Tab 3: Fiado -->
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'debt'"
+                    @click="selectTab('debt')"
+                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    :class="activeTab === 'debt'
+                        ? 'bg-white border-[#26845B] ring-1 ring-[#26845B]/25 shadow-[0_6px_18px_rgba(38,132,91,0.08)]'
+                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#BBE4CE]'"
+                >
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                        :class="activeTab === 'debt' ? 'bg-[#26845B] text-white' : 'bg-[#E8F2EC] text-[#26845B]'"
                     >
-                        <i class="fa-regular fa-clock text-xs sm:text-sm"></i>
-                        <span>Horario</span>
-                    </button>
-
-                    <!-- Pestaña: Fiado -->
-                    <button
-                        type="button"
-                        @click="activeTab = 'debt'"
-                        :class="[
-                            'pb-3 px-3.5 inline-flex items-center gap-2 text-sm font-semibold border-b-2 transition-all cursor-pointer min-h-[44px]',
-                            activeTab === 'debt'
-                                ? 'border-[#0E1E42] text-[#0E1E42]'
-                                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                        ]"
-                    >
-                        <i class="fa-solid fa-hand-holding-dollar text-xs sm:text-sm"></i>
-                        <span>Fiado</span>
-                    </button>
-                </nav>
+                        <ShieldCheck class="w-4 h-4" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                                Límite de fiado
+                            </h2>
+                            <span v-if="isDebtFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
+                        </div>
+                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                            Máximo {{ debtLimitForm.max_pending_payment_bottles }} {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón' : 'botellones' }}
+                        </p>
+                    </div>
+                </button>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 1. PESTAÑA: PRECIOS DEL BOTELLÓN DE 20 L -->
+            <!-- 1. TARIFAS Y PRODUCTO 20 L -->
             <!-- ========================================================================= -->
-            <div v-if="activeTab === 'prices'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <!-- Columna del formulario (7 columnas en escritorio) -->
-                <div class="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-5 sm:space-y-6">
-                    <div class="border-b border-slate-100 pb-3 sm:pb-4 flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <h2 class="text-base font-bold text-slate-900">
-                                Precios del botellón de 20 L
-                            </h2>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Tarifas oficiales de llenado y servicio para botellones de 20 L.
-                            </p>
-                        </div>
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200 shrink-0">
-                            20 L
-                        </span>
-                    </div>
-
-                    <form @submit.prevent="submitBottleForm" class="space-y-4 sm:space-y-5">
-                        <!-- Fila 1: Llenado en Planta y Servicio a domicilio (mismo peso visual) -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                            <!-- Llenado en Planta -->
-                            <div class="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-                                <InputLabel for="store_price" value="Llenado en Planta" class="text-xs font-bold text-slate-800" />
-                                <div class="relative mt-1">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-sm">
-                                        $
-                                    </div>
+            <div v-if="activeTab === 'prices'" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <!-- Formulario principal -->
+                <form
+                    @submit.prevent="submitBottleForm"
+                    class="lg:col-span-8 bg-white border border-[#E9E7F0] border-t-4 border-t-[#0071BA] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                >
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <!-- Precios -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label for="store_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                    <Store class="w-3.5 h-3.5 text-[#26845B]" />
+                                    En planta
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
                                     <TextInput
                                         id="store_price"
                                         v-model="bottleForm.store_price"
                                         type="number"
                                         step="0.01"
                                         min="0.01"
-                                        class="w-full text-sm pl-7 pr-14 font-mono font-bold text-slate-900 bg-white min-h-[44px]"
+                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#0071BA] focus:ring-[#0071BA]/15 rounded-xl min-h-[42px]"
                                         placeholder="10.00"
                                         required
                                     />
-                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
-                                        MXN
-                                    </div>
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
                                 </div>
                                 <InputError :message="bottleForm.errors.store_price" class="mt-1" />
                             </div>
 
-                            <!-- Servicio a domicilio -->
-                            <div class="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-                                <InputLabel for="refill_price" value="Servicio a domicilio" class="text-xs font-bold text-slate-800" />
-                                <div class="relative mt-1">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-sm">
-                                        $
-                                    </div>
+                            <div>
+                                <label for="refill_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                    <Truck class="w-3.5 h-3.5 text-[#0071BA]" />
+                                    A domicilio
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
                                     <TextInput
                                         id="refill_price"
                                         v-model="bottleForm.refill_price"
                                         type="number"
                                         step="0.01"
                                         min="0.01"
-                                        class="w-full text-sm pl-7 pr-14 font-mono font-bold text-slate-900 bg-white min-h-[44px]"
+                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#0071BA] focus:ring-[#0071BA]/15 rounded-xl min-h-[42px]"
                                         placeholder="15.00"
                                         required
                                     />
-                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
-                                        MXN
-                                    </div>
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
                                 </div>
                                 <InputError :message="bottleForm.errors.refill_price" class="mt-1" />
                             </div>
+
+                            <div>
+                                <label for="new_bottle_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                    <PackagePlus class="w-3.5 h-3.5 text-[#1E1545]" />
+                                    Envase nuevo
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
+                                    <TextInput
+                                        id="new_bottle_price"
+                                        v-model="bottleForm.new_bottle_price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                        placeholder="95.00"
+                                    />
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
+                                </div>
+                                <InputError :message="bottleForm.errors.new_bottle_price" class="mt-1" />
+                            </div>
                         </div>
 
-                        <!-- Fila 2: Envase nuevo completo · Opcional -->
-                        <div class="p-3.5 sm:p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5">
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                <InputLabel for="new_bottle_price" value="Envase nuevo completo · Opcional" class="text-xs font-semibold text-slate-700" />
-                                <span class="text-[11px] text-slate-500">Incluye el envase de 20 L</span>
-                            </div>
-                            <div class="relative mt-1 max-w-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-sm">
-                                    $
-                                </div>
-                                <TextInput
-                                    id="new_bottle_price"
-                                    v-model="bottleForm.new_bottle_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    class="w-full text-sm pl-7 pr-14 font-mono text-slate-800 min-h-[44px]"
-                                    placeholder="95.00"
-                                />
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
-                                    MXN
-                                </div>
-                            </div>
-                            <InputError :message="bottleForm.errors.new_bottle_price" class="mt-1" />
-                        </div>
-
-                        <!-- Fila 3: Fila compacta de Servicio a domicilio con interruptor -->
+                        <!-- Entrega a domicilio -->
                         <div
-                            class="p-3.5 sm:p-4 rounded-xl border transition-colors flex items-center justify-between gap-3"
-                            :class="bottleForm.is_available_for_delivery ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'"
+                            class="px-4 py-3.5 rounded-xl border transition-colors flex items-center justify-between gap-4"
+                            :class="bottleForm.is_available_for_delivery ? 'bg-[#E9F3F8]/65 border-[#BDDDF0]' : 'bg-[#F4F3F8] border-[#E9E7F0]'"
                         >
-                            <div class="space-y-0.5 min-w-0 pr-2">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-xs sm:text-sm font-bold text-slate-900">
-                                        Servicio a domicilio
-                                    </span>
-                                    <span
-                                        class="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold"
-                                        :class="bottleForm.is_available_for_delivery ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-700'"
-                                    >
-                                        {{ bottleForm.is_available_for_delivery ? 'Activo' : 'Suspendido' }}
-                                    </span>
-                                </div>
-                                <p class="text-[11px] sm:text-xs text-slate-600">
-                                    Si se suspende, los clientes no podrán solicitar entregas a domicilio en ruta.
+                            <div>
+                                <p class="text-sm font-semibold text-[#292638]">
+                                    Entrega a domicilio
+                                </p>
+                                <p class="text-xs text-[#747181]">
+                                    {{ bottleForm.is_available_for_delivery ? 'Activa para pedidos en ruta y planta.' : 'Pausada — solo recargas en sucursal.' }}
                                 </p>
                             </div>
 
@@ -481,256 +631,196 @@ const formatCurrency = (val) => {
                                 role="switch"
                                 :aria-checked="bottleForm.is_available_for_delivery"
                                 @click="bottleForm.is_available_for_delivery = !bottleForm.is_available_for_delivery"
-                                class="relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                                :class="bottleForm.is_available_for_delivery ? 'bg-[#0E1E42]' : 'bg-slate-300'"
-                                title="Alternar disponibilidad de servicio a domicilio"
+                                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                                :class="bottleForm.is_available_for_delivery ? 'bg-[#1E1545]' : 'bg-[#CBC4DD]'"
+                                title="Alternar disponibilidad a domicilio"
                             >
                                 <span
-                                    class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out"
+                                    class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200"
                                     :class="bottleForm.is_available_for_delivery ? 'translate-x-5' : 'translate-x-0'"
                                 />
                             </button>
                         </div>
 
-                        <!-- Fila 4: Bloque integrado de imagen -->
-                        <div class="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                            <InputLabel value="Imagen del botellón" class="text-xs font-semibold text-slate-700" />
-                            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                                <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                                    <img :src="imagePreview" alt="Miniatura 20 L" class="max-h-full max-w-full object-contain" />
-                                </div>
-                                <div class="flex-1 space-y-2 min-w-0">
-                                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
-                                        <button
-                                            type="button"
-                                            @click="useStandardImage"
-                                            class="w-full sm:w-auto px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer min-h-[36px] inline-flex items-center justify-center"
-                                            :class="bottleForm.image_path === '/images/garrafon-20l.png' && !bottleForm.image
-                                                ? 'bg-blue-50 text-blue-900 border-blue-300 ring-1 ring-blue-300'
-                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
-                                        >
-                                            <i class="fa-solid fa-bottle-water text-xs mr-1 text-blue-600"></i>
-                                            Usar imagen estándar
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            @click="triggerImageUpload"
-                                            class="w-full sm:w-auto px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer min-h-[36px] transition inline-flex items-center justify-center gap-1.5"
-                                        >
-                                            <i class="fa-solid fa-cloud-arrow-up text-xs text-slate-500"></i>
-                                            Cambiar imagen
-                                        </button>
-
-                                        <input
-                                            ref="fileInputRef"
-                                            type="file"
-                                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                                            @change="handleImageUpload"
-                                            class="hidden"
-                                        />
-                                    </div>
-                                    <p class="text-[11px] text-slate-500">Formato recomendado: PNG o WEBP con fondo transparente.</p>
-                                </div>
+                        <!-- Imagen -->
+                        <div class="pt-4 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold text-[#292638]">Imagen pública</p>
+                                <p class="text-[11px] text-[#747181]">Mostrada en catálogo y pedidos.</p>
                             </div>
-                            <InputError :message="bottleForm.errors.image || bottleForm.errors.image_path" class="mt-1" />
-                        </div>
 
-                        <!-- Botón de guardado y texto de ayuda -->
-                        <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <p class="text-xs text-slate-500">
-                                Guarda los precios, la disponibilidad del servicio y la imagen seleccionada.
-                            </p>
-                            <PrimaryButton
-                                type="submit"
-                                :disabled="bottleForm.processing"
-                                class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 min-h-[44px] bg-[#0E1E42] hover:bg-[#142858]"
-                            >
-                                <i v-if="bottleForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                                <i v-else class="fa-solid fa-floppy-disk text-xs"></i>
-                                <span>Guardar precios y servicio</span>
-                            </PrimaryButton>
-                        </div>
-                    </form>
-                </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    @click="useStandardImage"
+                                    class="px-3 py-2 rounded-xl text-xs font-medium border transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                                    :class="bottleForm.image_path === '/images/garrafon-20l.png' && !bottleForm.image
+                                        ? 'bg-[#EEEAF7] text-[#1E1545] border-[#CBC4DD]'
+                                        : 'bg-white text-[#747181] border-[#E9E7F0] hover:bg-[#F4F3F8] hover:text-[#292638]'"
+                                >
+                                    <ImageIcon class="w-3.5 h-3.5" />
+                                    Estándar
+                                </button>
 
-                <!-- Columna de resumen (5 columnas en escritorio) -->
-                <div class="lg:col-span-5 space-y-4 sm:space-y-5">
-                    <!-- Tarjeta de vista previa -->
-                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-4">
-                        <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                <i class="fa-solid fa-eye text-blue-900 text-xs"></i>
-                                <span>{{ isPriceFormDirty ? 'Vista previa de los cambios' : 'Vista previa' }}</span>
-                            </h3>
-                            <span
-                                class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md"
-                                :class="isPriceFormDirty ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-slate-100 text-slate-600'"
-                            >
-                                {{ isPriceFormDirty ? 'Sin guardar' : 'En vivo' }}
-                            </span>
-                        </div>
+                                <button
+                                    type="button"
+                                    @click="triggerImageUpload"
+                                    class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white hover:bg-[#E9F3F8]/60 text-[#292638] cursor-pointer min-h-[38px] transition inline-flex items-center gap-1.5"
+                                >
+                                    <Upload class="w-3.5 h-3.5 text-[#0071BA]" />
+                                    Subir imagen
+                                </button>
 
-                        <!-- Resumen de imagen y disponibilidad -->
-                        <div class="flex items-center gap-3.5 p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl">
-                            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 p-1.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                                <img :src="imagePreview" alt="Botellón 20 L" class="max-h-full max-w-full object-contain" />
+                                <input
+                                    ref="fileInputRef"
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                    @change="handleImageUpload"
+                                    class="hidden"
+                                />
                             </div>
-                            <div class="space-y-1 min-w-0">
-                                <span class="font-bold text-slate-900 text-sm block">Botellón de 20 L</span>
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    <span
-                                        v-if="bottleForm.is_available_for_delivery"
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-100 text-blue-900"
-                                    >
-                                        <i class="fa-solid fa-truck-fast text-[9px]"></i>
-                                        A domicilio y planta
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-900"
-                                    >
-                                        <i class="fa-solid fa-store text-[9px]"></i>
-                                        Solo en planta
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Tarifas vigentes calculadas -->
-                        <div class="space-y-2 text-xs">
-                            <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                                <span class="text-slate-600 font-medium">Llenado en Planta:</span>
-                                <span class="font-bold text-slate-900 font-mono text-sm">
-                                    {{ formatCurrency(bottleForm.store_price) || 'Sin configurar' }}
-                                </span>
-                            </div>
-                            <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                                <span class="text-blue-900 font-medium">Servicio a domicilio:</span>
-                                <span class="font-bold text-blue-900 font-mono text-sm">
-                                    {{ formatCurrency(bottleForm.refill_price) || 'Sin configurar' }}
-                                </span>
-                            </div>
-                            <div class="flex justify-between items-center py-2">
-                                <span class="text-slate-500 font-medium">Envase nuevo completo:</span>
-                                <span class="font-semibold text-slate-700 font-mono">
-                                    {{ formatCurrency(bottleForm.new_bottle_price) || 'Sin configurar' }}
-                                </span>
-                            </div>
+                            <InputError :message="bottleForm.errors.image || bottleForm.errors.image_path" class="w-full" />
                         </div>
                     </div>
 
-                    <!-- Ayuda desplegable: Fijos y de cambio -->
-                    <details class="group bg-slate-50/80 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 text-xs transition">
-                        <summary class="flex items-center justify-between font-bold text-slate-800 cursor-pointer list-none select-none">
-                            <span class="flex items-center gap-2">
-                                <i class="fa-solid fa-circle-question text-blue-900 text-sm"></i>
-                                ¿Cómo funcionan los botellones fijos y de cambio?
-                            </span>
-                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200 group-open:rotate-180"></i>
-                        </summary>
-                        <div class="mt-3 pt-3 border-t border-slate-200/80 space-y-2.5 text-slate-600 leading-relaxed">
-                            <p>
-                                Ambos comparten la misma capacidad de 20 L y el mismo precio. Describen únicamente la propiedad del envase:
-                            </p>
-                            <div class="p-2.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                                <p class="font-bold text-slate-800 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-tag text-blue-800 text-[11px]"></i>
-                                    Botellones fijos (20 L)
-                                </p>
-                                <p class="text-[11px] text-slate-600">
-                                    Propiedad exclusiva del cliente. Se recogen vacíos, se lavan y llenan en planta, y se entregan al mismo cliente.
-                                </p>
-                            </div>
-                            <div class="p-2.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                                <p class="font-bold text-slate-800 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-repeat text-emerald-700 text-[11px]"></i>
-                                    Botellones de cambio (20 L)
-                                </p>
-                                <p class="text-[11px] text-slate-600">
-                                    Intercambio genérico e inmediato. El cliente entrega un botellón vacío y recibe uno lleno en la misma visita.
-                                </p>
-                            </div>
+                    <!-- Pie -->
+                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                        <span class="text-xs inline-flex items-center gap-1.5" :class="isPriceFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium'">
+                            <span v-if="isPriceFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                            <CheckCircle2 v-else class="w-3.5 h-3.5" />
+                            {{ isPriceFormDirty ? 'Cambios sin guardar' : 'Tarifas al día' }}
+                        </span>
+
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="isPriceFormDirty"
+                                type="button"
+                                @click="resetBottleForm"
+                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                            >
+                                <RotateCcw class="w-3.5 h-3.5" />
+                                Restablecer
+                            </button>
+
+                            <button
+                                type="submit"
+                                :disabled="bottleForm.processing"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
+                            >
+                                <Save class="w-3.5 h-3.5" />
+                                {{ bottleForm.processing ? 'Guardando...' : 'Guardar tarifas' }}
+                            </button>
                         </div>
-                    </details>
+                    </div>
+                </form>
+
+                <!-- Ficha compacta 20 L -->
+                <div class="lg:col-span-4 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden">
+                    <div class="bg-[#E9F3F8]/70 px-5 py-5 flex flex-col items-center text-center relative">
+                        <span
+                            class="self-end inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold mb-2"
+                            :class="bottleForm.is_available_for_delivery ? 'bg-white text-[#0071BA] border border-[#BDDDF0]' : 'bg-[#FEF5E6] text-[#9A670E] border border-[#F5DFB5]'"
+                        >
+                            {{ bottleForm.is_available_for_delivery ? 'Planta y domicilio' : 'Solo planta' }}
+                        </span>
+                        <div class="w-24 h-24 rounded-full bg-white border border-[#E9E7F0] flex items-center justify-center p-2.5 shadow-2xs">
+                            <img :src="imagePreview" alt="Botellón 20 L" class="max-h-full max-w-full object-contain" />
+                        </div>
+                        <h3 class="mt-2.5 text-sm font-bold text-[#292638]">Botellón 20 L</h3>
+                    </div>
+
+                    <div class="p-4 divide-y divide-[#E9E7F0] text-xs">
+                        <div class="py-2 flex items-center justify-between">
+                            <span class="text-[#747181]">Planta</span>
+                            <span class="font-bold text-[#26845B] tabular-nums">{{ formatCurrency(bottleForm.store_price) || '—' }}</span>
+                        </div>
+                        <div class="py-2 flex items-center justify-between">
+                            <span class="text-[#747181]">Domicilio</span>
+                            <span class="font-bold text-[#0071BA] tabular-nums">{{ formatCurrency(bottleForm.refill_price) || '—' }}</span>
+                        </div>
+                        <div class="pt-2 flex items-center justify-between">
+                            <span class="text-[#747181]">Envase nuevo</span>
+                            <span class="font-bold text-[#1E1545] tabular-nums">{{ formatCurrency(bottleForm.new_bottle_price) || '—' }}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 2. PESTAÑA: HORARIO DE LA SUCURSAL -->
+            <!-- 2. HORARIO DE LA SUCURSAL -->
             <!-- ========================================================================= -->
-            <div v-if="activeTab === 'schedule'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <!-- Columna del formulario (7 columnas en escritorio) -->
-                <div class="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-5 sm:space-y-6">
-                    <div class="border-b border-slate-100 pb-3 sm:pb-4">
-                        <h2 class="text-base font-bold text-slate-900">
-                            Horario de la sucursal
-                        </h2>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Organizado en apertura y cierre, descanso y recepción de pedidos.
-                        </p>
-                    </div>
+            <div v-if="activeTab === 'schedule'" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <!-- Editor -->
+                <form
+                    @submit.prevent="submitSchedule"
+                    class="lg:col-span-7 bg-white border border-[#E9E7F0] border-t-4 border-t-[#1E1545] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                >
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <!-- Apertura y cierre -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="opening_time" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                    <Sunrise class="w-3.5 h-3.5 text-[#D99A27]" />
+                                    Apertura
+                                </label>
+                                <TextInput
+                                    id="opening_time"
+                                    v-model="scheduleForm.opening_time"
+                                    type="time"
+                                    class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                    required
+                                />
+                                <InputError :message="scheduleForm.errors.opening_time || scheduleAnalysis.errors.opening_time" class="mt-1" />
+                            </div>
 
-                    <form @submit.prevent="submitSchedule" class="space-y-5 sm:space-y-6">
-                        <!-- Grupo 1: Apertura y cierre -->
-                        <div class="space-y-3">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                                <i class="fa-solid fa-door-open text-slate-400"></i>
-                                <span>Apertura y cierre</span>
-                            </h3>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                                <div>
-                                    <InputLabel for="opening_time" value="Hora de apertura" class="text-xs font-medium" />
-                                    <TextInput
-                                        id="opening_time"
-                                        v-model="scheduleForm.opening_time"
-                                        type="time"
-                                        class="w-full mt-1 text-sm min-h-[44px]"
-                                        required
-                                    />
-                                    <InputError :message="scheduleForm.errors.opening_time || scheduleAnalysis.errors.opening_time" class="mt-1" />
-                                </div>
-
-                                <div>
-                                    <InputLabel for="closing_time" value="Hora de cierre" class="text-xs font-medium" />
-                                    <TextInput
-                                        id="closing_time"
-                                        v-model="scheduleForm.closing_time"
-                                        type="time"
-                                        class="w-full mt-1 text-sm min-h-[44px]"
-                                        required
-                                    />
-                                    <InputError :message="scheduleForm.errors.closing_time || scheduleAnalysis.errors.closing_time" class="mt-1" />
-                                </div>
+                            <div>
+                                <label for="closing_time" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                    <Moon class="w-3.5 h-3.5 text-[#1E1545]" />
+                                    Cierre
+                                </label>
+                                <TextInput
+                                    id="closing_time"
+                                    v-model="scheduleForm.closing_time"
+                                    type="time"
+                                    class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                    required
+                                />
+                                <InputError :message="scheduleForm.errors.closing_time || scheduleAnalysis.errors.closing_time" class="mt-1" />
                             </div>
                         </div>
 
-                        <!-- Grupo 2: Descanso -->
-                        <div class="p-3.5 sm:p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-3">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                                <i class="fa-solid fa-mug-saucer text-slate-400"></i>
-                                <span>Descanso</span>
-                            </h3>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                        <!-- Descanso -->
+                        <div class="pt-4 border-t border-[#E9E7F0] space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#292638]">
+                                    <Coffee class="w-3.5 h-3.5 text-[#D99A27]" />
+                                    Descanso
+                                </span>
+                                <span v-if="scheduleAnalysis.isValid" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FEF5E6] text-[#9A670E]">
+                                    {{ scheduleAnalysis.breakDurationText }}
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <InputLabel for="break_start_time" value="Inicio del descanso" class="text-xs font-medium" />
+                                    <label for="break_start_time" class="block text-xs font-medium text-[#747181] mb-1.5">Inicio</label>
                                     <TextInput
                                         id="break_start_time"
                                         v-model="scheduleForm.break_start_time"
                                         type="time"
-                                        class="w-full mt-1 text-sm bg-white min-h-[44px]"
+                                        class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
                                         required
                                     />
                                     <InputError :message="scheduleForm.errors.break_start_time || scheduleAnalysis.errors.break_start_time" class="mt-1" />
                                 </div>
 
                                 <div>
-                                    <InputLabel for="break_end_time" value="Fin del descanso" class="text-xs font-medium" />
+                                    <label for="break_end_time" class="block text-xs font-medium text-[#747181] mb-1.5">Fin</label>
                                     <TextInput
                                         id="break_end_time"
                                         v-model="scheduleForm.break_end_time"
                                         type="time"
-                                        class="w-full mt-1 text-sm bg-white min-h-[44px]"
+                                        class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
                                         required
                                     />
                                     <InputError :message="scheduleForm.errors.break_end_time || scheduleAnalysis.errors.break_end_time" class="mt-1" />
@@ -738,242 +828,269 @@ const formatCurrency = (val) => {
                             </div>
                         </div>
 
-                        <!-- Grupo 3: Recepción de pedidos -->
-                        <div class="space-y-2">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                                <i class="fa-solid fa-cart-shopping text-slate-400"></i>
-                                <span>Recepción de pedidos</span>
-                            </h3>
-                            <div>
-                                <InputLabel
-                                    for="order_cutoff_advance_minutes"
-                                    :value="`Dejar de recibir pedidos ${scheduleForm.order_cutoff_advance_minutes || 60} minutos antes del cierre`"
-                                    class="text-xs font-semibold text-slate-800"
-                                />
-                                <div class="relative mt-1 max-w-xs">
+                        <!-- Corte de pedidos -->
+                        <div class="pt-4 border-t border-[#E9E7F0] space-y-2.5">
+                            <label for="order_cutoff_advance_minutes" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638]">
+                                <ShoppingBag class="w-3.5 h-3.5 text-[#0071BA]" />
+                                Corte antes del cierre
+                            </label>
+
+                            <div class="flex flex-wrap items-center gap-2.5">
+                                <div class="relative w-32">
                                     <TextInput
                                         id="order_cutoff_advance_minutes"
                                         v-model="scheduleForm.order_cutoff_advance_minutes"
                                         type="number"
                                         min="0"
-                                        class="w-full text-sm pl-4 pr-16 min-h-[44px]"
+                                        max="1440"
+                                        class="w-full pl-3.5 pr-11 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
                                         required
                                     />
-                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs">
-                                        minutos
-                                    </div>
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-xs">min</span>
                                 </div>
-                                <p class="text-[11px] text-slate-500 mt-1">
-                                    Aplica exclusivamente al cierre de la jornada para permitir la preparación y entrega en ruta.
-                                </p>
-                                <InputError :message="scheduleForm.errors.order_cutoff_advance_minutes || scheduleAnalysis.errors.order_cutoff_advance_minutes" class="mt-1" />
+
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <button
+                                        v-for="mins in cutoffQuickOptions"
+                                        :key="mins"
+                                        type="button"
+                                        @click="scheduleForm.order_cutoff_advance_minutes = mins"
+                                        class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                        :class="Number(scheduleForm.order_cutoff_advance_minutes) === mins
+                                            ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                                            : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                    >
+                                        {{ mins }} min
+                                    </button>
+                                </div>
                             </div>
+                            <InputError :message="scheduleForm.errors.order_cutoff_advance_minutes || scheduleAnalysis.errors.order_cutoff_advance_minutes" />
                         </div>
-
-                        <!-- Botón de guardado -->
-                        <div class="pt-4 border-t border-slate-100 flex items-center justify-end">
-                            <PrimaryButton
-                                type="submit"
-                                :disabled="scheduleForm.processing || !scheduleAnalysis.isValid"
-                                class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 min-h-[44px] bg-[#0E1E42] hover:bg-[#142858]"
-                            >
-                                <i v-if="scheduleForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                                <i v-else class="fa-solid fa-floppy-disk text-xs"></i>
-                                <span>Guardar horario</span>
-                            </PrimaryButton>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Columna de resumen (5 columnas en escritorio) -->
-                <div class="lg:col-span-5 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-4 sm:space-y-5">
-                    <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-                            <i class="fa-solid fa-eye text-blue-900 text-xs"></i>
-                            <span>{{ isScheduleFormDirty ? 'Vista previa de los cambios' : 'Vista previa del horario' }}</span>
-                        </h3>
-                        <span
-                            class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md"
-                            :class="isScheduleFormDirty ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-slate-100 text-slate-600'"
-                        >
-                            {{ isScheduleFormDirty ? 'Sin guardar' : 'En vivo' }}
-                        </span>
                     </div>
 
-                    <!-- Estado con error de coherencia -->
+                    <!-- Pie -->
+                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                        <span
+                            class="text-xs inline-flex items-center gap-1.5"
+                            :class="!scheduleAnalysis.isValid ? 'text-[#E82147] font-semibold' : (isScheduleFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium')"
+                        >
+                            <AlertTriangle v-if="!scheduleAnalysis.isValid" class="w-3.5 h-3.5" />
+                            <span v-else-if="isScheduleFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                            <CheckCircle2 v-else class="w-3.5 h-3.5" />
+                            {{ !scheduleAnalysis.isValid ? 'Horario inválido' : (isScheduleFormDirty ? 'Cambios sin guardar' : 'Horario vigente') }}
+                        </span>
+
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="isScheduleFormDirty"
+                                type="button"
+                                @click="resetScheduleForm"
+                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                            >
+                                <RotateCcw class="w-3.5 h-3.5" />
+                                Restablecer
+                            </button>
+
+                            <button
+                                type="submit"
+                                :disabled="scheduleForm.processing || !scheduleAnalysis.isValid"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-50 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
+                            >
+                                <Save class="w-3.5 h-3.5" />
+                                {{ scheduleForm.processing ? 'Guardando...' : 'Guardar horario' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Línea de tiempo compacta -->
+                <div class="lg:col-span-5 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] p-5 space-y-4">
                     <div
                         v-if="!scheduleAnalysis.isValid"
-                        class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 sm:p-4 text-amber-900 space-y-2 text-xs"
+                        class="bg-[#FCECEF] border border-[#F6C8D2] rounded-xl p-4 text-[#B91C3C] space-y-1.5 text-xs"
                     >
-                        <div class="flex items-center gap-2 font-bold text-amber-950">
-                            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
-                            <span>Horario con inconsistencias</span>
-                        </div>
-                        <ul class="list-disc list-inside space-y-1 text-amber-900/90 font-medium">
-                            <li v-for="(err, key) in scheduleAnalysis.errors" :key="key">
-                                {{ err }}
-                            </li>
+                        <p class="font-bold flex items-center gap-1.5">
+                            <AlertTriangle class="w-4 h-4 shrink-0" />
+                            Ajusta las franjas horarias
+                        </p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <li v-for="(err, key) in scheduleAnalysis.errors" :key="key">{{ err }}</li>
                         </ul>
                     </div>
 
-                    <!-- Resumen limpio y estructurado -->
-                    <div v-else class="space-y-4">
-                        <!-- Destacado: Pedidos hasta las XX:XX -->
-                        <div class="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-2.5 min-w-0">
-                                <div class="w-8 h-8 rounded-lg bg-blue-900 text-white flex items-center justify-center shrink-0">
-                                    <i class="fa-solid fa-cart-arrow-down text-xs"></i>
-                                </div>
-                                <div class="min-w-0">
-                                    <span class="text-xs font-bold text-blue-900 block truncate">
-                                        Pedidos hasta las {{ scheduleAnalysis.cutoffTime }}
-                                    </span>
-                                    <span class="text-[11px] text-blue-800/80 block truncate">
-                                        Límite de recepción por la tarde
-                                    </span>
-                                </div>
+                    <template v-else>
+                        <div class="p-3.5 rounded-xl bg-[#E9F3F8] border border-[#BDDDF0] flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-[#0071BA] text-white flex items-center justify-center shrink-0">
+                                <ShoppingBag class="w-4 h-4" />
                             </div>
-                            <span class="text-[11px] font-semibold text-slate-500 shrink-0">
-                                Lunes a domingo
-                            </span>
+                            <div>
+                                <p class="text-sm font-bold text-[#1E1545] tabular-nums">
+                                    Pedidos hasta las {{ scheduleAnalysis.cutoffTime }}
+                                </p>
+                                <p class="text-[11px] text-[#0071BA]">Lunes a domingo</p>
+                            </div>
                         </div>
 
-                        <!-- Tabla comparativa: Atención vs Descanso vs Recepción de pedidos -->
-                        <div class="overflow-hidden rounded-xl border border-slate-200">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
-                                    <tr>
-                                        <th scope="col" class="py-2.5 px-3 font-bold">Concepto</th>
-                                        <th scope="col" class="py-2.5 px-3 font-bold">Horario</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 font-mono text-[11px] sm:text-xs">
-                                    <tr class="hover:bg-slate-50/50">
-                                        <td class="py-2.5 px-3 font-sans font-medium text-slate-800">
-                                            Atención en sucursal
-                                        </td>
-                                        <td class="py-2.5 px-3 text-slate-900 font-semibold">
-                                            {{ scheduleAnalysis.branchService }}
-                                        </td>
-                                    </tr>
-                                    <tr class="hover:bg-slate-50/50 bg-slate-50/30">
-                                        <td class="py-2.5 px-3 font-sans font-medium text-slate-700">
-                                            Descanso
-                                        </td>
-                                        <td class="py-2.5 px-3 text-amber-700 font-semibold">
-                                            {{ scheduleAnalysis.breakPeriod }}
-                                        </td>
-                                    </tr>
-                                    <tr class="hover:bg-slate-50/50 bg-blue-50/30">
-                                        <td class="py-2.5 px-3 font-sans font-bold text-blue-950">
-                                            Recepción de pedidos
-                                        </td>
-                                        <td class="py-2.5 px-3 text-blue-900 font-bold">
-                                            {{ scheduleAnalysis.orderReception }}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div class="space-y-2.5 pt-1">
+                            <div class="flex justify-between text-[11px] font-semibold text-[#747181] tabular-nums">
+                                <span>{{ scheduleForm.opening_time }}</span>
+                                <span>{{ scheduleForm.break_start_time }}–{{ scheduleForm.break_end_time }}</span>
+                                <span>{{ scheduleForm.closing_time }}</span>
+                            </div>
+
+                            <div class="h-3 w-full rounded-full overflow-hidden flex bg-[#F4F3F8] gap-0.5 p-0.5 border border-[#E9E7F0]">
+                                <div
+                                    v-for="seg in scheduleAnalysis.segments"
+                                    :key="seg.key"
+                                    :style="{ width: `${seg.pct}%` }"
+                                    :title="seg.label"
+                                    class="h-full rounded-full transition-all duration-300"
+                                    :class="seg.colorClass"
+                                />
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#747181]">
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#0071BA]" />Mañana</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#D99A27]" />Descanso</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#26845B]" />Pedidos tarde</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#1E1545]" />Entregas</span>
+                            </div>
                         </div>
-                    </div>
+                    </template>
                 </div>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 3. PESTAÑA: FIADO (LÍMITE DE BOTELLONES PENDIENTES) -->
+            <!-- 3. LÍMITE DE FIADO -->
             <!-- ========================================================================= -->
-            <div v-if="activeTab === 'debt'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <!-- Columna del formulario (7 columnas en escritorio) -->
-                <div class="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-5 sm:space-y-6">
-                    <div class="border-b border-slate-100 pb-3 sm:pb-4">
-                        <h2 class="text-base font-bold text-slate-900">
-                            Límite de fiado
-                        </h2>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Control general de botellones pendientes de pago por cliente.
+            <div v-if="activeTab === 'debt'" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <!-- Editor -->
+                <form
+                    @submit.prevent="submitDebtLimit"
+                    class="lg:col-span-7 bg-white border border-[#E9E7F0] border-t-4 border-t-[#26845B] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                >
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <div class="space-y-3">
+                            <label for="debt_limit" class="block text-xs font-semibold text-[#292638]">
+                                Máximo de botellones pendientes por cliente
+                            </label>
+
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div class="inline-flex items-center rounded-xl border border-[#E9E7F0] bg-[#F4F3F8] p-1 gap-1">
+                                    <button
+                                        type="button"
+                                        @click="adjustDebtLimit(-1)"
+                                        :disabled="Number(debtLimitForm.max_pending_payment_bottles) <= 0"
+                                        class="w-10 h-10 rounded-lg bg-white text-[#292638] border border-[#E9E7F0] hover:bg-[#EEEAF7] disabled:opacity-40 transition cursor-pointer inline-flex items-center justify-center"
+                                        title="Disminuir en 1"
+                                    >
+                                        <Minus class="w-4 h-4" />
+                                    </button>
+
+                                    <TextInput
+                                        id="debt_limit"
+                                        v-model="debtLimitForm.max_pending_payment_bottles"
+                                        type="number"
+                                        min="0"
+                                        class="w-24 text-center text-lg font-extrabold text-[#1E1545] tabular-nums bg-white border-[#E9E7F0] focus:border-[#26845B] focus:ring-[#26845B]/15 rounded-lg min-h-[40px]"
+                                        required
+                                    />
+
+                                    <button
+                                        type="button"
+                                        @click="adjustDebtLimit(1)"
+                                        class="w-10 h-10 rounded-lg bg-white text-[#292638] border border-[#E9E7F0] hover:bg-[#EEEAF7] transition cursor-pointer inline-flex items-center justify-center"
+                                        title="Aumentar en 1"
+                                    >
+                                        <Plus class="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <span class="text-xs font-medium text-[#747181]">
+                                    {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón de 20 L' : 'botellones de 20 L' }}
+                                </span>
+                            </div>
+
+                            <!-- Valores rápidos -->
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button
+                                    v-for="preset in debtQuickOptions"
+                                    :key="preset"
+                                    type="button"
+                                    @click="debtLimitForm.max_pending_payment_bottles = preset"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                    :class="Number(debtLimitForm.max_pending_payment_bottles) === preset
+                                        ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                                        : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                >
+                                    {{ preset === 0 ? 'Sin fiado (0)' : preset }}
+                                </button>
+                            </div>
+
+                            <InputError :message="debtLimitForm.errors.max_pending_payment_bottles" />
+                        </div>
+
+                        <p class="text-xs text-[#747181] bg-[#F4F3F8] border border-[#E9E7F0] rounded-xl px-4 py-3">
+                            Al llegar a este límite, el cliente podrá seguir recibiendo pedidos si paga en la entrega.
                         </p>
                     </div>
 
-                    <form @submit.prevent="submitDebtLimit" class="space-y-4 sm:space-y-5">
-                        <div class="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-                            <InputLabel
-                                for="debt_limit"
-                                value="Máximo de botellones pendientes de pago por cliente"
-                                class="text-xs font-bold text-slate-800"
-                            />
-                            <div class="relative mt-1 max-w-xs">
-                                <TextInput
-                                    id="debt_limit"
-                                    v-model="debtLimitForm.max_pending_payment_bottles"
-                                    type="number"
-                                    min="0"
-                                    class="w-full text-sm font-mono font-bold text-slate-900 bg-white min-h-[44px]"
-                                    required
-                                />
-                            </div>
-                            <p class="text-xs text-slate-600 leading-normal">
-                                Al alcanzar el límite, el cliente puede recibir nuevos pedidos con pago inmediato.
-                            </p>
-                            <InputError :message="debtLimitForm.errors.max_pending_payment_bottles" class="mt-1" />
-                        </div>
+                    <!-- Pie -->
+                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                        <span class="text-xs inline-flex items-center gap-1.5" :class="isDebtFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium'">
+                            <span v-if="isDebtFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                            <CheckCircle2 v-else class="w-3.5 h-3.5" />
+                            {{ isDebtFormDirty ? 'Cambios sin guardar' : 'Política vigente' }}
+                        </span>
 
-                        <!-- Botón de guardado -->
-                        <div class="pt-4 border-t border-slate-100 flex items-center justify-end">
-                            <PrimaryButton
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="isDebtFormDirty"
+                                type="button"
+                                @click="resetDebtLimitForm"
+                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                            >
+                                <RotateCcw class="w-3.5 h-3.5" />
+                                Restablecer
+                            </button>
+
+                            <button
                                 type="submit"
                                 :disabled="debtLimitForm.processing"
-                                class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 min-h-[44px] bg-[#0E1E42] hover:bg-[#142858]"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
                             >
-                                <i v-if="debtLimitForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                                <i v-else class="fa-solid fa-floppy-disk text-xs"></i>
-                                <span>Guardar límite de fiado</span>
-                            </PrimaryButton>
+                                <Save class="w-3.5 h-3.5" />
+                                {{ debtLimitForm.processing ? 'Guardando...' : 'Guardar límite' }}
+                            </button>
                         </div>
-                    </form>
-                </div>
+                    </div>
+                </form>
 
-                <!-- Columna de resumen (5 columnas en escritorio) -->
-                <div class="lg:col-span-5 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 space-y-4">
-                    <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-                            <i class="fa-solid fa-eye text-blue-900 text-xs"></i>
-                            <span>{{ isDebtFormDirty ? 'Vista previa de los cambios' : 'Resumen del límite' }}</span>
-                        </h3>
-                        <span
-                            class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md"
-                            :class="isDebtFormDirty ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-slate-100 text-slate-600'"
-                        >
-                            {{ isDebtFormDirty ? 'Sin guardar' : 'Vigente' }}
+                <!-- Resumen compacto -->
+                <div class="lg:col-span-5 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] p-5 space-y-3">
+                    <div class="p-4 rounded-xl border flex items-center justify-between gap-3" :class="debtPolicyMeta.boxClass">
+                        <div>
+                            <span class="text-xs text-[#747181] block">Tope actual</span>
+                            <div class="flex items-baseline gap-1.5 mt-0.5">
+                                <span class="text-3xl font-black text-[#1E1545] tabular-nums">
+                                    {{ debtLimitForm.max_pending_payment_bottles || 0 }}
+                                </span>
+                                <span class="text-xs font-semibold text-[#292638]">
+                                    {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón' : 'botellones' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0" :class="debtPolicyMeta.badgeClass">
+                            {{ debtPolicyMeta.label }}
                         </span>
                     </div>
 
-                    <div class="p-4 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
-                        <span class="text-xs text-slate-500 font-medium">Límite configurado</span>
-                        <div class="flex items-baseline gap-2">
-                            <span class="text-3xl font-black text-slate-900 font-mono">
-                                {{ debtLimitForm.max_pending_payment_bottles }}
-                            </span>
-                            <span class="text-xs font-semibold text-slate-600">botellones</span>
-                        </div>
-                    </div>
-
-                    <div class="text-xs text-slate-600 leading-relaxed space-y-2">
-                        <div class="flex items-start gap-2">
-                            <i class="fa-solid fa-shield-halved text-blue-900 text-xs mt-0.5 shrink-0"></i>
-                            <span>
-                                Protege la cartera de clientes evitando que un domicilio acumule envases sin liquidar.
-                            </span>
-                        </div>
-                        <div class="flex items-start gap-2">
-                            <i class="fa-solid fa-circle-check text-emerald-600 text-xs mt-0.5 shrink-0"></i>
-                            <span>
-                                No interrumpe el abastecimiento: si el cliente alcanza este límite, el repartidor puede cobrar en efectivo o transferencia en la entrega para surtir el pedido.
-                            </span>
-                        </div>
-                    </div>
+                    <p class="text-xs text-[#747181] leading-relaxed">
+                        {{ debtPolicyMeta.description }}
+                    </p>
                 </div>
             </div>
-
         </div>
     </AuthenticatedLayout>
 </template>

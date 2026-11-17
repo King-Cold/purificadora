@@ -13,7 +13,6 @@ use App\Models\OrderCharge;
 use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
 use App\Models\RouteStop;
-use App\Models\TruckInventory;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;

@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\BottleCustodyMovement;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\PlantInventory;
 use App\Services\PlantInventoryService;
 use App\Services\TruckInventoryService;
 use Illuminate\Http\Request;

@@ -11,7 +11,6 @@ use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
 use App\Models\User;
 use DateTimeInterface;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class OrderService

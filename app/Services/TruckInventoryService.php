@@ -8,7 +8,6 @@ use App\Models\BottleIncident;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\OrderStatusHistory;
 use App\Models\TruckInventory;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;

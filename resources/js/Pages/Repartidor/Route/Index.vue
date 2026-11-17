@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { confirmAction } from '@/utils/swal';
 
 const props = defineProps({
     activeRoute: {
@@ -16,8 +17,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.route || page.props.errors?.stop || null);
+const formError = computed(() => page.props.errors?.route || page.props.errors?.stop || null);
 
 // Iniciar ruta
 const startForm = useForm({});
@@ -39,9 +39,16 @@ const submitResume = () => {
 
 // Completar ruta
 const completeForm = useForm({});
-const submitComplete = () => {
+const submitComplete = async () => {
     if (!props.activeRoute) return;
-    if (confirm('¿Confirmas que has concluido todas las paradas y deseas cerrar la hoja de ruta?')) {
+    const confirmed = await confirmAction({
+        title: '¿Cerrar jornada de reparto?',
+        text: '¿Confirmas que has concluido todas las paradas y deseas cerrar la hoja de ruta?',
+        confirmText: 'Sí, finalizar',
+        icon: 'question',
+    });
+
+    if (confirmed) {
         completeForm.post(route('repartidor.route.complete', props.activeRoute.id), {
             preserveScroll: true,
         });
@@ -266,21 +273,12 @@ const getStopStatusBadge = (status) => {
                 </Link>
             </div>
 
-            <!-- Mensajes Flash -->
             <div
-                v-if="flashSuccess"
-                class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-lg text-emerald-600 mt-0.5"></i>
-                <div class="flex-1 font-medium">{{ flashSuccess }}</div>
-            </div>
-
-            <div
-                v-if="flashError"
+                v-if="formError"
                 class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3 shadow-2xs"
             >
                 <i class="fa-solid fa-triangle-exclamation text-lg text-rose-600 mt-0.5"></i>
-                <div class="flex-1 font-medium">{{ flashError }}</div>
+                <div class="flex-1 font-medium">{{ formError }}</div>
             </div>
 
             <!-- ========================================================================= -->

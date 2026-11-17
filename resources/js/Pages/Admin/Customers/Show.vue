@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { confirmAction } from '@/utils/swal';
 
 const props = defineProps({
     customer: {
@@ -14,17 +15,33 @@ const props = defineProps({
     },
 });
 
-const deleteAddress = (address) => {
-    if (confirm('¿Está seguro de eliminar el domicilio de este cliente?')) {
+const deleteAddress = async (address) => {
+    const confirmed = await confirmAction({
+        title: '¿Eliminar domicilio?',
+        text: '¿Está seguro de eliminar el domicilio de este cliente?',
+        confirmText: 'Sí, eliminar',
+        icon: 'warning',
+        danger: true,
+    });
+
+    if (confirmed) {
         router.delete(route('admin.customers.addresses.destroy', [props.customer.id, address.id]), {
             preserveScroll: true,
         });
     }
 };
 
-const deleteCustomer = () => {
+const deleteCustomer = async () => {
     const displayName = props.customer.name || props.customer.nickname || props.customer.code;
-    if (confirm(`¿Estás seguro de que deseas eliminar al cliente "${displayName}"? Esta acción dará de baja al cliente del sistema.`)) {
+    const confirmed = await confirmAction({
+        title: '¿Eliminar cliente?',
+        text: `¿Estás seguro de que deseas eliminar al cliente "${displayName}"? Esta acción dará de baja al cliente del sistema.`,
+        confirmText: 'Sí, borrar cliente',
+        icon: 'warning',
+        danger: true,
+    });
+
+    if (confirmed) {
         router.delete(route('admin.customers.destroy', props.customer.id));
     }
 };
@@ -118,33 +135,6 @@ const getInitials = (name) => {
 
         <div class="py-8">
             <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-6">
-
-                <!-- Mensaje de Éxito Flash -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3 shadow-xs"
-                >
-                    <i class="fa-solid fa-circle-check text-emerald-600 shrink-0"></i>
-                    <span class="text-sm font-medium">{{ $page.props.flash.success }}</span>
-                </div>
-
-                <!-- Mensaje de Advertencia Flash -->
-                <div
-                    v-if="$page.props.flash?.warning"
-                    class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3 shadow-xs"
-                >
-                    <i class="fa-solid fa-triangle-exclamation text-amber-600 shrink-0"></i>
-                    <span class="text-sm font-medium">{{ $page.props.flash.warning }}</span>
-                </div>
-
-                <!-- Mensaje de Error Flash -->
-                <div
-                    v-if="$page.props.flash?.error"
-                    class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 shadow-xs"
-                >
-                    <i class="fa-solid fa-circle-xmark text-rose-600 shrink-0"></i>
-                    <span class="text-sm font-medium">{{ $page.props.flash.error }}</span>
-                </div>
 
                 <!-- ============================================================== -->
                 <!-- CASO A: FICHA DE CLIENTES CON CUENTA (has_account = true)     -->

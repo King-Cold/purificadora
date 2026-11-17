@@ -111,14 +111,6 @@ class BottlePresentation extends Model
     }
 
     /**
-     * Scope para filtrar presentaciones disponibles a domicilio.
-     */
-    public function scopeAvailableForDelivery(Builder $query): Builder
-    {
-        return $query->where('is_available_for_delivery', true);
-    }
-
-    /**
      * Capacidad formateada de forma legible (ej. 20 Litros).
      */
     protected function formattedCapacity(): Attribute
@@ -175,63 +167,6 @@ class BottlePresentation extends Model
                 }
                 return '/storage/' . $this->image_path;
             }
-        );
-    }
-
-    /**
-     * Comprueba si existe una presentación duplicada considerando mayúsculas/minúsculas y espacios.
-     */
-    public static function checkDuplicate(string $name, $capacity, string $unit, ?int $ignoreId = null): ?string
-    {
-        $normalizedName = mb_strtolower(trim($name));
-
-        $nameQuery = static::query()->whereRaw('LOWER(TRIM(name)) = ?', [$normalizedName]);
-        if ($ignoreId) {
-            $nameQuery->where('id', '!=', $ignoreId);
-        }
-        if ($nameQuery->exists()) {
-            return 'name';
-        }
-
-        $capacityQuery = static::query()->where('capacity', self::CAPACITY_LITERS);
-        if ($ignoreId) {
-            $capacityQuery->where('id', '!=', $ignoreId);
-        }
-        if ($capacityQuery->exists()) {
-            return 'capacity_unit';
-        }
-
-        return null;
-    }
-
-    /**
-     * Evalúa si una capacidad y unidad de medida equivalen exactamente a 20 litros.
-     */
-    public static function isEquivalentToTwentyLiters($capacity, string $unit): bool
-    {
-        $numeric = (float) $capacity;
-        $normalizedUnit = mb_strtolower(trim($unit));
-
-        // Litros
-        if (in_array($normalizedUnit, ['l', 'lt', 'lts', 'litro', 'litros'])) {
-            return abs($numeric - 20.0) < 0.001;
-        }
-
-        // Mililitros
-        if (in_array($normalizedUnit, ['ml', 'mililitros', 'mililitro'])) {
-            return abs($numeric - 20000.0) < 0.001;
-        }
-
-        return false;
-    }
-
-    /**
-     * Accesor para saber si la presentación equivale a 20 litros.
-     */
-    protected function isTwentyLiters(): Attribute
-    {
-        return Attribute::make(
-            get: fn (): bool => true
         );
     }
 }

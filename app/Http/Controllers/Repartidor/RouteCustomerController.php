@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Repartidor;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\DeliveryRoute;
-use App\Services\CustomerCodeGenerator;
 use App\Services\DebtAndCreditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

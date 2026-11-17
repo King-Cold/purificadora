@@ -13,7 +13,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['close', 'toggle']);
+const emit = defineEmits(['close']);
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user || {});
@@ -32,29 +32,291 @@ const isRouteActive = (pattern) => {
     }
 };
 
-const isTopDashboardActive = computed(() => {
-    if (isAdmin.value) {
-        return isRouteActive('admin.dashboard');
-    }
-    if (isRepartidor.value) {
-        return isRouteActive('repartidor.dashboard');
-    }
-    if (isPlanta.value) {
-        return isRouteActive('planta.dashboard');
-    }
-    return isRouteActive('dashboard');
-});
-
-const getRouteUrl = (name) => {
+const getRouteUrl = (name, params = undefined) => {
     try {
         if (name && route().has(name)) {
-            return route(name);
+            return route(name, params);
         }
     } catch (e) {
         // fallback
     }
     return '#';
 };
+
+const currentUrlTab = computed(() => {
+    const url = page.url || '';
+    const queryIndex = url.indexOf('?');
+    if (queryIndex === -1) return null;
+    const params = new URLSearchParams(url.slice(queryIndex + 1));
+    return params.get('tab');
+});
+
+const userInitials = computed(() => {
+    const name = user.value.name || '';
+    if (!name.trim()) return 'U';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+});
+
+const roleBadgeInfo = computed(() => {
+    if (isAdmin.value) {
+        return {
+            label: userRoles.value.includes('Super Admin') ? 'Super Admin' : 'Administrador',
+            icon: 'fa-solid fa-shield-halved',
+            dotClass: 'bg-[#0071BA]',
+            avatarClass: 'bg-[#2E2363] text-white',
+        };
+    }
+    if (isRepartidor.value) {
+        return {
+            label: 'Repartidor',
+            icon: 'fa-solid fa-truck-fast',
+            dotClass: 'bg-[#0071BA]',
+            avatarClass: 'bg-[#2E2363] text-white',
+        };
+    }
+    if (isPlanta.value) {
+        return {
+            label: 'Operador Planta',
+            icon: 'fa-solid fa-industry',
+            dotClass: 'bg-[#34785A]',
+            avatarClass: 'bg-[#2E2363] text-white',
+        };
+    }
+    return {
+        label: 'Portal Cliente',
+        icon: 'fa-solid fa-droplet',
+        dotClass: 'bg-[#0071BA]',
+        avatarClass: 'bg-[#2E2363] text-white',
+    };
+});
+
+const navGroups = computed(() => {
+    if (isCliente.value) {
+        return [
+            {
+                id: 'cliente-main',
+                label: 'Principal',
+                items: [
+                    {
+                        label: 'Inicio',
+                        href: getRouteUrl('dashboard'),
+                        icon: 'fa-solid fa-house',
+                        active: isRouteActive('dashboard') || isRouteActive('cliente.dashboard'),
+                    },
+                ],
+            },
+            {
+                id: 'cliente-orders',
+                label: 'Pedidos',
+                items: [
+                    {
+                        label: 'Mis pedidos',
+                        href: getRouteUrl('cliente.orders.index'),
+                        icon: 'fa-regular fa-file-lines',
+                        active: isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show'),
+                    },
+                    {
+                        label: 'Nuevo pedido',
+                        href: getRouteUrl('cliente.orders.create'),
+                        icon: 'fa-solid fa-cart-plus',
+                        active: isRouteActive('cliente.orders.create'),
+                    },
+                ],
+            },
+            {
+                id: 'cliente-account',
+                label: 'Mi cuenta',
+                items: [
+                    {
+                        label: 'Mi domicilio',
+                        href: getRouteUrl('cliente.addresses.index'),
+                        icon: 'fa-solid fa-house-chimney',
+                        active: isRouteActive('cliente.addresses.*'),
+                    },
+                    {
+                        label: 'Mi perfil',
+                        href: getRouteUrl('profile.edit'),
+                        icon: 'fa-regular fa-user',
+                        active: isRouteActive('profile.edit') || isRouteActive('cliente.profile.*'),
+                    },
+                ],
+            },
+        ];
+    }
+
+    if (isRepartidor.value && !isAdmin.value) {
+        return [
+            {
+                id: 'repartidor-main',
+                label: 'Operación en ruta',
+                items: [
+                    {
+                        label: 'Reparto',
+                        href: getRouteUrl('repartidor.reparto'),
+                        icon: 'fa-solid fa-truck',
+                        active:
+                            isRouteActive('repartidor.reparto') ||
+                            isRouteActive('repartidor.dashboard') ||
+                            isRouteActive('repartidor.stops.*') ||
+                            isRouteActive('repartidor.direct-service.*') ||
+                            isRouteActive('repartidor.route.*') ||
+                            isRouteActive('repartidor.collections.*') ||
+                            isRouteActive('repartidor.deliveries.*') ||
+                            isRouteActive('repartidor.ready-to-load.*'),
+                    },
+                    {
+                        label: 'Mi carga',
+                        href: getRouteUrl('repartidor.truck-load.index'),
+                        icon: 'fa-solid fa-boxes-stacked',
+                        active: isRouteActive('repartidor.truck-load.*'),
+                    },
+                    {
+                        label: 'Cobros',
+                        href: getRouteUrl('repartidor.debt.index'),
+                        icon: 'fa-solid fa-hand-holding-dollar',
+                        active: isRouteActive('repartidor.debt.*'),
+                    },
+                    {
+                        label: 'Clientes',
+                        href: getRouteUrl('repartidor.customers.index'),
+                        icon: 'fa-solid fa-users',
+                        active: isRouteActive('repartidor.customers.*'),
+                    },
+                ],
+            },
+        ];
+    }
+
+    if (isPlanta.value && !isAdmin.value) {
+        const inInventory = isRouteActive('planta.inventory.*');
+        return [
+            {
+                id: 'planta-main',
+                label: 'Operación Planta',
+                items: [
+                    {
+                        label: 'Llenado rápido',
+                        href: getRouteUrl('planta.quick-refill.index'),
+                        icon: 'fa-solid fa-bolt',
+                        active: isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard'),
+                    },
+                    {
+                        label: 'Fijos',
+                        href: getRouteUrl('planta.fijos.index'),
+                        icon: 'fa-solid fa-boxes-stacked',
+                        badge: pendingFixedCount.value > 0 ? pendingFixedCount.value : null,
+                        badgeTitle: 'Recepciones pendientes',
+                        active:
+                            isRouteActive('planta.fijos.*') ||
+                            isRouteActive('planta.reception.*') ||
+                            isRouteActive('planta.production.*') ||
+                            isRouteActive('planta.loads.*'),
+                    },
+                    {
+                        label: 'Cambios',
+                        href: getRouteUrl('planta.cambios.index'),
+                        icon: 'fa-solid fa-arrows-rotate',
+                        active: isRouteActive('planta.cambios.*'),
+                    },
+                ],
+            },
+            {
+                id: 'planta-more',
+                label: 'Control y Almacén',
+                items: [
+                    {
+                        label: 'Existencias',
+                        href: getRouteUrl('planta.inventory.index'),
+                        icon: 'fa-solid fa-warehouse',
+                        active: inInventory && !['incidencias', 'historial'].includes(currentUrlTab.value),
+                    },
+                    {
+                        label: 'Incidencias',
+                        href: getRouteUrl('planta.inventory.index', { tab: 'incidencias' }),
+                        icon: 'fa-solid fa-triangle-exclamation',
+                        iconTint: 'text-[#F8F0DF]',
+                        active: inInventory && currentUrlTab.value === 'incidencias',
+                    },
+                    {
+                        label: 'Historial',
+                        href: getRouteUrl('planta.inventory.index', { tab: 'historial' }),
+                        icon: 'fa-solid fa-clock-rotate-left',
+                        active: inInventory && currentUrlTab.value === 'historial',
+                    },
+                ],
+            },
+        ];
+    }
+
+    // Administrador / Super Admin / Otros roles
+    const groups = [
+        {
+            id: 'admin-main',
+            label: 'Principal',
+            items: [
+                {
+                    label: 'Dashboard',
+                    href: getRouteUrl('dashboard'),
+                    icon: 'fa-solid fa-house',
+                    active: isRouteActive('admin.dashboard') || isRouteActive('dashboard'),
+                },
+            ],
+        },
+    ];
+
+    if (isAdmin.value) {
+        groups.push(
+            {
+                id: 'admin-manage',
+                label: 'Administración',
+                items: [
+                    {
+                        label: 'Pedidos',
+                        href: getRouteUrl('admin.orders.index'),
+                        icon: 'fa-solid fa-clipboard-list',
+                        active: isRouteActive('admin.orders.*'),
+                    },
+                    {
+                        label: 'Clientes',
+                        href: getRouteUrl('admin.customers.index'),
+                        icon: 'fa-regular fa-user',
+                        active: isRouteActive('admin.customers.*'),
+                    },
+                    {
+                        label: 'Usuarios',
+                        href: getRouteUrl('admin.users.index'),
+                        icon: 'fa-solid fa-users',
+                        active: isRouteActive('admin.users.*'),
+                    },
+                    {
+                        label: 'Configuración General',
+                        href: getRouteUrl('admin.settings.index'),
+                        icon: 'fa-solid fa-gear',
+                        active: isRouteActive('admin.settings.*'),
+                    },
+                ],
+            },
+            {
+                id: 'admin-supervision',
+                label: 'Supervisión',
+                items: [
+                    {
+                        label: 'Inventario de cambios',
+                        href: getRouteUrl('admin.exchange-inventory.index'),
+                        icon: 'fa-solid fa-bottle-water',
+                        active: isRouteActive('admin.exchange-inventory.*'),
+                    },
+                ],
+            }
+        );
+    }
+
+    return groups;
+});
 
 const handleLinkClick = () => {
     if (props.mobileOpen) {
@@ -78,9 +340,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <!-- ========================================================================= -->
-    <!-- 1. OVERLAY MÓVIL (BACKDROP OSCURECIDO) -->
-    <!-- ========================================================================= -->
+    <!-- Overlay móvil suave -->
     <transition
         enter-active-class="transition-opacity duration-200 ease-out"
         enter-from-class="opacity-0"
@@ -91,640 +351,197 @@ onUnmounted(() => {
     >
         <div
             v-if="mobileOpen"
-            class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden"
+            class="fixed inset-0 bg-[#1E1545]/40 backdrop-blur-[2px] z-40 lg:hidden"
             @click="$emit('close')"
             aria-hidden="true"
         />
     </transition>
 
-    <!-- ========================================================================= -->
-    <!-- 2. SIDEBAR CONTENEDOR (256 PX EXPANDIDO / 80 PX CONTRAÍDO) -->
-    <!-- ========================================================================= -->
+    <!-- Sidebar con identidad corporativa morado profundo (#1E1545) -->
     <aside
-        class="fixed inset-y-0 left-0 z-40 flex flex-col bg-[#f8fafc] border-r border-slate-200/80 select-none transition-all duration-300 ease-in-out"
+        class="fixed top-0 bottom-0 left-0 z-40 min-h-screen h-[100dvh] flex flex-col bg-[#1E1545] border-r border-[#2E2363] select-none transition-[width,transform] duration-300 ease-in-out"
         :class="[
-            mobileOpen ? 'translate-x-0 shadow-xl w-64' : '-translate-x-full lg:translate-x-0',
+            mobileOpen
+                ? 'translate-x-0 shadow-[8px_0_32px_-8px_rgba(30,21,69,0.28)] w-64'
+                : '-translate-x-full lg:translate-x-0',
             collapsed ? 'lg:w-20' : 'lg:w-64'
         ]"
         aria-label="Menú principal de navegación"
     >
-        <!-- CABECERA: Logotipo original proporcionado y botón de cierre en móvil -->
+        <!-- Cabecera de Marca -->
         <div
-            class="h-16 flex items-center border-b border-slate-200/80 shrink-0 bg-[#f8fafc]"
+            class="h-16 flex items-center border-b border-white/10 shrink-0"
             :class="collapsed ? 'justify-center px-3' : 'justify-between px-5'"
         >
-            <!-- MODO CONTRAÍDO: Isotipo / Marca compacta de Puritronic (elimina el doble botón de menú) -->
+            <!-- Modo contraído: Isotipo limpio -->
             <Link
                 v-if="collapsed"
                 :href="route('dashboard')"
                 @click="handleLinkClick"
-                class="hidden lg:flex w-10 h-10 rounded-2xl bg-blue-900 text-white items-center justify-center transition shadow-2xs hover:bg-blue-800 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                class="hidden lg:flex w-10 h-10 rounded-xl bg-white/10 text-white hover:bg-[#0071BA] items-center justify-center transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-white/30"
                 title="Puritronic - Ir al inicio"
                 aria-label="Puritronic"
             >
-                <i class="fa-solid fa-droplet text-lg text-sky-400"></i>
+                <i class="fa-solid fa-droplet text-base"></i>
             </Link>
 
-            <!-- MODO EXPANDIDO: Logotipo original sin deformar y botón móvil de cierre -->
+            <!-- Modo expandido: Logotipo oficial sobre fondo limpio para contraste -->
             <template v-else>
                 <Link
                     :href="route('dashboard')"
                     @click="handleLinkClick"
-                    class="flex items-center min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-900/20 rounded-lg p-0.5"
+                    class="flex items-center min-w-0 rounded-xl bg-white px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-white/35"
                 >
                     <img
                         src="/images/logo.png"
                         alt="Puritronic"
-                        class="h-8 w-auto max-w-[155px] object-contain shrink-0"
+                        class="h-7 w-auto max-w-[140px] object-contain shrink-0"
                     />
                 </Link>
 
-                <!-- Botón de cerrar visible únicamente en móviles -->
                 <button
                     v-if="mobileOpen"
                     @click="$emit('close')"
                     type="button"
-                    class="lg:hidden h-9 w-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition focus:outline-none focus:ring-2 focus:ring-blue-900/20 cursor-pointer"
+                    class="lg:hidden h-8 w-8 rounded-lg flex items-center justify-center text-[#DAD6E8] hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/25"
                     title="Cerrar menú"
                     aria-label="Cerrar menú"
                 >
-                    <i class="fa-solid fa-xmark text-base"></i>
+                    <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
             </template>
         </div>
 
-        <!-- LISTADO DE NAVEGACIÓN -->
+        <!-- Lista de Navegación -->
         <div
-            class="flex-1 overflow-y-auto py-5"
-            :class="collapsed ? 'px-2.5 space-y-4' : 'px-3.5 space-y-5'"
+            class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-5"
+            :class="collapsed ? 'px-2.5 space-y-4' : 'px-3.5 space-y-6'"
         >
-
-            <!-- ============================================================= -->
-            <!-- NAVEGACIÓN DEL CLIENTE                                       -->
-            <!-- ============================================================= -->
-            <template v-if="isCliente">
-                <!-- 1. INICIO (Sin encabezado "Principal") -->
-                <div>
-                    <nav class="space-y-1">
-                        <Link
-                            :href="route('dashboard')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('dashboard') || isRouteActive('cliente.dashboard')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Inicio' : ''"
-                            aria-label="Inicio"
-                        >
-                            <span
-                                v-if="isRouteActive('dashboard') || isRouteActive('cliente.dashboard')"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i
-                                    class="fa-solid fa-house transition-colors"
-                                    :class="isRouteActive('dashboard') || isRouteActive('cliente.dashboard') ? 'text-blue-900' : 'text-slate-400 group-hover:text-slate-700'"
-                                ></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Inicio</span>
-                        </Link>
-                    </nav>
-                </div>
-
-                <!-- 2. GRUPO: PEDIDOS (Etiqueta discreta) -->
-                <div>
-                    <div v-if="!collapsed" class="px-3 mb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-                        Pedidos
+            <div v-for="(group, gIdx) in navGroups" :key="group.id">
+                <!-- Categoría de navegación -->
+                <template v-if="group.label">
+                    <div
+                        v-if="!collapsed"
+                        class="px-3 mb-2 text-[11px] font-semibold tracking-[0.04em] text-[#A6A3B2]"
+                    >
+                        {{ group.label }}
                     </div>
-                    <div v-else class="w-6 mx-auto my-2 border-t border-slate-200" title="Pedidos"></div>
+                    <div
+                        v-else-if="gIdx > 0"
+                        class="w-7 mx-auto my-2 border-t border-white/10"
+                        :title="group.label"
+                    ></div>
+                </template>
 
-                    <nav class="space-y-1">
-                        <!-- Mis pedidos -->
-                        <Link
-                            :href="route('cliente.orders.index')"
-                            @click="handleLinkClick"
+                <!-- Enlaces -->
+                <nav class="space-y-1">
+                    <Link
+                        v-for="item in group.items"
+                        :key="item.label"
+                        :href="item.href"
+                        @click="handleLinkClick"
+                        :title="collapsed ? item.label : ''"
+                        :aria-label="item.label"
+                        :aria-current="item.active ? 'page' : undefined"
+                        :class="[
+                            'group relative flex items-center rounded-xl text-[13.5px] transition-colors duration-150 min-h-[42px] focus:outline-none focus:ring-2 focus:ring-white/25',
+                            collapsed ? 'justify-center w-11 h-11 mx-auto' : 'gap-3 px-3 py-2',
+                            item.active
+                                ? 'bg-white/[0.13] text-white font-semibold'
+                                : 'text-[#DAD6E8] hover:text-white hover:bg-white/[0.06] font-medium'
+                        ]"
+                    >
+                        <!-- Indicador sutil activo -->
+                        <span
+                            v-if="item.active && !collapsed"
+                            class="absolute left-0 top-2.5 bottom-2.5 w-[3px] bg-[#E82147] rounded-r-full"
+                        ></span>
+
+                        <!-- Icono consistente -->
+                        <div
                             :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
+                                'relative flex items-center justify-center shrink-0 rounded-lg transition-colors duration-150',
+                                collapsed ? 'w-9 h-9 text-sm' : 'w-7 h-7 text-[13px]',
+                                item.active
+                                    ? 'text-white'
+                                    : 'group-hover:text-white',
+                                !item.active && (item.iconTint || 'text-[#A6A3B2]')
                             ]"
-                            :title="collapsed ? 'Mis pedidos' : ''"
-                            aria-label="Mis pedidos"
                         >
+                            <i :class="item.icon"></i>
+
+                            <!-- Badge en modo contraído -->
                             <span
-                                v-if="isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show')"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i
-                                    class="fa-regular fa-file-lines transition-colors"
-                                    :class="isRouteActive('cliente.orders.index') || isRouteActive('cliente.orders.show') ? 'text-blue-900' : 'text-slate-400 group-hover:text-slate-700'"
-                                ></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Mis pedidos</span>
-                        </Link>
-
-                        <!-- Nuevo pedido -->
-                        <Link
-                            :href="route('cliente.orders.create')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('cliente.orders.create')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Nuevo pedido' : ''"
-                            aria-label="Nuevo pedido"
-                        >
-                            <span
-                                v-if="isRouteActive('cliente.orders.create')"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i
-                                    class="fa-solid fa-cart-plus transition-colors"
-                                    :class="isRouteActive('cliente.orders.create') ? 'text-blue-900' : 'text-slate-400 group-hover:text-slate-700'"
-                                ></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Nuevo pedido</span>
-                        </Link>
-                    </nav>
-                </div>
-
-                <!-- 3. GRUPO: MI CUENTA (Etiqueta discreta) -->
-                <div>
-                    <div v-if="!collapsed" class="px-3 mb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-                        Mi cuenta
-                    </div>
-                    <div v-else class="w-6 mx-auto my-2 border-t border-slate-200" title="Mi cuenta"></div>
-
-                    <nav class="space-y-1">
-                        <!-- Mi domicilio -->
-                        <Link
-                            :href="route('cliente.addresses.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('cliente.addresses.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Mi domicilio' : ''"
-                            aria-label="Mi domicilio"
-                        >
-                            <span
-                                v-if="isRouteActive('cliente.addresses.*')"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i
-                                    class="fa-solid fa-house-chimney transition-colors"
-                                    :class="isRouteActive('cliente.addresses.*') ? 'text-blue-900' : 'text-slate-400 group-hover:text-slate-700'"
-                                ></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Mi domicilio</span>
-                        </Link>
-
-                        <!-- Mi perfil -->
-                        <Link
-                            :href="route('profile.edit')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('profile.edit') || isRouteActive('cliente.profile.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Mi perfil' : ''"
-                            aria-label="Mi perfil"
-                        >
-                            <span
-                                v-if="isRouteActive('profile.edit') || isRouteActive('cliente.profile.*')"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i
-                                    class="fa-regular fa-user transition-colors"
-                                    :class="isRouteActive('profile.edit') || isRouteActive('cliente.profile.*') ? 'text-blue-900' : 'text-slate-400 group-hover:text-slate-700'"
-                                ></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Mi perfil</span>
-                        </Link>
-                    </nav>
-                </div>
-            </template>
-
-            <!-- ============================================================= -->
-            <!-- NAVEGACIÓN EXCLUSIVA PARA REPARTIDOR (4 DESTINOS EXACTOS)      -->
-            <!-- ============================================================= -->
-            <template v-else-if="isRepartidor && !isAdmin">
-                <nav class="space-y-2">
-                    <!-- 1. Reparto -->
-                    <Link
-                        :href="route('repartidor.reparto')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('repartidor.reparto') || isRouteActive('repartidor.dashboard') || isRouteActive('repartidor.stops.*') || isRouteActive('repartidor.direct-service.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Reparto"
-                        aria-label="Reparto"
-                    >
-                        <span
-                            v-if="!collapsed && (isRouteActive('repartidor.reparto') || isRouteActive('repartidor.dashboard') || isRouteActive('repartidor.stops.*') || isRouteActive('repartidor.direct-service.*'))"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-truck text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Reparto</span>
-                    </Link>
-
-                    <!-- 2. Mi Carga -->
-                    <Link
-                        :href="route('repartidor.truck-load.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('repartidor.truck-load.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Mi carga"
-                        aria-label="Mi carga"
-                    >
-                        <span
-                            v-if="!collapsed && isRouteActive('repartidor.truck-load.*')"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-boxes-stacked text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Mi carga</span>
-                    </Link>
-
-                    <!-- 3. Cobros -->
-                    <Link
-                        :href="route('repartidor.debt.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('repartidor.debt.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Cobros"
-                        aria-label="Cobros"
-                    >
-                        <span
-                            v-if="!collapsed && isRouteActive('repartidor.debt.*')"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-hand-holding-dollar text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Cobros</span>
-                    </Link>
-
-                    <!-- 4. Clientes -->
-                    <Link
-                        :href="route('repartidor.customers.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('repartidor.customers.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Clientes"
-                        aria-label="Clientes"
-                    >
-                        <span
-                            v-if="!collapsed && isRouteActive('repartidor.customers.*')"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-users text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Clientes</span>
-                    </Link>
-                </nav>
-            </template>
-
-            <!-- ============================================================= -->
-            <!-- NAVEGACIÓN EXCLUSIVA PARA OPERADOR DE PLANTA (TABLET-FIRST)   -->
-            <!-- ============================================================= -->
-            <template v-else-if="isPlanta && !isAdmin">
-                <nav class="space-y-2">
-                    <!-- 1. Llenado Rápido -->
-                    <Link
-                        :href="route('planta.quick-refill.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Llenado rápido"
-                        aria-label="Llenado rápido"
-                    >
-                        <span
-                            v-if="!collapsed && (isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard'))"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-bolt text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Llenado rápido</span>
-                    </Link>
-
-                    <!-- 2. Fijos (con badge de recepciones pendientes) -->
-                    <Link
-                        :href="route('planta.fijos.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('planta.fijos.*') || isRouteActive('planta.reception.*') || isRouteActive('planta.production.*') || isRouteActive('planta.loads.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Fijos"
-                        aria-label="Fijos"
-                    >
-                        <span
-                            v-if="!collapsed && (isRouteActive('planta.fijos.*') || isRouteActive('planta.reception.*') || isRouteActive('planta.production.*') || isRouteActive('planta.loads.*'))"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center relative" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-boxes-stacked text-base"></i>
-                            <span
-                                v-if="collapsed && pendingFixedCount > 0"
-                                class="absolute -top-1 -right-2 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black bg-amber-500 text-white"
+                                v-if="collapsed && item.badge"
+                                class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-[#F8F0DF] text-[#A97827] ring-2 ring-[#1E1545]"
                             >
-                                {{ pendingFixedCount }}
+                                {{ item.badge }}
                             </span>
                         </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold flex-1'">Fijos</span>
+
+                        <!-- Etiqueta -->
+                        <span v-if="!collapsed" class="truncate flex-1">
+                            {{ item.label }}
+                        </span>
+
+                        <!-- Badge en modo expandido -->
                         <span
-                            v-if="!collapsed && pendingFixedCount > 0"
-                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-black bg-amber-500 text-white shrink-0 ml-auto"
-                            title="Recepciones pendientes"
+                            v-if="!collapsed && item.badge"
+                            class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-[#F8F0DF] text-[#A97827] border border-[#A97827]/25 shrink-0"
+                            :title="item.badgeTitle"
                         >
-                            {{ pendingFixedCount }}
+                            {{ item.badge }}
                         </span>
                     </Link>
-
-                    <!-- 3. Cambios -->
-                    <Link
-                        :href="route('planta.cambios.index')"
-                        @click="handleLinkClick"
-                        :class="[
-                            'group flex rounded-xl transition-colors duration-150 relative min-h-[48px]',
-                            collapsed
-                                ? 'flex-col items-center justify-center py-2 px-1 text-center w-full'
-                                : 'items-center gap-3 px-3.5 py-2.5 text-sm',
-                            isRouteActive('planta.cambios.*')
-                                ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                        ]"
-                        title="Cambios"
-                        aria-label="Cambios"
-                    >
-                        <span
-                            v-if="!collapsed && isRouteActive('planta.cambios.*')"
-                            class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                        ></span>
-                        <div class="text-center shrink-0 flex items-center justify-center" :class="collapsed ? 'h-6 w-6 mb-0.5' : 'w-5 text-sm'">
-                            <i class="fa-solid fa-arrows-rotate text-base"></i>
-                        </div>
-                        <span :class="collapsed ? 'text-[11px] leading-tight font-bold truncate max-w-[70px]' : 'truncate font-bold'">Cambios</span>
-                    </Link>
-
-                    <!-- Grupo: Más (Existencias, Incidencias, Historial) -->
-                    <div class="pt-2 border-t border-slate-200/80">
-                        <div v-if="!collapsed" class="px-3 mb-1 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-                            Más
-                        </div>
-                        <div v-else class="w-6 mx-auto my-1.5 border-t border-slate-200" title="Más opciones"></div>
-
-                        <nav class="space-y-1">
-                            <!-- Existencias -->
-                            <Link
-                                :href="route('planta.inventory.index')"
-                                @click="handleLinkClick"
-                                :class="[
-                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
-                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
-                                    isRouteActive('planta.inventory.*')
-                                        ? 'bg-blue-50/80 text-blue-900 font-bold shadow-2xs'
-                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                                ]"
-                                title="Existencias"
-                            >
-                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                    <i class="fa-solid fa-warehouse text-xs"></i>
-                                </div>
-                                <span v-if="!collapsed" class="truncate">Existencias</span>
-                            </Link>
-
-                            <!-- Incidencias -->
-                            <Link
-                                :href="route('planta.inventory.index', { tab: 'incidencias' })"
-                                @click="handleLinkClick"
-                                :class="[
-                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
-                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
-                                    'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                                ]"
-                                title="Incidencias"
-                            >
-                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                    <i class="fa-solid fa-triangle-exclamation text-xs text-amber-500"></i>
-                                </div>
-                                <span v-if="!collapsed" class="truncate">Incidencias</span>
-                            </Link>
-
-                            <!-- Historial -->
-                            <Link
-                                :href="route('planta.inventory.index', { tab: 'historial' })"
-                                @click="handleLinkClick"
-                                :class="[
-                                    'group flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 relative min-h-[40px]',
-                                    collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5 py-2',
-                                    'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                                ]"
-                                title="Historial"
-                            >
-                                <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
-                                </div>
-                                <span v-if="!collapsed" class="truncate">Historial</span>
-                            </Link>
-                        </nav>
-                    </div>
                 </nav>
-            </template>
+            </div>
+        </div>
 
-            <!-- ============================================================= -->
-            <!-- NAVEGACIÓN PARA OTROS ROLES (ADMIN, PLANTA)                    -->
-            <!-- ============================================================= -->
-            <template v-else>
-                <!-- Principal (Dashboard) -->
-                <div>
-                    <nav class="space-y-1">
-                        <Link
-                            :href="route('dashboard')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isTopDashboardActive
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Dashboard' : ''"
-                            aria-label="Dashboard"
-                        >
-                            <span
-                                v-if="isTopDashboardActive"
-                                class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"
-                            ></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-house"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Dashboard</span>
-                        </Link>
-                    </nav>
-                </div>
-
-                <!-- Administración (Usuarios, Clientes, Configuración) -->
-                <div v-if="isAdmin">
-                    <div v-if="!collapsed" class="px-3 mb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-                        Administración
+        <!-- Perfil del Operador / Usuario al pie del Sidebar -->
+        <div class="shrink-0 border-t border-white/10 bg-[#19113B] p-3">
+            <div
+                v-if="!collapsed"
+                class="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white/[0.07] border border-white/10"
+            >
+                <div class="relative shrink-0">
+                    <div
+                        class="h-9 w-9 rounded-lg font-semibold text-xs flex items-center justify-center"
+                        :class="roleBadgeInfo.avatarClass"
+                    >
+                        {{ userInitials }}
                     </div>
-                    <div v-else class="w-6 mx-auto my-2 border-t border-slate-200" title="Administración"></div>
-
-                    <nav class="space-y-1">
-                        <Link
-                            :href="route('admin.users.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('admin.users.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Usuarios' : ''"
-                        >
-                            <span v-if="isRouteActive('admin.users.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-users"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Usuarios</span>
-                        </Link>
-
-                        <Link
-                            :href="route('admin.customers.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('admin.customers.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Clientes' : ''"
-                        >
-                            <span v-if="isRouteActive('admin.customers.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-regular fa-user"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Clientes</span>
-                        </Link>
-
-                        <Link
-                            v-if="isAdmin"
-                            :href="route('admin.settings.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('admin.settings.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Configuración General' : ''"
-                        >
-                            <span v-if="isRouteActive('admin.settings.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-gear"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Configuración General</span>
-                        </Link>
-                    </nav>
+                    <span
+                        class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#19113B]"
+                        :class="roleBadgeInfo.dotClass"
+                        title="Sesión activa"
+                    ></span>
                 </div>
 
-                <!-- Supervisión (Inventario de cambios) -->
-                <div v-if="isAdmin">
-                    <div v-if="!collapsed" class="px-3 mb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-                        Supervisión
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs font-semibold text-white truncate leading-tight">
+                        {{ user.name || 'Usuario' }}
+                    </p>
+                    <p class="text-[11px] font-medium text-[#DAD6E8] truncate mt-0.5">
+                        {{ roleBadgeInfo.label }}
+                    </p>
+                </div>
+            </div>
+
+            <div v-else class="flex justify-center" :title="`${user.name || 'Usuario'} · ${roleBadgeInfo.label}`">
+                <div class="relative">
+                    <div
+                        class="h-9 w-9 rounded-lg font-semibold text-xs flex items-center justify-center"
+                        :class="roleBadgeInfo.avatarClass"
+                    >
+                        {{ userInitials }}
                     </div>
-                    <div v-else class="w-6 mx-auto my-2 border-t border-slate-200" title="Supervisión"></div>
-
-                    <nav class="space-y-1">
-                        <Link
-                            :href="getRouteUrl('admin.exchange-inventory.index')"
-                            @click="handleLinkClick"
-                            :class="[
-                                'group flex items-center rounded-xl text-sm transition-colors duration-150 relative h-11 min-h-[44px]',
-                                collapsed ? 'justify-center w-11 mx-auto' : 'gap-3 px-3.5',
-                                isRouteActive('admin.exchange-inventory.*')
-                                    ? 'bg-blue-50/80 text-blue-900 font-semibold shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
-                            ]"
-                            :title="collapsed ? 'Inventario de cambios' : ''"
-                        >
-                            <span v-if="isRouteActive('admin.exchange-inventory.*')" class="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-900 rounded-r-full"></span>
-                            <div class="w-5 text-center text-sm shrink-0 flex items-center justify-center">
-                                <i class="fa-solid fa-bottle-water"></i>
-                            </div>
-                            <span v-if="!collapsed" class="truncate">Inventario de cambios</span>
-                        </Link>
-                    </nav>
+                    <span
+                        class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#19113B]"
+                        :class="roleBadgeInfo.dotClass"
+                        title="Sesión activa"
+                    ></span>
                 </div>
-            </template>
-
+            </div>
         </div>
     </aside>
 </template>

@@ -185,14 +185,6 @@ class Order extends Model
     }
 
     /**
-     * Comprueba si el pedido está asignado a ruta.
-     */
-    public function isInRoute(): bool
-    {
-        return $this->status === self::STATUS_IN_ROUTE;
-    }
-
-    /**
      * Comprueba si el pedido está en proceso con envases en planta o pendientes de retorno.
      */
     public function isInProcess(): bool
@@ -214,14 +206,6 @@ class Order extends Model
     public function isCancelled(): bool
     {
         return $this->status === self::STATUS_CANCELLED;
-    }
-
-    /**
-     * Comprueba si el pedido tiene registrada una incidencia con fijos en custodia.
-     */
-    public function isIncident(): bool
-    {
-        return $this->status === self::STATUS_INCIDENT;
     }
 
     /**

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { alertWarning, toastInfo } from '@/utils/swal';
 
 const props = defineProps({
     driver: {
@@ -52,8 +53,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.route || page.props.errors?.stop || page.props.errors?.quantity || page.props.errors?.collect || page.props.errors?.deliver || page.props.errors?.cancel || page.props.flash?.error || null);
+const formError = computed(() => page.props.errors?.route || page.props.errors?.stop || page.props.errors?.quantity || page.props.errors?.collect || page.props.errors?.deliver || page.props.errors?.cancel || null);
 
 // Pestañas (Por recoger, Por recoger en Planta, Por entregar)
 const currentTab = computed(() => {
@@ -197,7 +197,7 @@ const submitCancelOrder = () => {
     if (!itemToCancel.value || cancelForm.processing) return;
 
     if (cancelForm.reason.trim().length < 5) {
-        alert('Debe especificar un motivo válido de cancelación (mínimo 5 caracteres).');
+        alertWarning('Debe especificar un motivo válido de cancelación (mínimo 5 caracteres).');
         return;
     }
 
@@ -243,7 +243,7 @@ const submitIncident = () => {
         });
     } else {
         // En caso sin parada de ruta, simplemente cierra con notificación
-        alert('Incidencia registrada para el pedido ' + itemForIncident.value.folio + ': ' + incidentForm.reason);
+        toastInfo('Incidencia registrada para el pedido ' + itemForIncident.value.folio + ': ' + incidentForm.reason);
         closeIncidentModal();
     }
 };
@@ -485,21 +485,12 @@ const submitDeliver = () => {
     <AuthenticatedLayout wide>
         <div class="max-w-4xl mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-3 pb-24 md:pb-12">
 
-            <!-- Mensajes Flash de Notificación -->
             <div
-                v-if="flashSuccess"
-                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
-            </div>
-
-            <div
-                v-if="flashError"
+                v-if="formError"
                 class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
+                <div class="flex-1 font-semibold leading-relaxed">{{ formError }}</div>
             </div>
 
             <!-- ========================================================================= -->

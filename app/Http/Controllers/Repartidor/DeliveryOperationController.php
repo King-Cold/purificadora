@@ -168,20 +168,5 @@ class DeliveryOperationController extends Controller
 
         return response()->json(['message' => 'Parada completada exitosamente.']);
     }
-
-    /**
-     * Registra una parada fallida.
-     */
-    public function failStop(Request $request, RouteStop $stop): JsonResponse
-    {
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'max:255'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        $this->deliveryRouteService->recordStopFailed($stop, $validated['reason'], $validated['notes'] ?? null, $request->user());
-
-        return response()->json(['message' => 'Incidencia de parada registrada exitosamente.']);
-    }
 }
 

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Planta;
 
-use App\Exceptions\OrderBusinessRuleException;
 use App\Http\Controllers\Controller;
 use App\Models\BottleCustodyMovement;
 use App\Models\BottleIncident;

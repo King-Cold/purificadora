@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import InputError from '@/Components/InputError.vue';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     hasActiveRoute: {
@@ -16,7 +17,6 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
 const newlyCreated = ref(props.createdCustomer || null);
 
 const availableZones = [
@@ -70,7 +70,7 @@ const submitCustomer = () => {
         return;
     }
     if (!form.delivery_zone) {
-        alert('Por favor especifica la zona de reparto (Norte, Sur, Este u Oeste).');
+        alertWarning('Por favor especifica la zona de reparto (Norte, Sur, Este u Oeste).');
         return;
     }
     syncCounts();
@@ -130,15 +130,6 @@ const registerAnother = () => {
         </template>
 
         <div class="py-6 sm:py-8 max-w-xl mx-auto px-4 sm:px-6 space-y-5">
-
-            <!-- Mensaje de éxito si existe flash -->
-            <div
-                v-if="flashSuccess"
-                class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-lg text-emerald-600 mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-medium">{{ flashSuccess }}</div>
-            </div>
 
             <!-- ========================================================================= -->
             <!-- 1. CASO: CLIENTE RECIÉN GUARDADO (OFRECER REGISTRAR SERVICIO)              -->

@@ -130,20 +130,4 @@ class CustomerAddressService
             $address->delete();
         });
     }
-
-    /**
-     * Método conservado por compatibilidad de interfaz.
-     */
-    public function setDefaultAddress(Customer $customer, CustomerAddress $address): void
-    {
-        DB::transaction(function () use ($customer, $address) {
-            Customer::where('id', $customer->id)->lockForUpdate()->first();
-
-            if ($address->customer_id !== $customer->id) {
-                abort(404, 'El domicilio no pertenece al cliente especificado.');
-            }
-
-            $address->update(['is_default' => true]);
-        });
-    }
 }

@@ -20,8 +20,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.load || page.props.flash?.error || null);
+const formError = computed(() => page.props.errors?.load || null);
 
 // Modal 1: Aceptar Carga Individual (Total o Parcial)
 const showLoadModal = ref(false);
@@ -95,21 +94,12 @@ const submitAcceptAll = () => {
     <AuthenticatedLayout wide>
         <div class="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 pb-28 md:pb-16">
 
-            <!-- Mensajes Flash -->
             <div
-                v-if="flashSuccess"
-                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
-            </div>
-
-            <div
-                v-if="flashError"
+                v-if="formError"
                 class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
+                <div class="flex-1 font-semibold leading-relaxed">{{ formError }}</div>
             </div>
 
             <!-- ========================================================================= -->

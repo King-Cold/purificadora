@@ -125,32 +125,6 @@ const getStageBadgeClass = (stageKey) => {
                     <span>Consulta actualizada: {{ last_updated_at }}</span>
                 </div>
 
-                <!-- ALERTA DE ÉXITO FLASH -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="p-4 rounded-xl bg-emerald-50 border border-emerald-200/90 text-emerald-900 shadow-xs flex items-start gap-3"
-                >
-                    <div class="h-6 w-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <i class="fa-solid fa-check text-xs"></i>
-                    </div>
-                    <div class="flex-1 text-xs sm:text-sm leading-relaxed font-medium">
-                        {{ $page.props.flash.success }}
-                    </div>
-                </div>
-
-                <!-- ALERTA DE ERROR FLASH -->
-                <div
-                    v-if="$page.props.flash?.error"
-                    class="p-4 rounded-xl bg-rose-50 border border-rose-200/90 text-rose-900 shadow-xs flex items-start gap-3"
-                >
-                    <div class="h-6 w-6 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <i class="fa-solid fa-triangle-exclamation text-xs"></i>
-                    </div>
-                    <div class="flex-1 text-xs sm:text-sm leading-relaxed font-medium">
-                        {{ $page.props.flash.error }}
-                    </div>
-                </div>
-
                 <!-- ========================================================================= -->
                 <!-- 2. SEGUIMIENTO DE PEDIDO ACTIVO (CON AVANCE OPERATIVO REAL)                -->
                 <!-- ========================================================================= -->

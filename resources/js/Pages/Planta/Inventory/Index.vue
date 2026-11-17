@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     inventoryState: {
@@ -36,7 +37,7 @@ const initialCountForm = useForm({
 
 const openInitialCountConfirmation = () => {
     if (initialCountForm.empty_count === '' || initialCountForm.full_count === '') {
-        alert('Por favor complete las cantidades de botellones vacíos y llenos.');
+        alertWarning('Por favor complete las cantidades de botellones vacíos y llenos.');
         return;
     }
     showInitialCountConfirmModal.value = true;
@@ -196,17 +197,6 @@ const translateStage = (stage) => {
 
         <div class="py-6 sm:py-8">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
-
-                <!-- FLASH MESSAGES -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-800 text-sm font-semibold flex items-center justify-between"
-                >
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
-                        <span>{{ $page.props.flash.success }}</span>
-                    </div>
-                </div>
 
                 <!-- SECCIÓN 1: CONTEO INICIAL FÍSICO PENDIENTE -->
                 <div

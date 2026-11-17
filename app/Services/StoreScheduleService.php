@@ -42,32 +42,6 @@ class StoreScheduleService
     }
 
     /**
-     * Obtiene los intervalos permitidos para la recepción de pedidos.
-     */
-    public function getAllowedIntervals(?BranchSchedule $schedule = null): array
-    {
-        $sched = $schedule ?? $this->getSchedule();
-        $cutoff = $this->getCutoffTime($sched);
-
-        $open = substr($sched->opening_time, 0, 5);
-        $breakStart = substr($sched->break_start_time, 0, 5);
-        $breakEnd = substr($sched->break_end_time, 0, 5);
-
-        return [
-            'morning' => [
-                'start' => $open,
-                'end' => $breakStart,
-                'label' => "{$open} a {$breakStart}",
-            ],
-            'afternoon' => [
-                'start' => $breakEnd,
-                'end' => $cutoff,
-                'label' => "{$breakEnd} a {$cutoff}",
-            ],
-        ];
-    }
-
-    /**
      * Evalúa si una fecha y hora determinadas permiten la recepción de pedidos.
      * Si no se proporciona fecha/hora, utiliza el momento actual en America/Merida.
      *
@@ -182,14 +156,6 @@ class StoreScheduleService
     public function isStoreOpen($dateTime = null, ?BranchSchedule $schedule = null): bool
     {
         return (bool) ($this->checkOrderReception($dateTime, $schedule)['is_store_open'] ?? false);
-    }
-
-    /**
-     * Comprueba si una fecha y hora dadas permiten recibir pedidos (valor booleano directo).
-     */
-    public function canReceiveOrdersAt($dateTime = null, ?BranchSchedule $schedule = null): bool
-    {
-        return $this->checkOrderReception($dateTime, $schedule)['can_receive'];
     }
 
     /**

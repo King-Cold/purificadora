@@ -37,7 +37,6 @@ const props = defineProps({
 
 const registeredFixed = computed(() => Number(props.customer?.fixed_bottles_count ?? 0));
 const registeredExchange = computed(() => Number(props.customer?.exchange_bottles_count ?? 0));
-const totalRegistered = computed(() => Number(props.customer?.total_bottles ?? 0));
 const customerBottleType = computed(() => props.customer?.bottle_type);
 
 const form = useForm({

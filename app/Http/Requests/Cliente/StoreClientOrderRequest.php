@@ -4,7 +4,6 @@ namespace App\Http\Requests\Cliente;
 
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Services\OrderService;
 use App\Services\StoreScheduleService;
 use Illuminate\Foundation\Http\FormRequest;

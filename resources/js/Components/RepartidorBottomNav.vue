@@ -1,8 +1,5 @@
 <script setup>
-import { computed } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
-
-const page = usePage();
+import { Link } from '@inertiajs/vue3';
 
 const isCurrent = (name) => {
     try {

@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import { confirmAction } from '@/utils/swal';
 
 const props = defineProps({
     users: {
@@ -81,17 +82,17 @@ const hasActiveFilters = () => {
 const getRoleBadgeClass = (roleName) => {
     switch (roleName) {
         case 'Super Admin':
-            return 'bg-purple-50 text-purple-700 border-purple-200';
+            return 'bg-[#F4F3F8] text-[#1E1545] border-[#DAD6E8] font-semibold';
         case 'Administrador':
-            return 'bg-blue-50 text-blue-800 border-blue-200 font-semibold';
+            return 'bg-[#E9F3F8] text-[#0071BA] border-[#DCECF7] font-semibold';
         case 'Repartidor':
-            return 'bg-amber-50 text-amber-800 border-amber-200';
+            return 'bg-[#F8F0DF] text-[#A97827] border-[#A97827]/25 font-semibold';
         case 'Operador Planta':
-            return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            return 'bg-[#E8F2EC] text-[#34785A] border-[#34785A]/25 font-semibold';
         case 'Cliente':
-            return 'bg-sky-50 text-sky-700 border-sky-200';
+            return 'bg-[#DCECF7]/60 text-[#0071BA] border-[#DCECF7] font-medium';
         default:
-            return 'bg-gray-100 text-gray-700 border-gray-200';
+            return 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0] font-medium';
     }
 };
 
@@ -106,13 +107,19 @@ const getInitials = (name) => {
     return clean.slice(0, 2).toUpperCase();
 };
 
-const handleToggleStatus = (user) => {
+const handleToggleStatus = async (user) => {
     const isCurrentActive = user.is_active;
-    const confirmMsg = isCurrentActive
-        ? `¿Confirmas que deseas desactivar la cuenta de ${user.name}? Se revocará su acceso al sistema inmediatamente.`
-        : `¿Deseas activar la cuenta de ${user.name}?`;
+    const confirmed = await confirmAction({
+        title: isCurrentActive ? '¿Desactivar cuenta?' : '¿Activar cuenta?',
+        text: isCurrentActive
+            ? `¿Confirmas que deseas desactivar la cuenta de ${user.name}? Se revocará su acceso al sistema inmediatamente.`
+            : `¿Deseas activar nuevamente la cuenta de ${user.name}?`,
+        confirmText: isCurrentActive ? 'Sí, desactivar' : 'Sí, activar',
+        icon: 'warning',
+        danger: isCurrentActive,
+    });
 
-    if (confirm(confirmMsg)) {
+    if (confirmed) {
         router.patch(route('admin.users.toggle-status', user.id), {}, {
             preserveScroll: true,
         });
@@ -132,20 +139,20 @@ const handleToggleStatus = (user) => {
                             { label: 'Usuarios', icon: 'fa-solid fa-users' }
                         ]"
                     />
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-xl font-bold leading-tight text-gray-900">
+                    <div class="flex items-center gap-3 mt-1">
+                        <h2 class="text-xl font-bold leading-tight tracking-tight text-[#292638]">
                             Gestión de Usuarios
                         </h2>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E9F3F8] text-[#0071BA] border border-[#DCECF7] tabular-nums">
                             {{ totalUsersCount }} registrados
                         </span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="self-start sm:self-auto">
                     <Link
                         :href="route('admin.users.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all active:scale-[0.98]"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1E1545] hover:bg-[#2C2061] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#1E1545]/30 focus:ring-offset-1"
                     >
                         <i class="fa-solid fa-user-plus text-xs"></i>
                         <span>Nuevo Usuario</span>
@@ -154,46 +161,16 @@ const handleToggleStatus = (user) => {
             </div>
         </template>
 
-        <div class="py-8">
-            <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-6">
-
-                <!-- Mensaje de Éxito Flash -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between shadow-sm animate-fade-in"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                        </div>
-                        <span class="text-sm font-medium">{{ $page.props.flash.success }}</span>
-                    </div>
-                </div>
-
-                <!-- Mensaje de Error Flash -->
-                <div
-                    v-if="$page.props.flash?.error"
-                    class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between shadow-sm animate-fade-in"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="h-8 w-8 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                            <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <span class="text-sm font-medium">{{ $page.props.flash.error }}</span>
-                    </div>
-                </div>
+        <div class="py-6 sm:py-8">
+            <div class="mx-auto w-full max-w-[98%] 2xl:max-w-[1850px] px-4 sm:px-6 lg:px-8 space-y-5">
 
                 <!-- Barra de Búsqueda y Filtros -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div class="bg-white rounded-2xl shadow-sm border border-[#E9E7F0] p-4 sm:p-5">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         <!-- Buscador -->
                         <div class="md:col-span-5 relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A6A3B2]">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                             </div>
@@ -201,7 +178,7 @@ const handleToggleStatus = (user) => {
                                 v-model="search"
                                 type="text"
                                 placeholder="Buscar por nombre o correo electrónico..."
-                                class="block w-full pl-10 pr-4 py-2 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                                class="block w-full pl-10 pr-4 py-2 text-sm bg-[#F4F3F8]/60 focus:bg-white border border-[#E9E7F0] rounded-xl focus:ring-2 focus:ring-[#0071BA]/15 focus:border-[#0071BA] text-[#292638] placeholder-[#A6A3B2] transition"
                             />
                         </div>
 
@@ -209,7 +186,7 @@ const handleToggleStatus = (user) => {
                         <div class="md:col-span-3">
                             <select
                                 v-model="role"
-                                class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
+                                class="block w-full py-2 px-3 text-sm bg-[#F4F3F8]/60 focus:bg-white border border-[#E9E7F0] rounded-xl focus:ring-2 focus:ring-[#0071BA]/15 focus:border-[#0071BA] text-[#292638] font-medium transition"
                             >
                                 <option value="all">Todos los roles</option>
                                 <option v-for="r in availableRoles" :key="r" :value="r">
@@ -222,7 +199,7 @@ const handleToggleStatus = (user) => {
                         <div class="md:col-span-3">
                             <select
                                 v-model="status"
-                                class="block w-full py-2 px-3 text-sm border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700 font-medium"
+                                class="block w-full py-2 px-3 text-sm bg-[#F4F3F8]/60 focus:bg-white border border-[#E9E7F0] rounded-xl focus:ring-2 focus:ring-[#0071BA]/15 focus:border-[#0071BA] text-[#292638] font-medium transition"
                             >
                                 <option value="all">Todos los estados</option>
                                 <option value="active">Cuenta Activa</option>
@@ -238,10 +215,11 @@ const handleToggleStatus = (user) => {
                                 v-if="hasActiveFilters()"
                                 @click="resetFilters"
                                 type="button"
-                                class="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                                class="h-9 w-9 inline-flex items-center justify-center text-[#747181] hover:text-[#E82147] rounded-xl hover:bg-[#FCECEF] transition"
                                 title="Limpiar todos los filtros"
+                                aria-label="Limpiar todos los filtros"
                             >
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
@@ -249,12 +227,12 @@ const handleToggleStatus = (user) => {
                     </div>
 
                     <!-- Resumen de resultados filtrados -->
-                    <div class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                    <div class="mt-3.5 pt-3 border-t border-[#E9E7F0]/80 flex items-center justify-between text-xs text-[#747181]">
                         <div>
-                            <span>Mostrando <strong>{{ users.total }}</strong> usuarios encontrados</span>
-                            <span v-if="hasActiveFilters()" class="text-blue-600 ml-1 font-medium">(filtros aplicados)</span>
+                            <span>Mostrando <strong class="text-[#292638] tabular-nums">{{ users.total }}</strong> usuarios encontrados</span>
+                            <span v-if="hasActiveFilters()" class="text-[#0071BA] ml-1.5 font-medium">(filtros aplicados)</span>
                         </div>
-                        <div v-if="isLoading" class="flex items-center gap-1.5 text-blue-600">
+                        <div v-if="isLoading" class="flex items-center gap-1.5 text-[#0071BA] font-medium">
                             <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -265,10 +243,10 @@ const handleToggleStatus = (user) => {
                 </div>
 
                 <!-- Contenedor de Usuarios: Tarjetas en móvil y Tabla en escritorio -->
-                <div class="bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden">
-                    
+                <div class="bg-white rounded-2xl shadow-sm border border-[#E9E7F0] overflow-hidden">
+
                     <!-- VISTA MÓVIL (PANTALLAS < MD): TARJETAS COMPACTAS -->
-                    <div class="md:hidden divide-y divide-slate-100">
+                    <div class="md:hidden divide-y divide-[#E9E7F0]">
                         <div
                             v-for="user in users.data"
                             :key="user.id"
@@ -276,16 +254,16 @@ const handleToggleStatus = (user) => {
                         >
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex items-start gap-3 min-w-0">
-                                    <div class="h-10 w-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                    <div class="h-10 w-10 rounded-xl bg-[#1E1545] text-white flex items-center justify-center font-bold text-xs shrink-0">
                                         {{ getInitials(user.name) }}
                                     </div>
                                     <div class="min-w-0">
-                                        <div class="font-bold text-sm text-slate-900 leading-tight">
+                                        <div class="font-semibold text-sm text-[#292638] leading-tight truncate">
                                             {{ user.name }}
                                         </div>
-                                        <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
-                                            <span class="font-mono text-slate-400">#{{ user.id }}</span>
-                                            <span v-if="user.has_customer" class="text-sky-700 bg-sky-50 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                                        <div class="flex items-center gap-2 mt-1 text-xs text-[#747181]">
+                                            <span class="tabular-nums text-[11px] text-[#A6A3B2] font-medium">#{{ user.id }}</span>
+                                            <span v-if="user.has_customer" class="text-[#0071BA] bg-[#E9F3F8] border border-[#DCECF7] px-1.5 py-0.5 rounded-md tabular-nums text-[10px] font-semibold">
                                                 {{ user.customer_code }}
                                             </span>
                                         </div>
@@ -293,36 +271,36 @@ const handleToggleStatus = (user) => {
                                 </div>
 
                                 <span
-                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border shrink-0"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] border shrink-0"
                                     :class="getRoleBadgeClass(user.primary_role)"
                                 >
                                     {{ user.primary_role }}
                                 </span>
                             </div>
 
-                            <div class="flex items-center justify-between text-xs text-slate-600 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-                                <span class="font-mono text-[11px] truncate max-w-[190px]">{{ user.email }}</span>
+                            <div class="flex items-center justify-between text-xs text-[#747181] bg-[#F4F3F8]/70 px-3 py-2.5 rounded-xl border border-[#E9E7F0]">
+                                <span class="text-xs text-[#292638] truncate max-w-[190px]">{{ user.email }}</span>
                                 <span
                                     v-if="user.is_active"
-                                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200"
+                                    class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#34785A] bg-[#E8F2EC] px-2.5 py-0.5 rounded-full border border-[#34785A]/20 shrink-0"
                                 >
-                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                    <span class="h-1.5 w-1.5 rounded-full bg-[#34785A]"></span>
                                     Activo
                                 </span>
                                 <span
                                     v-else
-                                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200"
+                                    class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#E82147] bg-[#FCECEF] px-2.5 py-0.5 rounded-full border border-[#E82147]/20 shrink-0"
                                 >
-                                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                    <span class="h-1.5 w-1.5 rounded-full bg-[#E82147]"></span>
                                     Inactivo
                                 </span>
                             </div>
 
                             <!-- Acciones táctiles para móvil -->
-                            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-[#E9E7F0]/70">
                                 <Link
                                     :href="route('admin.users.show', user.id)"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0071BA] bg-[#E9F3F8] hover:bg-[#DCECF7] rounded-xl transition"
                                 >
                                     <i class="fa-solid fa-eye text-[11px]"></i>
                                     <span>Ver</span>
@@ -330,7 +308,7 @@ const handleToggleStatus = (user) => {
 
                                 <Link
                                     :href="route('admin.users.edit', user.id)"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-900 bg-slate-100 hover:bg-blue-50 rounded-xl transition"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#292638] bg-[#F4F3F8] hover:bg-[#E9E7F0] rounded-xl transition"
                                 >
                                     <i class="fa-solid fa-pen text-[11px]"></i>
                                     <span>Editar</span>
@@ -341,8 +319,8 @@ const handleToggleStatus = (user) => {
                                     type="button"
                                     @click="handleToggleStatus(user)"
                                     :disabled="$page.props.auth?.user?.id === user.id"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition disabled:opacity-30"
-                                    :class="user.is_active ? 'text-rose-700 bg-rose-50 hover:bg-rose-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition disabled:opacity-35 disabled:cursor-not-allowed"
+                                    :class="user.is_active ? 'text-[#E82147] bg-[#FCECEF] hover:bg-[#FCECEF]/80' : 'text-[#34785A] bg-[#E8F2EC] hover:bg-[#E8F2EC]/80'"
                                 >
                                     <i :class="user.is_active ? 'fa-solid fa-ban' : 'fa-solid fa-check'" class="text-[11px]"></i>
                                     <span>{{ user.is_active ? 'Desactivar' : 'Activar' }}</span>
@@ -351,19 +329,19 @@ const handleToggleStatus = (user) => {
                         </div>
 
                         <!-- Estado vacío móvil -->
-                        <div v-if="users.data.length === 0" class="p-8 text-center">
-                            <div class="mx-auto h-12 w-12 text-slate-400 flex items-center justify-center rounded-2xl bg-slate-100 mb-3">
-                                <i class="fa-solid fa-user-slash text-xl"></i>
+                        <div v-if="users.data.length === 0" class="p-10 text-center">
+                            <div class="mx-auto h-12 w-12 text-[#747181] flex items-center justify-center rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] mb-3">
+                                <i class="fa-solid fa-user-slash text-lg"></i>
                             </div>
-                            <h4 class="text-sm font-bold text-slate-900">No se encontraron usuarios</h4>
-                            <p class="text-xs text-slate-500 mt-1">
+                            <h4 class="text-sm font-semibold text-[#292638]">No se encontraron usuarios</h4>
+                            <p class="text-xs text-[#747181] mt-1">
                                 No existen registros que coincidan con los filtros aplicados.
                             </p>
                             <button
                                 v-if="hasActiveFilters()"
                                 @click="resetFilters"
                                 type="button"
-                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-xl text-blue-900 bg-blue-100 hover:bg-blue-200 transition cursor-pointer"
+                                class="mt-4 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold rounded-xl text-[#1E1545] bg-[#F4F3F8] hover:bg-[#DAD6E8] transition cursor-pointer"
                             >
                                 Restablecer filtros
                             </button>
@@ -372,8 +350,8 @@ const handleToggleStatus = (user) => {
 
                     <!-- VISTA ESCRITORIO (PANTALLAS >= MD): TABLA -->
                     <div class="hidden md:block overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-left">
-                            <thead class="bg-gray-50/75 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                        <table class="min-w-full divide-y divide-[#E9E7F0] text-left">
+                            <thead class="bg-[#F4F3F8] text-[11px] uppercase tracking-wider text-[#747181] font-semibold">
                                 <tr>
                                     <th scope="col" class="py-3.5 pl-6 pr-3">Usuario</th>
                                     <th scope="col" class="px-3 py-3.5">Correo Electrónico</th>
@@ -383,25 +361,25 @@ const handleToggleStatus = (user) => {
                                     <th scope="col" class="relative py-3.5 pl-3 pr-6 text-right">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white text-sm">
+                            <tbody class="divide-y divide-[#E9E7F0] bg-white text-sm">
                                 <tr
                                     v-for="user in users.data"
                                     :key="user.id"
-                                    class="hover:bg-gray-50/80 transition duration-150"
+                                    class="hover:bg-[#F4F3F8]/60 transition-colors duration-150"
                                 >
                                     <!-- Nombre y Avatar -->
-                                    <td class="whitespace-nowrap py-4 pl-6 pr-3">
+                                    <td class="whitespace-nowrap py-3.5 pl-6 pr-3">
                                         <div class="flex items-center gap-3">
-                                            <div class="h-9 w-9 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm shrink-0">
+                                            <div class="h-9 w-9 rounded-xl bg-[#1E1545] text-white flex items-center justify-center font-bold text-xs tracking-wide shrink-0">
                                                 {{ getInitials(user.name) }}
                                             </div>
                                             <div>
-                                                <div class="font-semibold text-gray-900 leading-tight">
+                                                <div class="font-semibold text-[#292638] leading-tight">
                                                     {{ user.name }}
                                                 </div>
-                                                <div class="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                    <span>ID: #{{ user.id }}</span>
-                                                    <span v-if="user.has_customer" class="text-sky-700 bg-sky-50 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                                                <div class="text-xs text-[#A6A3B2] mt-0.5 flex items-center gap-1.5 tabular-nums">
+                                                    <span>ID #{{ user.id }}</span>
+                                                    <span v-if="user.has_customer" class="text-[#0071BA] bg-[#E9F3F8] border border-[#DCECF7] px-1.5 py-0.5 rounded-md text-[10px] font-semibold">
                                                         {{ user.customer_code }}
                                                     </span>
                                                 </div>
@@ -410,14 +388,14 @@ const handleToggleStatus = (user) => {
                                     </td>
 
                                     <!-- Correo -->
-                                    <td class="whitespace-nowrap px-3 py-4 text-gray-600 font-mono text-xs">
+                                    <td class="whitespace-nowrap px-3 py-3.5 text-[#747181] text-xs font-medium">
                                         {{ user.email }}
                                     </td>
 
                                     <!-- Rol -->
-                                    <td class="whitespace-nowrap px-3 py-4">
+                                    <td class="whitespace-nowrap px-3 py-3.5">
                                         <span
-                                            class="inline-flex items-center px-2.5 py-1 rounded-full text-xs border"
+                                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border"
                                             :class="getRoleBadgeClass(user.primary_role)"
                                         >
                                             {{ user.primary_role }}
@@ -425,41 +403,42 @@ const handleToggleStatus = (user) => {
                                     </td>
 
                                     <!-- Estado de Cuenta y Verificación -->
-                                    <td class="whitespace-nowrap px-3 py-4">
+                                    <td class="whitespace-nowrap px-3 py-3.5">
                                         <div class="flex flex-col gap-1">
                                             <span
                                                 v-if="user.is_active"
-                                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E8F2EC] text-[#34785A] border border-[#34785A]/20 w-fit"
                                             >
-                                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                <span class="h-1.5 w-1.5 rounded-full bg-[#34785A]"></span>
                                                 Activo
                                             </span>
                                             <span
                                                 v-else
-                                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 w-fit"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FCECEF] text-[#E82147] border border-[#E82147]/20 w-fit"
                                             >
-                                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                                <span class="h-1.5 w-1.5 rounded-full bg-[#E82147]"></span>
                                                 Inactivo
                                             </span>
-                                            <span class="text-[11px] text-gray-400">
+                                            <span class="text-[11px] text-[#A6A3B2]">
                                                 {{ user.is_verified ? 'Email verificado' : 'Email pendiente' }}
                                             </span>
                                         </div>
                                     </td>
 
                                     <!-- Fecha de Registro -->
-                                    <td class="whitespace-nowrap px-3 py-4 text-xs text-gray-500">
+                                    <td class="whitespace-nowrap px-3 py-3.5 text-xs text-[#747181] tabular-nums">
                                         {{ user.created_at }}
                                     </td>
 
                                     <!-- Columna Acciones -->
-                                    <td class="whitespace-nowrap py-4 pl-3 pr-6 text-right text-xs">
-                                        <div class="flex items-center justify-end gap-1">
+                                    <td class="whitespace-nowrap py-3.5 pl-3 pr-6 text-right text-xs">
+                                        <div class="inline-flex items-center justify-end gap-1">
                                             <!-- Ver detalles -->
                                             <Link
                                                 :href="route('admin.users.show', user.id)"
-                                                class="p-1.5 text-gray-500 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition"
+                                                class="h-8 w-8 inline-flex items-center justify-center text-[#747181] hover:text-[#0071BA] hover:bg-[#E9F3F8] rounded-lg transition"
                                                 title="Ver detalles"
+                                                aria-label="Ver detalles"
                                             >
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -470,23 +449,25 @@ const handleToggleStatus = (user) => {
                                             <!-- Editar -->
                                             <Link
                                                 :href="route('admin.users.edit', user.id)"
-                                                class="p-1.5 text-gray-500 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition"
+                                                class="h-8 w-8 inline-flex items-center justify-center text-[#747181] hover:text-[#1E1545] hover:bg-[#F4F3F8] rounded-lg transition"
                                                 title="Editar usuario"
+                                                aria-label="Editar usuario"
                                             >
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                 </svg>
                                             </Link>
 
-                                            <!-- Activar / Desactivar (solo para roles internos, cuentas de cliente no se pueden desactivar) -->
+                                            <!-- Activar / Desactivar (solo para roles internos) -->
                                             <button
                                                 v-if="user.primary_role !== 'Cliente'"
                                                 type="button"
                                                 @click="handleToggleStatus(user)"
                                                 :disabled="$page.props.auth?.user?.id === user.id"
                                                 :title="$page.props.auth?.user?.id === user.id ? 'No puedes desactivar tu propia cuenta' : (user.is_active ? 'Desactivar cuenta' : 'Activar cuenta')"
-                                                class="p-1.5 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
-                                                :class="user.is_active ? 'text-gray-400 hover:text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'"
+                                                :aria-label="user.is_active ? 'Desactivar cuenta' : 'Activar cuenta'"
+                                                class="h-8 w-8 inline-flex items-center justify-center rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                                :class="user.is_active ? 'text-[#747181] hover:text-[#E82147] hover:bg-[#FCECEF]' : 'text-[#34785A] hover:bg-[#E8F2EC]'"
                                             >
                                                 <svg v-if="user.is_active" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -501,20 +482,20 @@ const handleToggleStatus = (user) => {
 
                                 <!-- Estado Vacío Escritorio -->
                                 <tr v-if="users.data.length === 0">
-                                    <td colspan="6" class="px-6 py-12 text-center">
+                                    <td colspan="6" class="px-6 py-14 text-center">
                                         <div class="max-w-xs mx-auto">
-                                            <div class="mx-auto h-12 w-12 text-gray-400 flex items-center justify-center rounded-2xl bg-gray-100 mb-3">
-                                                <i class="fa-solid fa-user-slash text-xl"></i>
+                                            <div class="mx-auto h-12 w-12 text-[#747181] flex items-center justify-center rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] mb-3">
+                                                <i class="fa-solid fa-user-slash text-lg"></i>
                                             </div>
-                                            <h4 class="text-sm font-semibold text-gray-900">No se encontraron usuarios</h4>
-                                            <p class="text-xs text-gray-500 mt-1">
+                                            <h4 class="text-sm font-semibold text-[#292638]">No se encontraron usuarios</h4>
+                                            <p class="text-xs text-[#747181] mt-1">
                                                 No existen registros que coincidan con los filtros aplicados.
                                             </p>
                                             <button
                                                 v-if="hasActiveFilters()"
                                                 @click="resetFilters"
                                                 type="button"
-                                                class="mt-4 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-xl text-blue-900 bg-blue-100 hover:bg-blue-200 transition cursor-pointer"
+                                                class="mt-4 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold rounded-xl text-[#1E1545] bg-[#F4F3F8] hover:bg-[#DAD6E8] transition cursor-pointer"
                                             >
                                                 Restablecer filtros
                                             </button>
@@ -528,17 +509,17 @@ const handleToggleStatus = (user) => {
                     <!-- Paginación -->
                     <div
                         v-if="users.total > 0"
-                        class="bg-white px-4 py-3 sm:px-6 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4"
+                        class="bg-[#F4F3F8]/40 px-4 py-3.5 sm:px-6 border-t border-[#E9E7F0] flex flex-col sm:flex-row items-center justify-between gap-4"
                     >
-                        <div class="text-xs text-gray-600">
-                            Mostrando del <span class="font-semibold">{{ users.from || 0 }}</span> al <span class="font-semibold">{{ users.to || 0 }}</span> de <span class="font-semibold">{{ users.total }}</span> usuarios
+                        <div class="text-xs text-[#747181] tabular-nums">
+                            Mostrando del <span class="font-semibold text-[#292638]">{{ users.from || 0 }}</span> al <span class="font-semibold text-[#292638]">{{ users.to || 0 }}</span> de <span class="font-semibold text-[#292638]">{{ users.total }}</span> usuarios
                         </div>
 
-                        <div v-if="users.links && users.links.length > 3" class="flex flex-wrap gap-1 items-center">
+                        <div v-if="users.links && users.links.length > 3" class="flex flex-wrap gap-1.5 items-center">
                             <template v-for="(link, key) in users.links" :key="key">
                                 <span
                                     v-if="link.url === null"
-                                    class="px-3 py-1.5 text-xs text-gray-400 border border-gray-200 rounded-lg cursor-not-allowed"
+                                    class="px-3 py-1.5 text-xs text-[#A6A3B2] bg-white/60 border border-[#E9E7F0] rounded-lg cursor-not-allowed tabular-nums"
                                     v-html="link.label"
                                 />
                                 <Link
@@ -546,8 +527,8 @@ const handleToggleStatus = (user) => {
                                     :href="link.url"
                                     preserve-scroll
                                     preserve-state
-                                    class="px-3 py-1.5 text-xs rounded-lg border transition font-medium"
-                                    :class="link.active ? 'bg-blue-900 text-white border-blue-900 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                    class="px-3 py-1.5 text-xs rounded-lg border transition font-medium tabular-nums"
+                                    :class="link.active ? 'bg-[#1E1545] text-white border-[#1E1545] shadow-sm' : 'bg-white text-[#292638] border-[#E9E7F0] hover:bg-[#F4F3F8]'"
                                     v-html="link.label"
                                 />
                             </template>

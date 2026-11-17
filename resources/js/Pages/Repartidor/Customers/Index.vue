@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, Link, router } from '@inertiajs/vue3';

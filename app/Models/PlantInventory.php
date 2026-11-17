@@ -43,10 +43,5 @@ class PlantInventory extends Model
     {
         return $this->belongsTo(User::class, 'initial_count_user_id');
     }
-
-    public function isInitialCountCompleted(): bool
-    {
-        return !is_null($this->initial_count_completed_at);
-    }
 }
 

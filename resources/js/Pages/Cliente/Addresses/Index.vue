@@ -134,24 +134,6 @@ const deleteAddress = () => {
                     <span class="text-xs text-slate-400">Aquí entregaremos tus pedidos</span>
                 </div>
 
-                <!-- Mensaje de Éxito Flash -->
-                <div
-                    v-if="$page.props.flash?.success"
-                    class="p-3.5 sm:p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-2.5 text-xs sm:text-sm"
-                >
-                    <i class="fa-solid fa-circle-check text-emerald-600 shrink-0"></i>
-                    <span>{{ $page.props.flash.success }}</span>
-                </div>
-
-                <!-- Mensaje de Advertencia Flash -->
-                <div
-                    v-if="$page.props.flash?.warning"
-                    class="p-3.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center gap-2.5 text-xs sm:text-sm"
-                >
-                    <i class="fa-solid fa-triangle-exclamation text-amber-600 shrink-0"></i>
-                    <span>{{ $page.props.flash.warning }}</span>
-                </div>
-
                 <!-- Tarjeta única del Domicilio -->
                 <div
                     v-if="address"

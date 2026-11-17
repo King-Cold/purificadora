@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'warning' => fn () => $request->session()->get('warning'),
+                'info' => fn () => $request->session()->get('info'),
             ],
             'plant' => [
                 'pending_fixed_count' => fn () => $user && ($user->hasRole(['Operador Planta', 'Administrador', 'Super Admin']))

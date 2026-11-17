@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     activeTab: {
@@ -35,8 +36,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.flash?.error || page.props.errors?.fill || page.props.errors?.received_quantity || null);
+const formError = computed(() => page.props.errors?.fill || page.props.errors?.received_quantity || null);
 
 // Pestaña actual reactiva
 const currentTab = ref(props.activeTab || 'por-recibir');
@@ -139,12 +139,12 @@ const submitReceptionIncident = () => {
     if (!itemForReceptionIncident.value || receptionIncidentForm.processing) return;
 
     if (receptionShortage.value > 0 && receptionIncidentForm.difference_reason.trim().length < 5) {
-        alert('Debe especificar el motivo obligatorio de los faltantes (mínimo 5 caracteres).');
+        alertWarning('Debe especificar el motivo obligatorio de los faltantes (mínimo 5 caracteres).');
         return;
     }
 
     if (receptionIncidentForm.damaged_quantity > 0 && receptionIncidentForm.damage_notes.trim().length < 5) {
-        alert('Debe describir el daño detectado en los envases (mínimo 5 caracteres).');
+        alertWarning('Debe describir el daño detectado en los envases (mínimo 5 caracteres).');
         return;
     }
 
@@ -260,7 +260,7 @@ const submitFillIncident = () => {
     if (!itemForFillIncident.value || fillIncidentForm.processing) return;
 
     if (fillIncidentForm.notes.trim().length < 5) {
-        alert('Debe describir el daño detectado durante el lavado/llenado (mínimo 5 caracteres).');
+        alertWarning('Debe describir el daño detectado durante el lavado/llenado (mínimo 5 caracteres).');
         return;
     }
 
@@ -301,21 +301,12 @@ const submitFillAll = () => {
     <AuthenticatedLayout wide>
         <div class="max-w-4xl mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-3 pb-24 md:pb-12">
 
-            <!-- Mensajes Flash -->
             <div
-                v-if="flashSuccess"
-                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
-            </div>
-
-            <div
-                v-if="flashError"
+                v-if="formError"
                 class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
             >
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
+                <div class="flex-1 font-semibold leading-relaxed">{{ formError }}</div>
             </div>
 
             <!-- ========================================================================= -->

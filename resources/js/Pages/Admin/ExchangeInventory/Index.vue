@@ -35,8 +35,6 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.flash?.error);
 
 // =========================================================================
 // 1. EDITAR META DE CAMBIOS
@@ -333,20 +331,8 @@ const showResolvedIncidents = ref(false);
     <AuthenticatedLayout wide>
         <div class="py-5 sm:py-7 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
 
-            <!-- Mensajes Flash -->
             <div
-                v-if="flashSuccess"
-                class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 shadow-2xs"
-                role="alert"
-            >
-                <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-circle-check text-lg"></i>
-                </div>
-                <p class="text-sm font-bold flex-1">{{ flashSuccess }}</p>
-            </div>
-
-            <div
-                v-if="flashError || Object.keys(page.props.errors || {}).length > 0"
+                v-if="Object.keys(page.props.errors || {}).length > 0"
                 class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 shadow-2xs"
                 role="alert"
             >
@@ -354,7 +340,6 @@ const showResolvedIncidents = ref(false);
                     <i class="fa-solid fa-triangle-exclamation text-lg"></i>
                 </div>
                 <div class="text-sm font-bold flex-1">
-                    <p v-if="flashError">{{ flashError }}</p>
                     <p v-for="(err, key) in page.props.errors" :key="key">{{ err }}</p>
                 </div>
             </div>

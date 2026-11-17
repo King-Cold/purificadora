@@ -7,24 +7,18 @@ use App\Exceptions\OrderBusinessRuleException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CancelOrderRequest;
 use App\Http\Requests\Admin\ConfirmOrderRequest;
-use App\Http\Requests\Admin\StoreAdminOrderRequest;
-use App\Models\Customer;
 use App\Models\Order;
 use App\Services\OrderService;
-use App\Services\StoreScheduleService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class OrderController extends Controller
 {
     public function __construct(
-        protected OrderService $orderService,
-        protected StoreScheduleService $scheduleService
+        protected OrderService $orderService
     ) {}
 
     /**
@@ -105,140 +99,6 @@ class OrderController extends Controller
                 'date_to' => $dateTo,
             ],
         ]);
-    }
-
-    /**
-     * Búsqueda en tiempo real de clientes sin cuenta vinculada para selección en registro.
-     */
-    public function searchCustomers(Request $request): JsonResponse
-    {
-        Gate::authorize('create', Order::class);
-
-        $q = trim((string) $request->input('search', ''));
-
-        $query = Customer::whereNull('user_id')
-            ->with('address');
-
-        if (!empty($q)) {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('name', 'like', "%{$q}%")
-                    ->orWhere('nickname', 'like', "%{$q}%")
-                    ->orWhere('code', 'like', "%{$q}%")
-                    ->orWhere('phone', 'like', "%{$q}%");
-            });
-        }
-
-        $customers = $query->take(20)->get()->map(function (Customer $customer) {
-            $activeOrder = $this->orderService->getActiveOrderForCustomer($customer);
-            $address = $customer->address;
-
-            return [
-                'id' => $customer->id,
-                'code' => $customer->code,
-                'name' => $customer->name,
-                'nickname' => $customer->nickname,
-                'phone' => $customer->phone,
-                'bottle_type' => $customer->bottle_type,
-                'bottle_type_label' => $customer->bottle_type_label,
-                'assigned_bottles_count' => $customer->assigned_bottles_count,
-                'fixed_bottles_count' => (int) $customer->fixed_bottles_count,
-                'exchange_bottles_count' => (int) $customer->exchange_bottles_count,
-                'total_bottles' => (int) $customer->total_bottles,
-                'has_address' => $address !== null && !$address->trashed(),
-                'address' => $address && !$address->trashed() ? [
-                    'id' => $address->id,
-                    'full_address' => $address->full_address,
-                    'zone_label' => $address->zone_label,
-                ] : null,
-                'active_order' => $activeOrder ? [
-                    'id' => $activeOrder->id,
-                    'folio' => $activeOrder->folio,
-                    'status_label' => $activeOrder->status_label,
-                ] : null,
-            ];
-        });
-
-        return response()->json($customers);
-    }
-
-    /**
-     * Formulario para registrar un pedido administrativo para un cliente sin cuenta.
-     */
-    public function create(Request $request): Response
-    {
-        Gate::authorize('create', Order::class);
-
-        $scheduleStatus = $this->scheduleService->checkOrderReception();
-        $scheduleSummary = $this->scheduleService->getScheduleSummary();
-
-        $selectedCustomerData = null;
-        if ($customerId = $request->query('customer_id')) {
-            $customer = Customer::whereNull('user_id')
-                ->with('address')
-                ->find($customerId);
-
-            if ($customer && !$customer->trashed()) {
-                $activeOrder = $this->orderService->getActiveOrderForCustomer($customer);
-                $address = $customer->address;
-
-                $selectedCustomerData = [
-                    'id' => $customer->id,
-                    'code' => $customer->code,
-                    'name' => $customer->name,
-                    'nickname' => $customer->nickname,
-                    'phone' => $customer->phone,
-                    'bottle_type' => $customer->bottle_type,
-                    'bottle_type_label' => $customer->bottle_type_label,
-                    'assigned_bottles_count' => $customer->assigned_bottles_count,
-                    'fixed_bottles_count' => (int) $customer->fixed_bottles_count,
-                    'exchange_bottles_count' => (int) $customer->exchange_bottles_count,
-                    'total_bottles' => (int) $customer->total_bottles,
-                    'has_address' => $address !== null && !$address->trashed(),
-                    'address' => $address && !$address->trashed() ? [
-                        'id' => $address->id,
-                        'full_address' => $address->full_address,
-                        'zone_label' => $address->zone_label,
-                    ] : null,
-                    'active_order' => $activeOrder ? [
-                        'id' => $activeOrder->id,
-                        'folio' => $activeOrder->folio,
-                        'status_label' => $activeOrder->status_label,
-                    ] : null,
-                ];
-            }
-        }
-
-        return Inertia::render('Admin/Orders/Create', [
-            'scheduleStatus' => $scheduleStatus,
-            'scheduleSummary' => $scheduleSummary,
-            'preselectedCustomer' => $selectedCustomerData,
-        ]);
-    }
-
-    /**
-     * Procesa y registra un nuevo pedido administrativo.
-     *
-     * @throws ValidationException
-     */
-    public function store(StoreAdminOrderRequest $request): RedirectResponse
-    {
-        Gate::authorize('create', Order::class);
-
-        try {
-            $order = $this->orderService->createOrder($request->user(), [
-                'customer_id' => $request->integer('customer_id'),
-                'fixed_quantity' => $request->integer('fixed_quantity'),
-                'exchange_quantity' => $request->integer('exchange_quantity'),
-                'notes' => $request->input('notes'),
-            ]);
-
-            return redirect()->route('admin.orders.show', $order->id)
-                ->with('success', "¡Pedido con folio {$order->folio} registrado exitosamente!");
-        } catch (OrderBusinessRuleException $e) {
-            throw ValidationException::withMessages([
-                $e->getErrorKey() => [$e->getMessage()],
-            ]);
-        }
     }
 
     /**

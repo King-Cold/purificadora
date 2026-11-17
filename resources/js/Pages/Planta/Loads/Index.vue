@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     balances: {
@@ -113,7 +114,7 @@ const submitWithdraw = () => {
     if (!proposalToWithdraw.value) return;
     const total = Number(withdrawForm.retained_quantity || 0) + Number(withdrawForm.damaged_quantity || 0) + Number(withdrawForm.unlocated_quantity || 0);
     if (total !== proposalToWithdraw.value.quantity) {
-        alert(`La suma del desglose (Retenidas: ${withdrawForm.retained_quantity}, Dañadas: ${withdrawForm.damaged_quantity}, Sin localizar: ${withdrawForm.unlocated_quantity}) debe ser exactamente igual a ${proposalToWithdraw.value.quantity}.`);
+        alertWarning(`La suma del desglose (Retenidas: ${withdrawForm.retained_quantity}, Dañadas: ${withdrawForm.damaged_quantity}, Sin localizar: ${withdrawForm.unlocated_quantity}) debe ser exactamente igual a ${proposalToWithdraw.value.quantity}.`);
         return;
     }
     withdrawForm.post(route('planta.loads.withdraw', proposalToWithdraw.value.id), {

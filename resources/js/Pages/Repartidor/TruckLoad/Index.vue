@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
-import { Head, useForm, usePage, Link } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
     driver: {
@@ -36,8 +36,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.transfer || page.props.errors?.unload || null);
+const formError = computed(() => page.props.errors?.transfer || page.props.errors?.unload || null);
 
 // Modal para aceptar transferencia
 const selectedTransfer = ref(null);
@@ -223,8 +222,6 @@ const submitInconvenience = () => {
     });
 };
 
-const showHistoryMobile = ref(false);
-
 const formatDateTime = (dateStr) => {
     if (!dateStr) return '-';
     const d = new Date(dateStr);
@@ -284,78 +281,71 @@ const getLocationLabel = (loc) => {
     <Head title="Mi Carga - Puritronic" />
 
     <AuthenticatedLayout wide>
-        <div class="py-4 sm:py-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-4 pb-28 md:pb-16">
-
-            <!-- Mensajes Flash de Éxito / Error -->
-            <div
-                v-if="flashSuccess"
-                class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
-            >
-                <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashSuccess }}</div>
-            </div>
+        <div class="py-4 sm:py-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5 pb-28 md:pb-16">
 
             <div
-                v-if="flashError"
-                class="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs"
+                v-if="formError"
+                class="px-4 py-3.5 rounded-2xl bg-[#FCECEF] border border-[#E82147]/25 text-[#292638] text-xs sm:text-sm flex items-center gap-3"
             >
-                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
-                <div class="flex-1 font-semibold leading-relaxed">{{ flashError }}</div>
+                <div class="h-8 w-8 rounded-lg bg-[#E82147] text-white flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                </div>
+                <div class="flex-1 font-semibold text-[#E82147] leading-relaxed">{{ formError }}</div>
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 1. CARGAS POR CONFIRMAR (PRIMER LUGAR CUANDO EXISTAN)                     -->
+            <!-- 1. CARGAS DE FIJOS POR CONFIRMAR (SOLO CUANDO EXISTAN)                    -->
             <!-- ========================================================================= -->
             <div
                 v-if="pendingTransfers.length > 0"
-                class="bg-amber-50/70 rounded-3xl border border-amber-200 shadow-2xs overflow-hidden"
+                class="bg-white rounded-2xl border border-[#A97827]/35 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] overflow-hidden"
             >
-                <div class="px-4 sm:px-5 py-3.5 bg-amber-100/60 border-b border-amber-200/80 flex items-center justify-between">
+                <div class="px-4 sm:px-5 py-3.5 bg-[#F8F0DF] border-b border-[#A97827]/20 flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
-                        <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                        <h3 class="font-black text-amber-950 text-sm sm:text-base">
+                        <span class="h-2 w-2 rounded-full bg-[#A97827]"></span>
+                        <h3 class="font-bold text-[#292638] text-sm">
                             Cargas por confirmar ({{ pendingTransfers.length }})
                         </h3>
                     </div>
-                    <span class="text-xs font-semibold text-amber-800">
-                        Confirmación física requerida
+                    <span class="text-xs font-medium text-[#A97827]">
+                        Confirmación requerida
                     </span>
                 </div>
 
-                <div class="divide-y divide-amber-200/60">
+                <div class="divide-y divide-[#E9E7F0]">
                     <div
                         v-for="transfer in pendingTransfers"
                         :key="transfer.id"
-                        class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-amber-50/30 transition"
+                        class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white"
                     >
                         <div class="space-y-1">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="px-2.5 py-0.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
+                                <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-[#F8F0DF] text-[#A97827]">
                                     {{ transfer.bottle_type === 'cambio' ? 'Cambio lleno' : 'Fijo de cliente' }}
                                 </span>
-                                <span class="text-xs text-slate-500">
+                                <span class="text-xs text-[#747181]">
                                     {{ formatDateTime(transfer.created_at) }}
                                 </span>
-                                <span v-if="transfer.user" class="text-xs text-slate-500">
+                                <span v-if="transfer.user" class="text-xs text-[#747181]">
                                     · Autorizó: {{ transfer.user.name }}
                                 </span>
                             </div>
 
                             <div class="flex items-baseline gap-2">
-                                <span class="text-xl sm:text-2xl font-black text-slate-900">
+                                <span class="text-xl font-bold text-[#292638] tabular-nums">
                                     {{ transfer.proposed_quantity || transfer.quantity }} u. de 20L
                                 </span>
-                                <span class="text-xs font-semibold text-slate-500">
-                                    propuestas por Planta
+                                <span class="text-xs font-medium text-[#747181]">
+                                    enviadas por Planta
                                 </span>
                             </div>
 
-                            <div v-if="transfer.customer" class="text-xs text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200 mt-1 inline-block">
-                                <span class="font-bold text-slate-900">Propietario:</span>
+                            <div v-if="transfer.customer" class="text-xs text-[#292638] bg-[#F4F3F8] px-2.5 py-1.5 rounded-xl border border-[#E9E7F0] mt-1 inline-block">
+                                <span class="font-semibold">Propietario:</span>
                                 {{ transfer.customer.nickname ? `"${transfer.customer.nickname}" · ` : '' }}{{ transfer.customer.name }} ({{ transfer.customer.code }})
                             </div>
 
-                            <p v-if="transfer.notes" class="text-xs text-slate-500 italic">
+                            <p v-if="transfer.notes" class="text-xs text-[#747181] italic">
                                 Nota: {{ transfer.notes }}
                             </p>
                         </div>
@@ -364,15 +354,15 @@ const getLocationLabel = (loc) => {
                             <button
                                 @click="openAcceptModal(transfer)"
                                 type="button"
-                                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black bg-blue-900 text-white hover:bg-blue-800 active:scale-95 transition shadow-2xs min-h-[44px]"
+                                class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#1E1545] text-white hover:bg-[#2B205E] transition-colors min-h-[44px] cursor-pointer"
                             >
-                                <i class="fa-solid fa-boxes-stacked text-sky-400"></i>
+                                <i class="fa-solid fa-boxes-stacked text-xs"></i>
                                 <span>Revisar carga</span>
                             </button>
                             <button
                                 @click="openRejectModal(transfer)"
                                 type="button"
-                                class="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition min-h-[44px]"
+                                class="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-[#FCECEF] text-[#E82147] hover:bg-[#F9DCE2] transition-colors min-h-[44px] cursor-pointer"
                             >
                                 Rechazar
                             </button>
@@ -381,146 +371,129 @@ const getLocationLabel = (loc) => {
                 </div>
             </div>
 
-            <!-- Estado breve si no hay cargas por confirmar -->
-            <div
-                v-else
-                class="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-3.5 shadow-2xs flex items-center justify-between text-xs text-slate-500"
-            >
-                <div class="flex items-center gap-2 font-medium">
-                    <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
-                    <span>No hay cargas por confirmar</span>
-                </div>
-                <span class="text-[11px] text-slate-400">Planta al día</span>
-            </div>
-
             <!-- ========================================================================= -->
-            <!-- 2. RESUMEN DE CARGA (DOS BLOQUES: CAMBIOS Y FIJOS + ACCIÓN PLANTA)        -->
+            <!-- 2. RESUMEN DE CARGA EN CAMIÓN (CAMBIOS + FIJOS)                           -->
             <!-- ========================================================================= -->
-            <div class="space-y-3">
-                <!-- Cabecera de Resumen con Acción Directa: Entregar botellones a Planta -->
-                <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h3 class="text-base sm:text-lg font-black text-slate-900">
-                            Resumen de carga en camión
-                        </h3>
-                        <p class="text-xs text-slate-500">
-                            Inventario continuo de botellones de 20L
+                        <h1 class="text-lg sm:text-xl font-bold text-[#292638] tracking-[-0.015em]">
+                            Mi carga en camión
+                        </h1>
+                        <p class="text-xs text-[#747181] mt-0.5">
+                            Existencias actuales de 20L · {{ driver.name }}
                         </p>
                     </div>
 
-                    <!-- Acciones accesibles junto al resumen -->
                     <div v-if="canManage" class="flex flex-wrap items-center gap-2">
                         <button
                             @click="openInconvenienceModal"
                             type="button"
-                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs active:scale-95 transition min-h-[44px] cursor-pointer"
+                            class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-[#F8F0DF] hover:bg-[#F3E5C8] text-[#A97827] border border-[#A97827]/20 transition-colors min-h-[42px] cursor-pointer"
                         >
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Reportar inconveniente</span>
+                            <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                            <span>Reportar dañado / perdido</span>
                         </button>
 
                         <button
+                            v-if="truckInventory.fixed_empty_collected_total > 0"
                             @click="openUnloadModal"
                             type="button"
-                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0E1E42] hover:bg-blue-900 text-white shadow-2xs active:scale-95 transition min-h-[44px] cursor-pointer"
+                            class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-[#1E1545] hover:bg-[#2B205E] text-white transition-colors min-h-[42px] cursor-pointer"
                         >
-                            <i class="fa-solid fa-arrow-down text-sky-400"></i>
-                            <span>Entregar botellones a Planta</span>
+                            <i class="fa-solid fa-arrow-down text-xs"></i>
+                            <span>Entregar Fijos a Planta</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Cuadrícula de 2 Bloques: Cambios y Fijos -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- BLOQUE 1: CAMBIOS -->
-                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-3">
-                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                            <div class="flex items-center gap-2">
-                                <div class="h-8 w-8 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center text-sm font-black">
+                    <!-- BLOQUE 1: CAMBIOS (LECTURA DIRECTA PARA EL REPARTIDOR) -->
+                    <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] p-5 space-y-4">
+                        <div class="flex items-center justify-between border-b border-[#E9E7F0] pb-3.5">
+                            <div class="flex items-center gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-[#E9F3F8] text-[#0071BA] flex items-center justify-center text-sm">
                                     <i class="fa-solid fa-bottle-water"></i>
                                 </div>
                                 <div>
-                                    <h4 class="text-base font-black text-slate-900 leading-tight">Cambios</h4>
-                                    <span class="text-xs text-slate-500 font-medium">Fondo genérico de 20L</span>
+                                    <h4 class="text-sm font-bold text-[#292638] leading-tight">Cambios (20L)</h4>
+                                    <span class="text-xs text-[#747181]">Planta controla subidas y bajadas</span>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-900">
-                                {{ truckInventory.exchange_full_available + truckInventory.exchange_empty_collected }} total en camión
+                            <span class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#E9F3F8] text-[#0071BA] tabular-nums">
+                                {{ truckInventory.exchange_full_available + truckInventory.exchange_empty_collected }} en camión
                             </span>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3 pt-1">
+                        <div class="grid grid-cols-2 gap-3">
                             <!-- Llenos Disponibles -->
-                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
-                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
-                                    Llenos disponibles
+                            <div class="bg-[#F4F3F8] p-3.5 rounded-xl border border-[#E9E7F0] space-y-1">
+                                <span class="text-xs font-medium text-[#747181] block">
+                                    Llenos para entregar
                                 </span>
-                                <div class="text-2xl sm:text-3xl font-black text-blue-900">
+                                <div class="text-2xl sm:text-3xl font-bold text-[#0071BA] tabular-nums">
                                     {{ truckInventory.exchange_full_available }}
                                 </div>
-                                <span class="text-[11px] font-semibold text-slate-600 block">
-                                    Para entregar en ruta
+                                <span class="text-[11px] font-medium text-[#747181] block">
+                                    Listos para clientes
                                 </span>
                             </div>
 
                             <!-- Vacíos Recogidos -->
-                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
-                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
-                                    Vacíos recogidos
+                            <div class="bg-[#F4F3F8] p-3.5 rounded-xl border border-[#E9E7F0] space-y-1">
+                                <span class="text-xs font-medium text-[#747181] block">
+                                    Vacíos de regreso
                                 </span>
-                                <div class="text-2xl sm:text-3xl font-black text-slate-800">
+                                <div class="text-2xl sm:text-3xl font-bold text-[#292638] tabular-nums">
                                     {{ truckInventory.exchange_empty_collected }}
                                 </div>
-                                <span v-if="truckInventory.exchange_empty_committed_in_unload > 0" class="text-[11px] font-bold text-amber-800 block">
-                                    {{ truckInventory.exchange_empty_committed_in_unload }} pendientes de confirmar en Planta ({{ truckInventory.exchange_empty_uncommitted }} libres)
-                                </span>
-                                <span v-else class="text-[11px] font-semibold text-slate-600 block">
-                                    Listos para Planta
+                                <span class="text-[11px] font-medium text-[#747181] block">
+                                    Para entregar en Planta
                                 </span>
                             </div>
                         </div>
                     </div>
 
                     <!-- BLOQUE 2: FIJOS -->
-                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-3">
-                        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                            <div class="flex items-center gap-2">
-                                <div class="h-8 w-8 rounded-xl bg-purple-50 text-purple-900 flex items-center justify-center text-sm font-black">
+                    <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] p-5 space-y-4">
+                        <div class="flex items-center justify-between border-b border-[#E9E7F0] pb-3.5">
+                            <div class="flex items-center gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-[#DAD6E8]/70 text-[#1E1545] flex items-center justify-center text-sm">
                                     <i class="fa-solid fa-boxes-stacked"></i>
                                 </div>
                                 <div>
-                                    <h4 class="text-base font-black text-slate-900 leading-tight">Fijos</h4>
-                                    <span class="text-xs text-slate-500 font-medium">Propiedad de clientes</span>
+                                    <h4 class="text-sm font-bold text-[#292638] leading-tight">Fijos (20L)</h4>
+                                    <span class="text-xs text-[#747181]">Envases propios de clientes</span>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-900">
-                                {{ truckInventory.fixed_full_to_deliver_total + truckInventory.fixed_empty_collected_total }} total
+                            <span class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#DAD6E8]/70 text-[#1E1545] tabular-nums">
+                                {{ truckInventory.fixed_full_to_deliver_total + truckInventory.fixed_empty_collected_total }} en camión
                             </span>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3 pt-1">
+                        <div class="grid grid-cols-2 gap-3">
                             <!-- Llenos Para Devolver -->
-                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
-                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                            <div class="bg-[#F4F3F8] p-3.5 rounded-xl border border-[#E9E7F0] space-y-1">
+                                <span class="text-xs font-medium text-[#747181] block">
                                     Llenos preparados
                                 </span>
-                                <div class="text-2xl sm:text-3xl font-black text-emerald-900">
+                                <div class="text-2xl sm:text-3xl font-bold text-[#34785A] tabular-nums">
                                     {{ truckInventory.fixed_full_to_deliver_total }}
                                 </div>
-                                <span class="text-[11px] font-semibold text-emerald-700 block">
+                                <span class="text-[11px] font-medium text-[#34785A] block">
                                     Para devolver
                                 </span>
                             </div>
 
                             <!-- Vacíos Para Planta -->
-                            <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 space-y-1">
-                                <span class="text-xs font-bold text-slate-500 block uppercase tracking-wider text-[11px]">
+                            <div class="bg-[#F4F3F8] p-3.5 rounded-xl border border-[#E9E7F0] space-y-1">
+                                <span class="text-xs font-medium text-[#747181] block">
                                     Vacíos recogidos
                                 </span>
-                                <div class="text-2xl sm:text-3xl font-black text-slate-800">
+                                <div class="text-2xl sm:text-3xl font-bold text-[#292638] tabular-nums">
                                     {{ truckInventory.fixed_empty_collected_total }}
                                 </div>
-                                <span class="text-[11px] font-semibold text-slate-600 block">
+                                <span class="text-[11px] font-medium text-[#747181] block">
                                     Llevando a Planta
                                 </span>
                             </div>
@@ -532,59 +505,59 @@ const getLocationLabel = (loc) => {
             <!-- ========================================================================= -->
             <!-- 3. FIJOS POR CLIENTE (LISTA COMPACTA)                                     -->
             <!-- ========================================================================= -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-4 sm:px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+            <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[#E9E7F0] flex items-center justify-between">
                     <div>
-                        <h3 class="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                            <i class="fa-solid fa-users text-blue-900"></i> Fijos por cliente en camión
+                        <h3 class="font-bold text-[#292638] text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-users text-[#1E1545] text-xs"></i> Fijos por cliente en camión
                         </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Identificación de envases asignados en custodia
+                        <p class="text-xs text-[#747181] mt-0.5">
+                            Envases propios de clientes en custodia
                         </p>
                     </div>
                 </div>
 
                 <div v-if="fixedByCustomer.length === 0" class="p-4 sm:p-5 text-center">
-                    <p class="text-xs font-semibold text-slate-500">No hay envases fijos en el camión</p>
+                    <p class="text-xs font-medium text-[#747181]">No hay envases fijos en el camión</p>
                 </div>
 
-                <div v-else class="divide-y divide-slate-100">
+                <div v-else class="divide-y divide-[#E9E7F0]/75">
                     <div
                         v-for="item in fixedByCustomer"
                         :key="item.customer_id"
-                        class="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50/50 transition"
+                        class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-[#F4F3F8]/60 transition-colors"
                     >
                         <div class="space-y-0.5">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="font-black text-slate-900 text-sm sm:text-base">
+                                <span class="font-bold text-[#292638] text-sm">
                                     {{ item.customer_nickname || item.customer_name }}
                                 </span>
-                                <span class="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-slate-100 text-slate-600">
+                                <span class="px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-[#F4F3F8] text-[#747181]">
                                     {{ item.customer_code }}
                                 </span>
                             </div>
-                            <p v-if="item.customer_nickname && item.customer_name && item.customer_name !== item.customer_nickname" class="text-xs text-slate-500">
+                            <p v-if="item.customer_nickname && item.customer_name && item.customer_name !== item.customer_nickname" class="text-xs text-[#747181]">
                                 {{ item.customer_name }}
                             </p>
                         </div>
 
-                        <div class="flex items-center gap-2 shrink-0">
+                        <div class="flex items-center gap-2 shrink-0 flex-wrap">
                             <div
                                 v-if="item.fixed_full_to_deliver > 0"
-                                class="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-1.5"
+                                class="px-3 py-1.5 rounded-xl bg-[#E8F2EC] border border-[#34785A]/20 text-[#34785A] text-xs font-semibold flex items-center gap-1.5 tabular-nums"
                             >
-                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                <i class="fa-solid fa-circle-check"></i>
                                 <span>Llenos para devolver:</span>
-                                <span class="text-sm font-black">{{ item.fixed_full_to_deliver }}</span>
+                                <span class="text-sm font-bold">{{ item.fixed_full_to_deliver }}</span>
                             </div>
 
                             <div
                                 v-if="item.fixed_empty_collected > 0"
-                                class="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5"
+                                class="px-3 py-1.5 rounded-xl bg-[#F4F3F8] border border-[#E9E7F0] text-[#292638] text-xs font-semibold flex items-center gap-1.5 tabular-nums"
                             >
-                                <i class="fa-solid fa-arrow-down text-slate-500"></i>
+                                <i class="fa-solid fa-arrow-down text-[#747181]"></i>
                                 <span>Vacíos para Planta:</span>
-                                <span class="text-sm font-black">{{ item.fixed_empty_collected }}</span>
+                                <span class="text-sm font-bold">{{ item.fixed_empty_collected }}</span>
                             </div>
                         </div>
                     </div>
@@ -592,29 +565,29 @@ const getLocationLabel = (loc) => {
             </div>
 
             <!-- ========================================================================= -->
-            <!-- 4. MOVIMIENTOS RECIENTES (CON ETIQUETAS CAMIÓN → PLANTA, CLIENTE → CAMIÓN)-->
+            <!-- 4. MOVIMIENTOS RECIENTES                                                  -->
             <!-- ========================================================================= -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
-                <div class="px-4 sm:px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+            <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[#E9E7F0] flex items-center justify-between">
                     <div>
-                        <h3 class="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-slate-700"></i> Movimientos recientes
+                        <h3 class="font-bold text-[#292638] text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-[#747181] text-xs"></i> Movimientos recientes
                         </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
+                        <p class="text-xs text-[#747181] mt-0.5">
                             Historial continuo de custodia en el camión
                         </p>
                     </div>
                 </div>
 
-                <div v-if="recentMovements.length === 0" class="p-4 sm:p-5 text-center text-xs font-semibold text-slate-400">
+                <div v-if="recentMovements.length === 0" class="p-5 text-center text-xs font-medium text-[#747181]">
                     No se registran movimientos recientes de custodia.
                 </div>
 
-                <div v-else class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                <div v-else class="divide-y divide-[#E9E7F0]/75 max-h-96 overflow-y-auto">
                     <div
                         v-for="mov in recentMovements"
                         :key="mov.id"
-                        class="p-3.5 sm:p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition"
+                        class="p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#F4F3F8]/60 transition-colors"
                     >
                         <div class="space-y-1">
                             <div class="flex items-center gap-2 flex-wrap">

@@ -99,19 +99,9 @@ const getStatusIconClass = (statusKey) => {
                             Gestión de Pedidos
                         </h2>
                         <p class="text-xs text-slate-500">
-                            Consulta global, supervisión y registro administrativo de pedidos
+                            Consulta global y supervisión administrativa de pedidos
                         </p>
                     </div>
-                </div>
-
-                <div class="flex items-center gap-2.5 self-start sm:self-auto">
-                    <Link
-                        :href="route('admin.orders.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer"
-                    >
-                        <i class="fa-solid fa-plus-circle text-sky-400"></i>
-                        <span>Registrar Pedido</span>
-                    </Link>
                 </div>
             </div>
         </template>
@@ -410,13 +400,6 @@ const getStatusIconClass = (statusKey) => {
                                 >
                                     Limpiar filtros
                                 </button>
-                                <Link
-                                    :href="route('admin.orders.create')"
-                                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs"
-                                >
-                                    <i class="fa-solid fa-plus-circle text-sky-400"></i>
-                                    <span>Registrar Pedido</span>
-                                </Link>
                             </div>
                         </div>
                     </div>

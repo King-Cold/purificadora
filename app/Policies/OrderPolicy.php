@@ -64,20 +64,11 @@ class OrderPolicy
 
     /**
      * Determina si el usuario puede registrar un nuevo pedido.
-     * Administrador: puede registrar pedidos para clientes.
-     * Cliente: puede registrar pedidos exclusivamente para su propio Customer vinculado.
-     * Repartidor y Operador Planta: sin acceso en este bloque.
+     * Solo los clientes con perfil vinculado pueden generar pedidos en línea.
+     * Administrador, Repartidor y Operador Planta: sin acceso para crear pedidos.
      */
     public function create(User $user): bool
     {
-        if ($user->hasRole('Repartidor') || $user->hasRole('Operador Planta')) {
-            return false;
-        }
-
-        if ($user->hasRole('Administrador') || $user->can('orders.create') && !$user->hasRole('Cliente')) {
-            return true;
-        }
-
         if ($user->hasRole('Cliente')) {
             return $user->customer !== null;
         }

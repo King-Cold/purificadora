@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     activeRoute: {
@@ -27,7 +28,6 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.errors?.direct || null);
 
 // -------------------------------------------------------------------------
@@ -212,27 +212,27 @@ const form = useForm({
 
 const submitDirectOrder = () => {
     if (!selectedService.value) {
-        alert('Por favor elige primero el servicio: Fijos o Cambios.');
+        alertWarning('Por favor elige primero el servicio: Fijos o Cambios.');
         return;
     }
 
     if (clientMode.value === 'search' && !selectedCustomer.value) {
-        alert('Debes buscar y seleccionar un cliente o registrar un Nuevo Cliente Rápido.');
+        alertWarning('Debes buscar y seleccionar un cliente o registrar un Nuevo Cliente Rápido.');
         return;
     }
 
     if (hasActiveOrder.value) {
-        alert('Este cliente ya cuenta con un pedido activo. No se puede registrar otro pedido hasta que concluya el actual.');
+        alertWarning('Este cliente ya cuenta con un pedido activo. No se puede registrar otro pedido hasta que concluya el actual.');
         return;
     }
 
     if (clientMode.value === 'new') {
         if (!newCustomer.value.nickname.trim()) {
-            alert('El apodo es obligatorio para registrar un nuevo cliente.');
+            alertWarning('El apodo es obligatorio para registrar un nuevo cliente.');
             return;
         }
         if (!newCustomer.value.delivery_zone) {
-            alert('Por favor especifica la zona de reparto del nuevo cliente (Norte, Sur, Este u Oeste).');
+            alertWarning('Por favor especifica la zona de reparto del nuevo cliente (Norte, Sur, Este u Oeste).');
             return;
         }
     }
@@ -240,11 +240,11 @@ const submitDirectOrder = () => {
     if (selectedService.value === 'cambios') {
         const fulls = Number(props.truck?.exchange_full_available || 0);
         if (fulls <= 0) {
-            alert('No tienes cambios llenos disponibles en tu camión.');
+            alertWarning('No tienes cambios llenos disponibles en tu camión.');
             return;
         }
         if (quantity.value > fulls) {
-            alert(`Solo tienes ${fulls} botellones llenos disponibles.`);
+            alertWarning(`Solo tienes ${fulls} botellones llenos disponibles.`);
             return;
         }
     }

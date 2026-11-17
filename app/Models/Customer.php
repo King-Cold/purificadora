@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Services\CustomerCodeGenerator;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class Customer extends Model
@@ -120,37 +118,6 @@ class Customer extends Model
     }
 
     /**
-     * Reglas de validación estándar para controladores y FormRequests.
-     */
-    public static function validationRules(?int $customerId = null): array
-    {
-        return [
-            'user_id' => [
-                'nullable',
-                'integer',
-                'exists:users,id',
-                Rule::unique('customers', 'user_id')->ignore($customerId),
-            ],
-            'code' => [
-                'required',
-                'string',
-                'max:30',
-                Rule::unique('customers', 'code')->ignore($customerId),
-            ],
-            'name' => ['nullable', 'string', 'max:150'],
-            'nickname' => ['nullable', 'string', 'max:100'],
-            'phone' => ['nullable', 'string', 'max:25'],
-            'secondary_phone' => ['nullable', 'string', 'max:25'],
-            'email' => ['nullable', 'email', 'max:120'],
-            'bottle_type' => ['nullable', 'string', 'in:fixed,exchange,none'],
-            'bottles_count' => ['nullable', 'integer', 'min:0'],
-            'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],
-            'exchange_bottles_count' => ['nullable', 'integer', 'min:0'],
-            'notes' => ['nullable', 'string'],
-        ];
-    }
-
-    /**
      * Determina el tipo de botellón exclusivo del cliente: 'fixed', 'exchange', 'unassigned' o 'mixed' (legado).
      */
     public function getBottleTypeAttribute(): string
@@ -226,14 +193,6 @@ class Customer extends Model
     }
 
     /**
-     * Domicilio predeterminado del cliente (compatibilidad).
-     */
-    public function defaultAddress(): HasOne
-    {
-        return $this->hasOne(CustomerAddress::class)->whereNull('deleted_at');
-    }
-
-    /**
      * Pedidos realizados por el cliente.
      */
     public function orders(): HasMany
@@ -291,24 +250,5 @@ class Customer extends Model
             get: fn (?string $value) => $value ?: $this->user?->email,
             set: fn (?string $value) => $value
         );
-    }
-
-    /**
-     * Scope para búsquedas rápidas por nombre, código, teléfono o correo.
-     */
-    public function scopeSearch(Builder $query, ?string $term): Builder
-    {
-        if (empty($term)) {
-            return $query;
-        }
-
-        return $query->where(function (Builder $subQuery) use ($term) {
-            $subQuery->where('name', 'like', "%{$term}%")
-                ->orWhere('nickname', 'like', "%{$term}%")
-                ->orWhere('code', 'like', "%{$term}%")
-                ->orWhere('phone', 'like', "%{$term}%")
-                ->orWhere('secondary_phone', 'like', "%{$term}%")
-                ->orWhere('email', 'like', "%{$term}%");
-        });
     }
 }

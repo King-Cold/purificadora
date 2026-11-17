@@ -2376,5 +2376,170 @@ class PlantInventoryService
 
         throw new OrderBusinessRuleException('Ubicación de recuperación inválida.', 'recovery_location', 422);
     }
+
+    /**
+     * Resuelve el repartidor activo único (o el especificado) para movimientos directos de cambios.
+     */
+    private function resolveDriverForDirectExchange(?User $driver = null): User
+    {
+        if ($driver) {
+            return $driver;
+        }
+
+        $resolved = User::role('Repartidor')->where('status', 'active')->orderBy('id')->first()
+            ?? User::role('Repartidor')->orderBy('id')->first();
+
+        if (!$resolved) {
+            throw new OrderBusinessRuleException('No hay ningún repartidor activo registrado en el sistema.', 'driver', 422);
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Opción 1 (Flujo simple): Recibe en 1 clic botellones de cambio vacíos del camión hacia Planta.
+     */
+    public function receiveTruckEmptyDirect(User $operator, int $quantity, ?User $driver = null): void
+    {
+        if ($quantity <= 0) {
+            throw new OrderBusinessRuleException('La cantidad a recibir debe ser mayor a cero.', 'quantity', 422);
+        }
+
+        $targetDriver = $this->resolveDriverForDirectExchange($driver);
+
+        DB::transaction(function () use ($operator, $quantity, $targetDriver) {
+            $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+            $truckInv = TruckInventory::lockForUpdate()->firstOrCreate(
+                ['driver_user_id' => $targetDriver->id],
+                [
+                    'exchange_full_available' => 0,
+                    'exchange_full_initial' => 0,
+                    'exchange_full_delivered' => 0,
+                    'exchange_empty_collected' => 0,
+                ]
+            );
+
+            if ($truckInv->exchange_empty_collected < $quantity) {
+                throw new OrderBusinessRuleException(
+                    "El camión solo tiene {$truckInv->exchange_empty_collected} vacío(s) de cambio disponibles para bajar.",
+                    'quantity',
+                    422
+                );
+            }
+
+            $truckInv->decrement('exchange_empty_collected', $quantity);
+            $inv->increment('exchange_empty_available', $quantity);
+
+            BottleCustodyMovement::create([
+                'user_id' => $targetDriver->id,
+                'movement_type' => BottleCustodyMovement::TYPE_TRUCK_UNLOAD_EXCHANGE,
+                'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                'bottle_condition' => BottleCustodyMovement::CONDITION_EMPTY,
+                'quantity' => $quantity,
+                'proposed_quantity' => $quantity,
+                'origin' => 'truck',
+                'destination' => 'plant',
+                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                'confirmed_by_user_id' => $operator->id,
+                'confirmed_at' => now(),
+                'notes' => "Recepción directa en planta de {$quantity} vacío(s) del camión ({$targetDriver->name})",
+                'created_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Opción 1 (Flujo simple): Marca botellones de cambio vacíos en Planta como llenos en 1 clic.
+     */
+    public function fillExchangeDirect(User $operator, int $quantity): void
+    {
+        if ($quantity <= 0) {
+            throw new OrderBusinessRuleException('La cantidad a llenar debe ser mayor a cero.', 'quantity', 422);
+        }
+
+        DB::transaction(function () use ($operator, $quantity) {
+            $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+
+            if ($inv->exchange_empty_available < $quantity) {
+                throw new OrderBusinessRuleException(
+                    "Solo hay {$inv->exchange_empty_available} botellón(es) vacíos disponibles en planta para llenar.",
+                    'quantity',
+                    422
+                );
+            }
+
+            $inv->decrement('exchange_empty_available', $quantity);
+            $inv->increment('exchange_full_available', $quantity);
+
+            BottleCustodyMovement::create([
+                'user_id' => $operator->id,
+                'movement_type' => BottleCustodyMovement::TYPE_PLANT_WASHING_FINISHED,
+                'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+                'quantity' => $quantity,
+                'origin' => 'plant_empty_storage',
+                'destination' => 'plant_full_storage',
+                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                'confirmed_by_user_id' => $operator->id,
+                'confirmed_at' => now(),
+                'notes' => "Llenado directo de {$quantity} cambio(s) en planta",
+                'created_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Opción 1 (Flujo simple): Sube botellones de cambio llenos desde Planta al Camión en 1 clic.
+     */
+    public function sendFullToTruckDirect(User $operator, int $quantity, ?User $driver = null): void
+    {
+        if ($quantity <= 0) {
+            throw new OrderBusinessRuleException('La cantidad a subir al camión debe ser mayor a cero.', 'quantity', 422);
+        }
+
+        $targetDriver = $this->resolveDriverForDirectExchange($driver);
+
+        DB::transaction(function () use ($operator, $quantity, $targetDriver) {
+            $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+
+            if ($inv->exchange_full_available < $quantity) {
+                throw new OrderBusinessRuleException(
+                    "Solo hay {$inv->exchange_full_available} botellón(es) llenos disponibles en planta para subir al camión.",
+                    'quantity',
+                    422
+                );
+            }
+
+            $truckInv = TruckInventory::lockForUpdate()->firstOrCreate(
+                ['driver_user_id' => $targetDriver->id],
+                [
+                    'exchange_full_available' => 0,
+                    'exchange_full_initial' => 0,
+                    'exchange_full_delivered' => 0,
+                    'exchange_empty_collected' => 0,
+                ]
+            );
+
+            $inv->decrement('exchange_full_available', $quantity);
+            $truckInv->increment('exchange_full_available', $quantity);
+            $truckInv->increment('exchange_full_initial', $quantity);
+
+            BottleCustodyMovement::create([
+                'user_id' => $operator->id,
+                'movement_type' => BottleCustodyMovement::TYPE_TRUCK_LOAD_EXCHANGE,
+                'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+                'quantity' => $quantity,
+                'proposed_quantity' => $quantity,
+                'origin' => 'plant',
+                'destination' => 'truck',
+                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                'confirmed_by_user_id' => $targetDriver->id,
+                'confirmed_at' => now(),
+                'notes' => "Carga directa de {$quantity} cambio(s) llenos al camión ({$targetDriver->name})",
+                'created_at' => now(),
+            ]);
+        });
+    }
 }
 

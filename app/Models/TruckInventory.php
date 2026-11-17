@@ -40,10 +40,5 @@ class TruckInventory extends Model
     {
         return $this->belongsTo(User::class, 'driver_user_id');
     }
-
-    public function getAvailableExchangeFullAttribute(): int
-    {
-        return max(0, (int) $this->exchange_full_available);
-    }
 }
 

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import RepartidorBottomNav from '@/Components/RepartidorBottomNav.vue';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     customersWithDebt: {
@@ -20,8 +21,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.debt || null);
+const formError = computed(() => page.props.errors?.debt || null);
 
 // Búsqueda
 const searchQuery = ref(props.searchTerm || '');
@@ -93,7 +93,7 @@ const settleForm = useForm({
 const submitSettle = () => {
     if (!activeCustomer.value) return;
     if (isInsufficientCash.value) {
-        alert(`El efectivo recibido ($${cashTendered.value}) es insuficiente para cubrir los $${exactAmountToLiquidate.value} requeridos.`);
+        alertWarning(`El efectivo recibido ($${cashTendered.value}) es insuficiente para cubrir los $${exactAmountToLiquidate.value} requeridos.`);
         return;
     }
 
@@ -132,14 +132,9 @@ const submitSettle = () => {
                 </div>
             </div>
 
-            <!-- Alertas Flash -->
-            <div v-if="flashSuccess" class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2">
-                <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
-                <span>{{ flashSuccess }}</span>
-            </div>
-            <div v-if="flashError" class="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold flex items-center gap-2">
+            <div v-if="formError" class="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold flex items-center gap-2">
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i>
-                <span>{{ flashError }}</span>
+                <span>{{ formError }}</span>
             </div>
 
             <!-- Título de sección -->

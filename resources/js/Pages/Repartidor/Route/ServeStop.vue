@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { alertWarning } from '@/utils/swal';
 
 const props = defineProps({
     stop: {
@@ -51,8 +52,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.errors?.serve || page.props.errors?.debt || page.props.errors?.stop || null);
+const formError = computed(() => page.props.errors?.serve || page.props.errors?.debt || page.props.errors?.stop || null);
 
 // -------------------------------------------------------------------------
 // GESTIÓN DE SALDOS ANTERIORES
@@ -207,12 +207,12 @@ const serveForm = useForm({
 
 const submitServe = () => {
     if (isCreditExceeded.value) {
-        alert(`No es posible fiar ${unitsToCredit.value} botellones. El margen disponible de fiado es de ${availableCreditMargin.value} botellones.`);
+        alertWarning(`No es posible fiar ${unitsToCredit.value} botellones. El margen disponible de fiado es de ${availableCreditMargin.value} botellones.`);
         return;
     }
 
     if (unitsPaidCash.value > 0 && Number(cashTendered.value || 0) < cashAmountToPay.value) {
-        alert(`El efectivo recibido ($${cashTendered.value}) es insuficiente para cubrir los $${cashAmountToPay.value} a cobrar.`);
+        alertWarning(`El efectivo recibido ($${cashTendered.value}) es insuficiente para cubrir los $${cashAmountToPay.value} a cobrar.`);
         return;
     }
 
@@ -265,12 +265,8 @@ const getTrafficLightColor = (tl) => {
                 </div>
             </div>
 
-            <!-- Alertas de éxito o error -->
-            <div v-if="flashSuccess" class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold">
-                {{ flashSuccess }}
-            </div>
-            <div v-if="flashError" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold">
-                {{ flashError }}
+            <div v-if="formError" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold">
+                {{ formError }}
             </div>
 
             <!-- ========================================================================= -->
