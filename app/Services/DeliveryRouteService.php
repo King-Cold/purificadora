@@ -299,7 +299,7 @@ class DeliveryRouteService
                 }
             }
 
-            if (!$lockedOrder->isPending() && !$lockedOrder->isConfirmed() && !$lockedOrder->isInProcess()) {
+            if (!$lockedOrder->isPending() && !$lockedOrder->isConfirmed() && !$lockedOrder->isInProcess() && $lockedOrder->status !== Order::STATUS_IN_ROUTE) {
                 throw new OrderBusinessRuleException("El pedido {$lockedOrder->folio} no se encuentra elegible para asignación a ruta.", 'status', 422);
             }
 

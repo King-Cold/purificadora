@@ -53,6 +53,9 @@ const props = defineProps({
 
 const page = usePage();
 const formError = computed(() => page.props.errors?.serve || page.props.errors?.debt || page.props.errors?.stop || null);
+const backToRepartoUrl = computed(() =>
+    window.route('repartidor.reparto', { tab: props.return_tab, zone: props.return_zone })
+);
 
 // -------------------------------------------------------------------------
 // GESTIÓN DE SALDOS ANTERIORES
@@ -126,6 +129,9 @@ const totalDeliveredBottles = computed(() => {
     return Number(exchangeDelivered.value || 0) + Number(fixedDelivered.value || 0);
 });
 
+// Cobro: contado vs fiado (declarado antes de promoApplied para evitar TDZ al inicializar)
+const unitsPaidCash = ref(0);
+
 // Cálculo de promoción semanal
 const promoApplied = computed(() => {
     if (totalDeliveredBottles.value <= 0) return false;
@@ -146,8 +152,7 @@ const unitsToCharge = computed(() => {
     return promoApplied.value ? Math.max(0, total - 1) : total;
 });
 
-// Cobro: contado vs fiado
-const unitsPaidCash = ref(unitsToCharge.value);
+unitsPaidCash.value = unitsToCharge.value;
 watch(unitsToCharge, (newVal) => {
     unitsPaidCash.value = newVal;
 });
@@ -253,7 +258,7 @@ const getTrafficLightColor = (tl) => {
             <!-- ========================================================================= -->
             <div class="flex items-center justify-between gap-3">
                 <Link
-                    :href="route('repartidor.reparto', { tab: return_tab, zone: return_zone })"
+                    :href="backToRepartoUrl"
                     class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs hover:bg-slate-50 active:scale-95 transition min-h-[44px]"
                 >
                     <i class="fa-solid fa-arrow-left"></i> Volver a Reparto

@@ -523,8 +523,9 @@ class RouteExecutionController extends Controller
         $pendingDebtAmount = $this->debtService->getPendingDebtAmount($customer);
         $promoProgress = $this->promotionService->getWeeklyProgress($customer);
 
-        // Inventario continuo del camión
-        $truckState = $this->truckInventoryService->getTruckInventoryState($user);
+        // Inventario continuo del camión del chofer asignado a la ruta
+        $truckDriver = $route->driver ?? $user;
+        $truckState = $this->truckInventoryService->getTruckInventoryState($truckDriver);
 
         // Fijos del camión cargados específicamente para este cliente propietario
         $loadedFixed = (int) BottleCustodyMovement::where('customer_id', $customer->id)

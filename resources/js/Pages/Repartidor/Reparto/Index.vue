@@ -859,10 +859,10 @@ const handleDeliverAction = (item) => {
                                 <button
                                     @click="handleDeliverAction(item)"
                                     type="button"
-                                    class="h-10 px-3.5 rounded-xl flex items-center gap-1.5 text-xs font-bold text-white bg-[#0071BA] hover:bg-[#005E9B] transition cursor-pointer shadow-2xs"
+                                    class="h-10 px-3.5 rounded-xl flex items-center gap-1.5 text-xs font-bold text-white bg-[#26845B] hover:bg-[#1F6D4B] transition cursor-pointer shadow-2xs"
                                 >
                                     <CheckCircle2 class="w-4 h-4" />
-                                    <span>{{ item.operation_type === 'intercambio' && (item.fixed_in_truck || 0) === 0 ? 'Atender cambio' : 'Entregar' }}</span>
+                                    <span>Entregar</span>
                                 </button>
                             </template>
                         </div>

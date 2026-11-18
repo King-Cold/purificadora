@@ -2,6 +2,23 @@
 import { ref, computed, watch } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import {
+    AlertTriangle,
+    ArrowDownToLine,
+    ArrowRight,
+    ArrowUpFromLine,
+    Check,
+    ClipboardCheck,
+    Droplets,
+    Factory,
+    Loader2,
+    Minus,
+    Plus,
+    RefreshCw,
+    Scale,
+    Truck,
+    X,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     balances: {
@@ -62,6 +79,11 @@ const truckTotal = computed(() => Number(props.truckSummary.exchange_full_availa
 const activeTotal = computed(() => plantTotal.value + truckTotal.value + Number(props.balances.exchange_washing_filling || 0) + Number(props.balances.exchange_full_reserved || 0));
 const targetQuantity = computed(() => Number(props.supervisionSummary?.target_quantity ?? activeTotal.value));
 const isTargetExact = computed(() => activeTotal.value === targetQuantity.value);
+const targetDifference = computed(() => activeTotal.value - targetQuantity.value);
+const targetProgressPct = computed(() => {
+    if (targetQuantity.value <= 0) return 100;
+    return Math.min(100, Math.max(0, Math.round((activeTotal.value / targetQuantity.value) * 100)));
+});
 
 // Helper para ajustar cantidades dentro de límites seguros
 const clampQty = (val, max) => {
@@ -183,15 +205,15 @@ const submitInconvenience = () => {
 const getMovementMeta = (type) => {
     switch (type) {
         case 'truck_unload_exchange':
-            return { label: 'Vacíos recibidos', badge: 'bg-[#E9F3F8] text-[#0071BA]', icon: 'fa-arrow-down' };
+            return { label: 'Vacíos recibidos', badge: 'bg-[#E9F3F8] text-[#0071BA] border-[#0071BA]/15', kind: 'receive' };
         case 'plant_washing_finished':
-            return { label: 'Llenado en planta', badge: 'bg-[#E8F2EC] text-[#34785A]', icon: 'fa-droplet' };
+            return { label: 'Llenado en planta', badge: 'bg-[#E8F2EC] text-[#26845B] border-[#26845B]/15', kind: 'fill' };
         case 'truck_load_exchange':
-            return { label: 'Subida a camión', badge: 'bg-[#DAD6E8]/75 text-[#1E1545]', icon: 'fa-truck-ramp-box' };
+            return { label: 'Subida a camión', badge: 'bg-[#EEEAF7] text-[#1E1545] border-[#1E1545]/15', kind: 'load' };
         case 'plant_washing_started':
-            return { label: 'Inicio de lavado', badge: 'bg-[#F4F3F8] text-[#747181]', icon: 'fa-soap' };
+            return { label: 'Inicio de lavado', badge: 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0]', kind: 'wash' };
         default:
-            return { label: 'Movimiento', badge: 'bg-[#F4F3F8] text-[#747181]', icon: 'fa-arrows-rotate' };
+            return { label: 'Movimiento', badge: 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0]', kind: 'other' };
     }
 };
 </script>
@@ -202,194 +224,264 @@ const getMovementMeta = (type) => {
     <AuthenticatedLayout>
         <div class="py-5 sm:py-7 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
 
+            <!-- Alerta de error de negocio -->
             <div
                 v-if="formError"
-                class="px-4 py-3.5 rounded-2xl bg-[#FCECEF] border border-[#E82147]/25 text-[#292638] flex items-center gap-3"
+                class="px-4 py-3.5 rounded-2xl bg-[#FCECEF] border border-[#F6C8D2] text-[#292638] flex items-center gap-3"
                 role="alert"
             >
                 <div class="h-9 w-9 rounded-xl bg-[#E82147] text-white flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+                    <AlertTriangle class="w-4 h-4" />
                 </div>
-                <p class="text-sm font-semibold text-[#E82147] flex-1">{{ formError }}</p>
+                <p class="text-sm font-semibold text-[#B91C3C] flex-1">{{ formError }}</p>
             </div>
 
-            <!-- Encabezado compacto con acción discreta de incidencia -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                    <h1 class="text-lg sm:text-xl font-bold text-[#292638] tracking-[-0.015em]">
-                        Control de botellones de cambio
-                    </h1>
-                    <p class="text-xs text-[#747181] mt-0.5">
-                        Flujo directo entre Planta y el camión de {{ truckSummary.driver_name }}
-                    </p>
+            <!-- ===================================================================== -->
+            <!-- ENCABEZADO DE MÓDULO                                                  -->
+            <!-- ===================================================================== -->
+            <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_1px_3px_rgba(30,21,69,0.04)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                <div class="flex items-center gap-3.5 min-w-0">
+                    <div class="h-11 w-11 rounded-2xl bg-[#1E1545] text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <RefreshCw class="w-5 h-5" />
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-lg sm:text-xl font-bold text-[#292638] tracking-[-0.015em] truncate">
+                            Control de botellones de cambio
+                        </h1>
+                        <p class="text-xs text-[#747181] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>Circuito cerrado entre Planta y</span>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F4F3F8] text-[#1E1545] font-semibold">
+                                <Truck class="w-3 h-3" />
+                                {{ truckSummary.driver_name }}
+                            </span>
+                        </p>
+                    </div>
                 </div>
 
                 <button
                     type="button"
                     @click="openInconvenienceModal"
-                    class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#F8F0DF] hover:bg-[#F3E5C8] text-[#A97827] border border-[#A97827]/20 text-xs font-semibold transition-colors cursor-pointer self-start sm:self-auto min-h-[40px]"
+                    class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#FEF5E6] hover:bg-[#FDEBC8] text-[#9A670E] border border-[#F5DFB5] text-xs font-semibold transition-colors cursor-pointer self-start sm:self-auto min-h-[40px] shrink-0"
                 >
-                    <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                    <AlertTriangle class="w-3.5 h-3.5" />
                     <span>Reportar dañado / perdido</span>
                 </button>
             </div>
 
-            <!-- Conteo inicial (visible únicamente si nunca se ha registrado) -->
-            <div v-if="initialCountPending" class="bg-white rounded-2xl border border-[#A97827]/30 p-5 sm:p-6 shadow-xs space-y-4">
-                <div class="flex items-start gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-[#F8F0DF] text-[#A97827] flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-clipboard-check"></i>
+            <!-- ===================================================================== -->
+            <!-- CONTEO INICIAL FÍSICO (COMPACTO, SOLO SI ESTÁ PENDIENTE)              -->
+            <!-- ===================================================================== -->
+            <div
+                v-if="initialCountPending"
+                class="bg-[#FFFDF8] rounded-2xl border border-[#F0D9A8] p-4 sm:p-5 shadow-[0_2px_10px_-6px_rgba(169,120,39,0.18)]"
+            >
+                <form @submit.prevent="submitInitialCount" class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="h-10 w-10 rounded-xl bg-[#FEF5E6] border border-[#F5DFB5] text-[#A97827] flex items-center justify-center shrink-0">
+                            <ClipboardCheck class="w-5 h-5" />
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h2 class="text-sm font-bold text-[#292638]">Conteo inicial físico en Planta</h2>
+                                <span class="px-2 py-0.5 rounded-full bg-[#FEF5E6] text-[#9A670E] border border-[#F5DFB5] text-[10px] font-bold uppercase tracking-wider">
+                                    Pendiente
+                                </span>
+                            </div>
+                            <p class="text-xs text-[#747181] mt-0.5">
+                                Captura cuántos botellones hay físicamente en Planta hoy para fijar el inventario base.
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 class="text-sm font-bold text-[#292638]">Conteo inicial físico pendiente</h2>
-                        <p class="text-xs text-[#747181] mt-0.5">
-                            Registra cuántos botellones de cambio hay actualmente en Planta para fijar la base del inventario.
-                        </p>
-                    </div>
-                </div>
 
-                <form @submit.prevent="submitInitialCount" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div>
-                        <label class="block text-xs font-medium text-[#747181] mb-1">Vacíos en planta</label>
-                        <input
-                            v-model.number="initialCountForm.empty_count"
-                            type="number"
-                            min="0"
-                            required
-                            class="w-full rounded-xl border-[#DAD6E8] text-sm font-semibold text-[#292638] focus:border-[#1E1545] focus:ring-[#DAD6E8]"
-                        />
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5 shrink-0">
+                        <div class="w-full sm:w-36">
+                            <label class="block text-[11px] font-semibold text-[#747181] mb-1">Vacíos en planta</label>
+                            <input
+                                v-model.number="initialCountForm.empty_count"
+                                type="number"
+                                min="0"
+                                required
+                                class="w-full rounded-xl bg-white border-[#E4D5B3] text-sm font-bold text-[#292638] focus:border-[#1E1545] focus:ring-[#DAD6E8] tabular-nums py-2"
+                            />
+                        </div>
+                        <div class="w-full sm:w-36">
+                            <label class="block text-[11px] font-semibold text-[#747181] mb-1">Llenos en planta</label>
+                            <input
+                                v-model.number="initialCountForm.full_count"
+                                type="number"
+                                min="0"
+                                required
+                                class="w-full rounded-xl bg-white border-[#E4D5B3] text-sm font-bold text-[#292638] focus:border-[#1E1545] focus:ring-[#DAD6E8] tabular-nums py-2"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="initialCountForm.processing"
+                            class="min-h-[40px] px-4 rounded-xl bg-[#1E1545] hover:bg-[#2B1F60] text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+                        >
+                            {{ initialCountForm.processing ? 'Guardando...' : 'Guardar conteo' }}
+                        </button>
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-[#747181] mb-1">Llenos en planta</label>
-                        <input
-                            v-model.number="initialCountForm.full_count"
-                            type="number"
-                            min="0"
-                            required
-                            class="w-full rounded-xl border-[#DAD6E8] text-sm font-semibold text-[#292638] focus:border-[#1E1545] focus:ring-[#DAD6E8]"
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        :disabled="initialCountForm.processing"
-                        class="min-h-[42px] px-4 rounded-xl bg-[#1E1545] hover:bg-[#2B205E] text-white text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                        Guardar conteo inicial
-                    </button>
                 </form>
             </div>
 
             <!-- ===================================================================== -->
-            <!-- 1. TARJETAS DE CONTEO (EN PLANTA + EN CAMIÓN = TOTAL ESPERADO)        -->
+            <!-- 1. RESUMEN DEL CIRCUITO (PLANTA · CAMIÓN · BALANCE VS META)           -->
             <!-- ===================================================================== -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <!-- En Planta -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="h-2 w-2 rounded-full bg-[#0071BA] shrink-0"></span>
-                            <span class="text-xs font-medium text-[#747181]">En Planta</span>
-                        </div>
-                        <div class="mt-1.5 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] p-5 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex flex-col justify-between gap-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-semibold text-[#747181] flex items-center gap-1.5">
+                                <span class="h-2 w-2 rounded-full bg-[#0071BA]"></span>
+                                En Planta
+                            </span>
+                            <div class="mt-1 text-3xl font-extrabold text-[#292638] tracking-tight tabular-nums">
                                 {{ plantTotal }}
-                            </span>
-                            <span class="text-xs font-medium text-[#747181] tabular-nums truncate">
-                                {{ balances.exchange_empty_available }} vacíos · {{ balances.exchange_full_ready }} llenos
-                            </span>
+                            </div>
+                        </div>
+                        <div class="h-11 w-11 rounded-2xl bg-[#E9F3F8] text-[#0071BA] flex items-center justify-center shrink-0">
+                            <Factory class="w-5 h-5" />
                         </div>
                     </div>
-                    <div class="h-11 w-11 rounded-xl bg-[#E9F3F8] text-[#0071BA] flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-industry text-base"></i>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-[#F4F3F8] text-xs font-semibold tabular-nums">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F4F3F8] text-[#292638]">
+                            {{ balances.exchange_empty_available }} vacíos
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E8F2EC] text-[#26845B]">
+                            {{ balances.exchange_full_ready }} llenos
+                        </span>
                     </div>
                 </div>
 
                 <!-- En Camión -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="h-2 w-2 rounded-full bg-[#1E1545] shrink-0"></span>
-                            <span class="text-xs font-medium text-[#747181]">En Camión</span>
-                        </div>
-                        <div class="mt-1.5 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] p-5 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex flex-col justify-between gap-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-semibold text-[#747181] flex items-center gap-1.5">
+                                <span class="h-2 w-2 rounded-full bg-[#1E1545]"></span>
+                                En Camión
+                            </span>
+                            <div class="mt-1 text-3xl font-extrabold text-[#292638] tracking-tight tabular-nums">
                                 {{ truckTotal }}
-                            </span>
-                            <span class="text-xs font-medium text-[#747181] tabular-nums truncate">
-                                {{ truckSummary.exchange_full_available }} llenos · {{ truckSummary.exchange_empty_collected }} vacíos
-                            </span>
+                            </div>
+                        </div>
+                        <div class="h-11 w-11 rounded-2xl bg-[#EEEAF7] text-[#1E1545] flex items-center justify-center shrink-0">
+                            <Truck class="w-5 h-5" />
                         </div>
                     </div>
-                    <div class="h-11 w-11 rounded-xl bg-[#DAD6E8]/70 text-[#1E1545] flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-truck text-base"></i>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-[#F4F3F8] text-xs font-semibold tabular-nums">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E8F2EC] text-[#26845B]">
+                            {{ truckSummary.exchange_full_available }} llenos
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E9F3F8] text-[#0071BA]">
+                            {{ truckSummary.exchange_empty_collected }} vacíos
+                        </span>
                     </div>
                 </div>
 
-                <!-- Total Esperado (Planta + Camión) -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex items-center justify-between gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span
-                                class="h-2 w-2 rounded-full shrink-0"
-                                :class="isTargetExact ? 'bg-[#34785A]' : 'bg-[#A97827]'"
-                            ></span>
-                            <span class="text-xs font-medium text-[#747181]">Total Cambios (Planta + Camión)</span>
+                <!-- Total Circuito vs Meta -->
+                <div class="bg-white rounded-2xl border border-[#E9E7F0] p-5 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex flex-col justify-between gap-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-semibold text-[#747181] flex items-center gap-1.5">
+                                <span
+                                    class="h-2 w-2 rounded-full"
+                                    :class="isTargetExact ? 'bg-[#26845B]' : 'bg-[#A97827]'"
+                                ></span>
+                                Total en circuito
+                            </span>
+                            <div class="mt-1 flex items-baseline gap-2">
+                                <span class="text-3xl font-extrabold text-[#292638] tracking-tight tabular-nums">
+                                    {{ activeTotal }}
+                                </span>
+                                <span class="text-xs font-semibold text-[#747181] tabular-nums">
+                                    / {{ targetQuantity }} meta
+                                </span>
+                            </div>
                         </div>
-                        <div class="mt-1.5 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold text-[#292638] tracking-[-0.02em] tabular-nums">
-                                {{ activeTotal }}
-                            </span>
-                            <span
-                                class="text-xs font-semibold tabular-nums"
-                                :class="isTargetExact ? 'text-[#34785A]' : 'text-[#A97827]'"
-                            >
-                                Meta: {{ targetQuantity }}
-                            </span>
+                        <div
+                            class="h-11 w-11 rounded-2xl flex items-center justify-center shrink-0"
+                            :class="isTargetExact ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#FEF5E6] text-[#A97827]'"
+                        >
+                            <Scale class="w-5 h-5" />
                         </div>
                     </div>
-                    <div
-                        class="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
-                        :class="isTargetExact ? 'bg-[#E8F2EC] text-[#34785A]' : 'bg-[#F8F0DF] text-[#A97827]'"
-                    >
-                        <i class="fa-solid fa-scale-balanced text-base"></i>
+
+                    <div class="space-y-1.5 pt-2 border-t border-[#F4F3F8]">
+                        <div class="flex items-center justify-between text-[11px] font-semibold">
+                            <span :class="isTargetExact ? 'text-[#26845B]' : 'text-[#9A670E]'">
+                                <template v-if="isTargetExact">Cuadra al 100% con la meta</template>
+                                <template v-else-if="targetDifference < 0">Faltan {{ Math.abs(targetDifference) }} para la meta</template>
+                                <template v-else>+{{ targetDifference }} sobre la meta</template>
+                            </span>
+                            <span class="text-[#747181] tabular-nums">{{ targetProgressPct }}%</span>
+                        </div>
+                        <div class="h-1.5 w-full rounded-full bg-[#F4F3F8] overflow-hidden">
+                            <div
+                                class="h-full rounded-full transition-all duration-300"
+                                :class="isTargetExact ? 'bg-[#26845B]' : 'bg-[#D99A27]'"
+                                :style="{ width: `${targetProgressPct}%` }"
+                            ></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- ===================================================================== -->
-            <!-- 2. TRES ACCIONES DIRECTAS EN 1 CLIC (ADAPTADAS PARA MÓVIL Y DESKTOP)  -->
+            <!-- 2. FLUJO EN 3 PASOS: RECIBIR → LLENAR → SUBIR AL CAMIÓN              -->
             <!-- ===================================================================== -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
 
-                <!-- ACCIÓN 1: RECIBIR VACÍOS DEL CAMIÓN -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] flex flex-col overflow-hidden">
-                    <div class="px-5 py-4 border-b border-[#E9E7F0] flex items-center justify-between gap-3">
+                <!-- PASO 1: RECIBIR VACÍOS DEL CAMIÓN -->
+                <div
+                    class="rounded-2xl border flex flex-col overflow-hidden transition-all"
+                    :class="truckSummary.exchange_empty_collected > 0
+                        ? 'bg-white border-[#0071BA]/30 shadow-[0_6px_24px_-10px_rgba(0,113,186,0.2)]'
+                        : 'bg-[#FAFAFC] border-[#E9E7F0]'"
+                >
+                    <div class="h-1 w-full" :class="truckSummary.exchange_empty_collected > 0 ? 'bg-[#0071BA]' : 'bg-[#E9E7F0]'"></div>
+
+                    <div class="px-5 py-4 border-b border-[#E9E7F0]/80 flex items-center justify-between gap-3 bg-white">
                         <div class="flex items-center gap-3 min-w-0">
-                            <div class="h-9 w-9 rounded-xl bg-[#E9F3F8] text-[#0071BA] font-bold text-xs flex items-center justify-center shrink-0">
+                            <div
+                                class="h-9 w-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0"
+                                :class="truckSummary.exchange_empty_collected > 0 ? 'bg-[#0071BA] text-white' : 'bg-[#E9F3F8] text-[#0071BA]'"
+                            >
                                 1
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-sm font-bold text-[#292638] truncate">Recibir vacíos</h2>
-                                <p class="text-xs text-[#747181] truncate">Camión → Planta</p>
+                                <p class="text-[11px] text-[#747181] flex items-center gap-1 truncate">
+                                    <span>Camión</span>
+                                    <ArrowRight class="w-3 h-3 shrink-0" />
+                                    <span>Planta</span>
+                                </p>
                             </div>
                         </div>
 
-                        <span class="px-2.5 py-1 rounded-lg bg-[#E9F3F8] text-[#0071BA] text-xs font-semibold tabular-nums shrink-0">
-                            {{ truckSummary.exchange_empty_collected }} en camión
+                        <span
+                            class="px-2.5 py-1 rounded-full text-xs font-bold tabular-nums shrink-0"
+                            :class="truckSummary.exchange_empty_collected > 0 ? 'bg-[#E9F3F8] text-[#0071BA]' : 'bg-[#F4F3F8] text-[#747181]'"
+                        >
+                            {{ truckSummary.exchange_empty_collected }} disp.
                         </span>
                     </div>
 
-                    <form @submit.prevent="submitReceiveEmpties" class="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div class="rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] p-4 space-y-3.5">
+                    <form @submit.prevent="submitReceiveEmpties" class="p-5 flex-1 flex flex-col justify-between gap-4">
+                        <div class="rounded-2xl bg-[#F4F3F8]/80 border border-[#E9E7F0] p-4 space-y-3">
                             <div class="flex items-center justify-between">
-                                <label for="receive-qty" class="text-xs font-medium text-[#747181]">
+                                <label for="receive-qty" class="text-xs font-semibold text-[#747181]">
                                     Cantidad a recibir
                                 </label>
                                 <button
                                     v-if="truckSummary.exchange_empty_collected > 0"
                                     type="button"
                                     @click="receiveForm.quantity = truckSummary.exchange_empty_collected"
-                                    class="text-xs font-semibold text-[#0071BA] hover:underline cursor-pointer"
+                                    class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-[#0071BA] border border-[#0071BA]/25 hover:bg-[#E9F3F8] transition-colors cursor-pointer"
                                 >
                                     Todos ({{ truckSummary.exchange_empty_collected }})
                                 </button>
@@ -400,13 +492,13 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="receiveForm.quantity = Math.max(1, (Number(receiveForm.quantity) || 1) - 1)"
                                     :disabled="receiveForm.quantity <= 1 || truckSummary.exchange_empty_collected <= 0 || receiveForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#E9F3F8] text-[#292638] hover:text-[#0071BA] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#E9F3F8] text-[#292638] hover:text-[#0071BA] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Restar vacío"
                                 >
-                                    <i class="fa-solid fa-minus"></i>
+                                    <Minus class="w-4 h-4" />
                                 </button>
 
-                                <div class="flex-1 max-w-[130px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#0071BA] px-2.5 py-2">
+                                <div class="flex-1 max-w-[128px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#0071BA] px-2.5 py-2">
                                     <input
                                         id="receive-qty"
                                         v-model.number="receiveForm.quantity"
@@ -414,7 +506,7 @@ const getMovementMeta = (type) => {
                                         min="1"
                                         :max="Math.max(1, truckSummary.exchange_empty_collected)"
                                         :disabled="truckSummary.exchange_empty_collected <= 0"
-                                        class="w-full text-center text-2xl font-bold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#A6A3B2]"
+                                        class="w-full text-center text-2xl font-extrabold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#B4B1BE]"
                                     />
                                 </div>
 
@@ -422,10 +514,10 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="receiveForm.quantity = Math.min(Math.max(1, truckSummary.exchange_empty_collected), (Number(receiveForm.quantity) || 1) + 1)"
                                     :disabled="receiveForm.quantity >= truckSummary.exchange_empty_collected || truckSummary.exchange_empty_collected <= 0 || receiveForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-[#DCECF7] hover:bg-[#0071BA] text-[#0071BA] hover:text-white border border-[#0071BA]/25 active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-[#E9F3F8] hover:bg-[#0071BA] text-[#0071BA] hover:text-white border border-[#0071BA]/25 active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Sumar vacío"
                                 >
-                                    <i class="fa-solid fa-plus"></i>
+                                    <Plus class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -433,10 +525,10 @@ const getMovementMeta = (type) => {
                         <button
                             type="submit"
                             :disabled="receiveForm.processing || truckSummary.exchange_empty_collected <= 0"
-                            class="w-full min-h-[48px] px-4 rounded-xl bg-[#0071BA] hover:bg-[#005D99] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:cursor-not-allowed"
+                            class="w-full min-h-[46px] px-4 rounded-xl bg-[#0071BA] hover:bg-[#005E9B] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs disabled:bg-[#ECEAF2] disabled:text-[#9F9CAC] disabled:shadow-none disabled:cursor-not-allowed"
                         >
-                            <i v-if="receiveForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                            <i v-else class="fa-solid fa-arrow-down text-xs"></i>
+                            <Loader2 v-if="receiveForm.processing" class="w-4 h-4 animate-spin" />
+                            <ArrowDownToLine v-else class="w-4 h-4" />
                             <span class="tabular-nums">
                                 {{ truckSummary.exchange_empty_collected > 0 ? `Recibir ${receiveForm.quantity} vacío(s)` : 'Sin vacíos en camión' }}
                             </span>
@@ -444,39 +536,58 @@ const getMovementMeta = (type) => {
                     </form>
                 </div>
 
-                <!-- ACCIÓN 2: LLENAR CAMBIOS EN PLANTA -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] flex flex-col overflow-hidden">
-                    <div class="px-5 py-4 border-b border-[#E9E7F0] flex items-center justify-between gap-3">
+                <!-- PASO 2: LLENAR CAMBIOS EN PLANTA -->
+                <div
+                    class="rounded-2xl border flex flex-col overflow-hidden transition-all"
+                    :class="balances.exchange_empty_available > 0
+                        ? 'bg-white border-[#26845B]/30 shadow-[0_6px_24px_-10px_rgba(38,132,91,0.2)]'
+                        : 'bg-[#FAFAFC] border-[#E9E7F0]'"
+                >
+                    <div class="h-1 w-full" :class="balances.exchange_empty_available > 0 ? 'bg-[#26845B]' : 'bg-[#E9E7F0]'"></div>
+
+                    <div class="px-5 py-4 border-b border-[#E9E7F0]/80 flex items-center justify-between gap-3 bg-white">
                         <div class="flex items-center gap-3 min-w-0">
-                            <div class="h-9 w-9 rounded-xl bg-[#E8F2EC] text-[#34785A] font-bold text-xs flex items-center justify-center shrink-0">
+                            <div
+                                class="h-9 w-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0"
+                                :class="balances.exchange_empty_available > 0 ? 'bg-[#26845B] text-white' : 'bg-[#E8F2EC] text-[#26845B]'"
+                            >
                                 2
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-sm font-bold text-[#292638] truncate">Llenar cambios</h2>
-                                <p class="text-xs text-[#747181] truncate">Vacíos → Llenos en Planta</p>
+                                <p class="text-[11px] text-[#747181] flex items-center gap-1 truncate">
+                                    <span>Vacíos</span>
+                                    <ArrowRight class="w-3 h-3 shrink-0" />
+                                    <span>Llenos en Planta</span>
+                                </p>
                             </div>
                         </div>
 
-                        <span class="px-2.5 py-1 rounded-lg bg-[#E8F2EC] text-[#34785A] text-xs font-semibold tabular-nums shrink-0">
+                        <span
+                            class="px-2.5 py-1 rounded-full text-xs font-bold tabular-nums shrink-0"
+                            :class="balances.exchange_empty_available > 0 ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#F4F3F8] text-[#747181]'"
+                        >
                             {{ balances.exchange_empty_available }} vacíos
                         </span>
                     </div>
 
-                    <form @submit.prevent="submitFill" class="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div class="rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] p-4 space-y-3.5">
-                            <div class="flex items-center justify-between">
-                                <label for="fill-qty" class="text-xs font-medium text-[#747181]">
+                    <form @submit.prevent="submitFill" class="p-5 flex-1 flex flex-col justify-between gap-4">
+                        <div class="rounded-2xl bg-[#F4F3F8]/80 border border-[#E9E7F0] p-4 space-y-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <label for="fill-qty" class="text-xs font-semibold text-[#747181]">
                                     Cantidad llenada
                                 </label>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1.5">
                                     <button
                                         v-for="preset in [5, 10]"
                                         :key="preset"
                                         v-show="balances.exchange_empty_available >= preset"
                                         type="button"
                                         @click="fillForm.quantity = preset"
-                                        class="text-xs font-semibold px-2 py-0.5 rounded-md border transition-colors cursor-pointer"
-                                        :class="fillForm.quantity === preset ? 'bg-[#E82147] text-white border-[#E82147]' : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                        class="text-xs font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer"
+                                        :class="fillForm.quantity === preset
+                                            ? 'bg-[#26845B] text-white border-[#26845B]'
+                                            : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
                                     >
                                         {{ preset }}
                                     </button>
@@ -484,7 +595,7 @@ const getMovementMeta = (type) => {
                                         v-if="balances.exchange_empty_available > 0"
                                         type="button"
                                         @click="fillForm.quantity = balances.exchange_empty_available"
-                                        class="text-xs font-semibold text-[#34785A] hover:underline cursor-pointer"
+                                        class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-[#26845B] border border-[#26845B]/25 hover:bg-[#E8F2EC] transition-colors cursor-pointer"
                                     >
                                         Todos
                                     </button>
@@ -496,13 +607,13 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="fillForm.quantity = Math.max(1, (Number(fillForm.quantity) || 1) - 1)"
                                     :disabled="fillForm.quantity <= 1 || balances.exchange_empty_available <= 0 || fillForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#E8F2EC] text-[#292638] hover:text-[#34785A] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#E8F2EC] text-[#292638] hover:text-[#26845B] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Restar llenado"
                                 >
-                                    <i class="fa-solid fa-minus"></i>
+                                    <Minus class="w-4 h-4" />
                                 </button>
 
-                                <div class="flex-1 max-w-[130px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#34785A] px-2.5 py-2">
+                                <div class="flex-1 max-w-[128px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#26845B] px-2.5 py-2">
                                     <input
                                         id="fill-qty"
                                         v-model.number="fillForm.quantity"
@@ -510,7 +621,7 @@ const getMovementMeta = (type) => {
                                         min="1"
                                         :max="Math.max(1, balances.exchange_empty_available)"
                                         :disabled="balances.exchange_empty_available <= 0"
-                                        class="w-full text-center text-2xl font-bold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#A6A3B2]"
+                                        class="w-full text-center text-2xl font-extrabold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#B4B1BE]"
                                     />
                                 </div>
 
@@ -518,10 +629,10 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="fillForm.quantity = Math.min(Math.max(1, balances.exchange_empty_available), (Number(fillForm.quantity) || 1) + 1)"
                                     :disabled="fillForm.quantity >= balances.exchange_empty_available || balances.exchange_empty_available <= 0 || fillForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-[#E8F2EC] hover:bg-[#34785A] text-[#34785A] hover:text-white border border-[#34785A]/20 active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-[#E8F2EC] hover:bg-[#26845B] text-[#26845B] hover:text-white border border-[#26845B]/25 active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Sumar llenado"
                                 >
-                                    <i class="fa-solid fa-plus"></i>
+                                    <Plus class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -529,50 +640,69 @@ const getMovementMeta = (type) => {
                         <button
                             type="submit"
                             :disabled="fillForm.processing || balances.exchange_empty_available <= 0"
-                            class="w-full min-h-[48px] px-4 rounded-xl bg-[#34785A] hover:bg-[#2A634A] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:cursor-not-allowed"
+                            class="w-full min-h-[46px] px-4 rounded-xl bg-[#26845B] hover:bg-[#1F6D4B] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs disabled:bg-[#ECEAF2] disabled:text-[#9F9CAC] disabled:shadow-none disabled:cursor-not-allowed"
                         >
-                            <i v-if="fillForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                            <i v-else class="fa-solid fa-check text-xs"></i>
+                            <Loader2 v-if="fillForm.processing" class="w-4 h-4 animate-spin" />
+                            <Droplets v-else class="w-4 h-4" />
                             <span class="tabular-nums">
-                                {{ balances.exchange_empty_available > 0 ? `Marcar ${fillForm.quantity} llenado(s)` : 'Sin vacíos por llenar' }}
+                                {{ balances.exchange_empty_available > 0 ? `Llenar ${fillForm.quantity} botellón(es)` : 'En espera de vacíos' }}
                             </span>
                         </button>
                     </form>
                 </div>
 
-                <!-- ACCIÓN 3: SUBIR LLENOS AL CAMIÓN -->
-                <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] flex flex-col overflow-hidden">
-                    <div class="px-5 py-4 border-b border-[#E9E7F0] flex items-center justify-between gap-3">
+                <!-- PASO 3: SUBIR LLENOS AL CAMIÓN -->
+                <div
+                    class="rounded-2xl border flex flex-col overflow-hidden transition-all"
+                    :class="balances.exchange_full_ready > 0
+                        ? 'bg-white border-[#1E1545]/25 shadow-[0_6px_24px_-10px_rgba(30,21,69,0.2)]'
+                        : 'bg-[#FAFAFC] border-[#E9E7F0]'"
+                >
+                    <div class="h-1 w-full" :class="balances.exchange_full_ready > 0 ? 'bg-[#1E1545]' : 'bg-[#E9E7F0]'"></div>
+
+                    <div class="px-5 py-4 border-b border-[#E9E7F0]/80 flex items-center justify-between gap-3 bg-white">
                         <div class="flex items-center gap-3 min-w-0">
-                            <div class="h-9 w-9 rounded-xl bg-[#DAD6E8]/75 text-[#1E1545] font-bold text-xs flex items-center justify-center shrink-0">
+                            <div
+                                class="h-9 w-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0"
+                                :class="balances.exchange_full_ready > 0 ? 'bg-[#1E1545] text-white' : 'bg-[#EEEAF7] text-[#1E1545]'"
+                            >
                                 3
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-sm font-bold text-[#292638] truncate">Subir al camión</h2>
-                                <p class="text-xs text-[#747181] truncate">Planta → {{ truckSummary.driver_name }}</p>
+                                <p class="text-[11px] text-[#747181] flex items-center gap-1 truncate">
+                                    <span>Planta</span>
+                                    <ArrowRight class="w-3 h-3 shrink-0" />
+                                    <span class="truncate">{{ truckSummary.driver_name }}</span>
+                                </p>
                             </div>
                         </div>
 
-                        <span class="px-2.5 py-1 rounded-lg bg-[#DAD6E8]/60 text-[#1E1545] text-xs font-semibold tabular-nums shrink-0">
+                        <span
+                            class="px-2.5 py-1 rounded-full text-xs font-bold tabular-nums shrink-0"
+                            :class="balances.exchange_full_ready > 0 ? 'bg-[#EEEAF7] text-[#1E1545]' : 'bg-[#F4F3F8] text-[#747181]'"
+                        >
                             {{ balances.exchange_full_ready }} llenos
                         </span>
                     </div>
 
-                    <form @submit.prevent="submitLoadTruck" class="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div class="rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] p-4 space-y-3.5">
-                            <div class="flex items-center justify-between">
-                                <label for="load-qty" class="text-xs font-medium text-[#747181]">
+                    <form @submit.prevent="submitLoadTruck" class="p-5 flex-1 flex flex-col justify-between gap-4">
+                        <div class="rounded-2xl bg-[#F4F3F8]/80 border border-[#E9E7F0] p-4 space-y-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <label for="load-qty" class="text-xs font-semibold text-[#747181]">
                                     Cantidad para camión
                                 </label>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1.5">
                                     <button
                                         v-for="preset in [5, 10]"
                                         :key="preset"
                                         v-show="balances.exchange_full_ready >= preset"
                                         type="button"
                                         @click="loadForm.quantity = preset"
-                                        class="text-xs font-semibold px-2 py-0.5 rounded-md border transition-colors cursor-pointer"
-                                        :class="loadForm.quantity === preset ? 'bg-[#E82147] text-white border-[#E82147]' : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                        class="text-xs font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer"
+                                        :class="loadForm.quantity === preset
+                                            ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                                            : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
                                     >
                                         {{ preset }}
                                     </button>
@@ -580,7 +710,7 @@ const getMovementMeta = (type) => {
                                         v-if="balances.exchange_full_ready > 0"
                                         type="button"
                                         @click="loadForm.quantity = balances.exchange_full_ready"
-                                        class="text-xs font-semibold text-[#1E1545] hover:underline cursor-pointer"
+                                        class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-[#1E1545] border border-[#1E1545]/20 hover:bg-[#EEEAF7] transition-colors cursor-pointer"
                                     >
                                         Todos
                                     </button>
@@ -592,13 +722,13 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="loadForm.quantity = Math.max(1, (Number(loadForm.quantity) || 1) - 1)"
                                     :disabled="loadForm.quantity <= 1 || balances.exchange_full_ready <= 0 || loadForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#F4F3F8] text-[#292638] hover:text-[#1E1545] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-white hover:bg-[#EEEAF7] text-[#292638] hover:text-[#1E1545] border border-[#DAD6E8] active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Restar carga"
                                 >
-                                    <i class="fa-solid fa-minus"></i>
+                                    <Minus class="w-4 h-4" />
                                 </button>
 
-                                <div class="flex-1 max-w-[130px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#1E1545] px-2.5 py-2">
+                                <div class="flex-1 max-w-[128px] rounded-xl bg-white border border-[#DAD6E8] focus-within:border-[#1E1545] px-2.5 py-2">
                                     <input
                                         id="load-qty"
                                         v-model.number="loadForm.quantity"
@@ -606,7 +736,7 @@ const getMovementMeta = (type) => {
                                         min="1"
                                         :max="Math.max(1, balances.exchange_full_ready)"
                                         :disabled="balances.exchange_full_ready <= 0"
-                                        class="w-full text-center text-2xl font-bold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#A6A3B2]"
+                                        class="w-full text-center text-2xl font-extrabold text-[#292638] bg-transparent border-0 p-0 focus:ring-0 focus:outline-none tabular-nums disabled:text-[#B4B1BE]"
                                     />
                                 </div>
 
@@ -614,10 +744,10 @@ const getMovementMeta = (type) => {
                                     type="button"
                                     @click="loadForm.quantity = Math.min(Math.max(1, balances.exchange_full_ready), (Number(loadForm.quantity) || 1) + 1)"
                                     :disabled="loadForm.quantity >= balances.exchange_full_ready || balances.exchange_full_ready <= 0 || loadForm.processing"
-                                    class="h-12 w-12 rounded-xl bg-[#DAD6E8]/75 hover:bg-[#1E1545] text-[#1E1545] hover:text-white border border-[#1E1545]/15 active:scale-95 transition-all flex items-center justify-center text-base disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
+                                    class="h-12 w-12 rounded-xl bg-[#EEEAF7] hover:bg-[#1E1545] text-[#1E1545] hover:text-white border border-[#1E1545]/15 active:scale-95 transition-all flex items-center justify-center disabled:bg-[#EEEDF3] disabled:text-[#B4B1BE] disabled:border-[#E9E7F0] disabled:pointer-events-none cursor-pointer shrink-0"
                                     aria-label="Sumar carga"
                                 >
-                                    <i class="fa-solid fa-plus"></i>
+                                    <Plus class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -625,12 +755,12 @@ const getMovementMeta = (type) => {
                         <button
                             type="submit"
                             :disabled="loadForm.processing || balances.exchange_full_ready <= 0"
-                            class="w-full min-h-[48px] px-4 rounded-xl bg-[#1E1545] hover:bg-[#2B205E] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:bg-[#E9E7F0] disabled:text-[#A6A3B2] disabled:cursor-not-allowed"
+                            class="w-full min-h-[46px] px-4 rounded-xl bg-[#1E1545] hover:bg-[#2B1F60] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs disabled:bg-[#ECEAF2] disabled:text-[#9F9CAC] disabled:shadow-none disabled:cursor-not-allowed"
                         >
-                            <i v-if="loadForm.processing" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                            <i v-else class="fa-solid fa-truck-ramp-box text-xs"></i>
+                            <Loader2 v-if="loadForm.processing" class="w-4 h-4 animate-spin" />
+                            <ArrowUpFromLine v-else class="w-4 h-4" />
                             <span class="tabular-nums">
-                                {{ balances.exchange_full_ready > 0 ? `Subir ${loadForm.quantity} al camión` : 'Sin llenos disponibles' }}
+                                {{ balances.exchange_full_ready > 0 ? `Subir ${loadForm.quantity} al camión` : 'Sin llenos listos' }}
                             </span>
                         </button>
                     </form>
@@ -640,27 +770,29 @@ const getMovementMeta = (type) => {
             <!-- ===================================================================== -->
             <!-- 3. HISTORIAL RECIENTE DE MOVIMIENTOS                                  -->
             <!-- ===================================================================== -->
-            <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_4px_20px_-8px_rgba(30,21,69,0.07)] overflow-hidden">
-                <div class="px-6 py-4 border-b border-[#E9E7F0] flex items-center justify-between gap-3">
+            <div class="bg-white rounded-2xl border border-[#E9E7F0] shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] overflow-hidden">
+                <div class="px-5 py-4 border-b border-[#E9E7F0] flex items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-bold text-[#292638]">Movimientos recientes</h2>
+                        <h2 class="text-sm sm:text-base font-bold text-[#292638]">Movimientos recientes</h2>
                         <p class="text-xs text-[#747181] mt-0.5">Últimas entradas, llenados y cargas de cambios</p>
                     </div>
 
-                    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-[#F4F3F8] text-[#747181] border border-[#E9E7F0] tabular-nums">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-[#F4F3F8] text-[#747181] border border-[#E9E7F0] tabular-nums">
                         {{ recentExchangeMovements.length }} registro{{ recentExchangeMovements.length === 1 ? '' : 's' }}
                     </span>
                 </div>
 
-                <!-- Estado vacío -->
-                <div v-if="recentExchangeMovements.length === 0" class="py-12 px-6 text-center">
-                    <div class="h-12 w-12 mx-auto rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] flex items-center justify-center text-[#1E1545] mb-3">
-                        <i class="fa-solid fa-arrows-rotate text-lg"></i>
+                <!-- Estado vacío compacto -->
+                <div v-if="recentExchangeMovements.length === 0" class="py-8 px-5 flex flex-col sm:flex-row items-center justify-center gap-3 text-center sm:text-left">
+                    <div class="h-11 w-11 rounded-2xl bg-[#F4F3F8] border border-[#E9E7F0] flex items-center justify-center text-[#1E1545] shrink-0">
+                        <RefreshCw class="w-5 h-5" />
                     </div>
-                    <h3 class="text-sm font-semibold text-[#292638]">Sin movimientos registrados</h3>
-                    <p class="text-xs text-[#747181] mt-1 max-w-xs mx-auto">
-                        Cuando recibas vacíos, llenes garrafones o los subas al camión, aparecerán aquí.
-                    </p>
+                    <div>
+                        <h3 class="text-sm font-semibold text-[#292638]">Sin movimientos registrados</h3>
+                        <p class="text-xs text-[#747181] mt-0.5">
+                            Cuando recibas vacíos, llenes garrafones o los subas al camión, aparecerán aquí.
+                        </p>
+                    </div>
                 </div>
 
                 <template v-else>
@@ -668,28 +800,31 @@ const getMovementMeta = (type) => {
                     <div class="hidden sm:block overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="bg-[#F4F3F8] border-b border-[#E9E7F0] text-xs font-medium text-[#747181]">
-                                    <th class="py-3 px-6">Fecha</th>
+                                <tr class="bg-[#F4F3F8] border-b border-[#E9E7F0] text-xs font-semibold text-[#747181]">
+                                    <th class="py-3 px-5">Fecha</th>
                                     <th class="py-3 px-4">Movimiento</th>
                                     <th class="py-3 px-4">Cantidad</th>
-                                    <th class="py-3 px-6">Detalle</th>
+                                    <th class="py-3 px-5">Detalle</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#E9E7F0]/75 text-sm">
                                 <tr v-for="mov in recentExchangeMovements" :key="mov.id" class="hover:bg-[#F4F3F8]/60 transition-colors">
-                                    <td class="py-3.5 px-6 whitespace-nowrap text-xs text-[#747181] tabular-nums">
+                                    <td class="py-3 px-5 whitespace-nowrap text-xs text-[#747181] tabular-nums">
                                         {{ mov.date }}
                                     </td>
-                                    <td class="py-3.5 px-4 whitespace-nowrap">
-                                        <span :class="['inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold', getMovementMeta(mov.type).badge]">
-                                            <i :class="['fa-solid text-[10px]', getMovementMeta(mov.type).icon]"></i>
+                                    <td class="py-3 px-4 whitespace-nowrap">
+                                        <span :class="['inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold', getMovementMeta(mov.type).badge]">
+                                            <ArrowDownToLine v-if="getMovementMeta(mov.type).kind === 'receive'" class="w-3 h-3" />
+                                            <Droplets v-else-if="getMovementMeta(mov.type).kind === 'fill'" class="w-3 h-3" />
+                                            <ArrowUpFromLine v-else-if="getMovementMeta(mov.type).kind === 'load'" class="w-3 h-3" />
+                                            <Check v-else class="w-3 h-3" />
                                             {{ getMovementMeta(mov.type).label }}
                                         </span>
                                     </td>
-                                    <td class="py-3.5 px-4 whitespace-nowrap text-xs font-bold text-[#292638] tabular-nums">
+                                    <td class="py-3 px-4 whitespace-nowrap text-xs font-bold text-[#292638] tabular-nums">
                                         {{ mov.quantity }} botellón{{ mov.quantity === 1 ? '' : 'es' }}
                                     </td>
-                                    <td class="py-3.5 px-6 text-xs text-[#747181]">
+                                    <td class="py-3 px-5 text-xs text-[#747181]">
                                         {{ mov.notes || '-' }}
                                     </td>
                                 </tr>
@@ -701,8 +836,11 @@ const getMovementMeta = (type) => {
                     <div class="sm:hidden divide-y divide-[#E9E7F0]/75">
                         <div v-for="mov in recentExchangeMovements" :key="mov.id" class="px-5 py-3.5 flex items-center justify-between gap-3">
                             <div class="min-w-0">
-                                <span :class="['inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold', getMovementMeta(mov.type).badge]">
-                                    <i :class="['fa-solid text-[9px]', getMovementMeta(mov.type).icon]"></i>
+                                <span :class="['inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-semibold', getMovementMeta(mov.type).badge]">
+                                    <ArrowDownToLine v-if="getMovementMeta(mov.type).kind === 'receive'" class="w-3 h-3" />
+                                    <Droplets v-else-if="getMovementMeta(mov.type).kind === 'fill'" class="w-3 h-3" />
+                                    <ArrowUpFromLine v-else-if="getMovementMeta(mov.type).kind === 'load'" class="w-3 h-3" />
+                                    <Check v-else class="w-3 h-3" />
                                     {{ getMovementMeta(mov.type).label }}
                                 </span>
                                 <p class="text-[11px] text-[#747181] mt-1 tabular-nums truncate">
@@ -719,23 +857,32 @@ const getMovementMeta = (type) => {
 
         </div>
 
-        <!-- Modal simple para reportar dañado o sin localizar -->
+        <!-- Modal para reportar dañado o sin localizar -->
         <div
             v-if="showInconvenienceModal"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1545]/35 backdrop-blur-[2px]"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1545]/40 backdrop-blur-[2px]"
             @click.self="showInconvenienceModal = false"
         >
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-[0_20px_50px_-12px_rgba(30,21,69,0.22)] border border-[#E9E7F0] space-y-4">
-                <div class="flex items-start gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-[#F8F0DF] text-[#A97827] flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
+            <div class="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-[0_20px_50px_-12px_rgba(30,21,69,0.22)] border border-[#E9E7F0] space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-[#FEF5E6] text-[#9A670E] border border-[#F5DFB5] flex items-center justify-center shrink-0">
+                            <AlertTriangle class="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-[#292638]">Reportar botellón dañado o perdido</h3>
+                            <p class="text-xs text-[#747181] mt-0.5">
+                                Se descontará de los activos y pasará a revisión de Administración.
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 class="text-base font-bold text-[#292638]">Reportar botellón dañado o perdido</h3>
-                        <p class="text-xs text-[#747181] mt-0.5">
-                            Se descontará de los activos y pasará a revisión de Administración.
-                        </p>
-                    </div>
+                    <button
+                        type="button"
+                        @click="showInconvenienceModal = false"
+                        class="h-8 w-8 rounded-xl bg-[#F4F3F8] hover:bg-[#E9E7F0] text-[#747181] flex items-center justify-center cursor-pointer shrink-0"
+                    >
+                        <X class="w-4 h-4" />
+                    </button>
                 </div>
 
                 <form @submit.prevent="submitInconvenience" class="space-y-3.5">
