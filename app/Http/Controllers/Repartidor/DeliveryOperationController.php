@@ -109,7 +109,7 @@ class DeliveryOperationController extends Controller
             'street' => ['nullable', 'string', 'max:150'],
             'exterior_number' => ['nullable', 'string', 'max:20'],
             'neighborhood' => ['nullable', 'string', 'max:100'],
-            'delivery_zone' => ['nullable', 'string', 'in:north,south,east,west'],
+            'delivery_zone' => ['nullable', 'string', \Illuminate\Validation\Rule::in(app(\App\Services\SettingService::class)->getDeliveryZoneKeys())],
             'between_streets' => ['nullable', 'string', 'max:200'],
             'reference' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string', 'max:1000'],

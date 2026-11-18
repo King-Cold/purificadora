@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Services\SettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,10 +26,14 @@ class CustomerController extends Controller
             abort(403, 'No tiene autorización para visualizar el catálogo de clientes.');
         }
 
+        $settingService = app(SettingService::class);
+        $validZoneKeys = $settingService->getDeliveryZoneKeys();
+        $zonesMap = $settingService->getDeliveryZonesMap();
+
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
             'access' => ['nullable', 'string', 'in:all,with_account,without_account'],
-            'zone' => ['nullable', 'string', 'in:all,north,south,east,west,no_zone,other_municipality'],
+            'zone' => ['nullable', 'string', Rule::in(array_merge(['all', 'no_zone', 'other_municipality'], $validZoneKeys))],
         ]);
 
         $search = $validated['search'] ?? null;
@@ -80,7 +86,7 @@ class CustomerController extends Controller
 
         // 3. Filtro por zonas de reparto del domicilio único
         if (!empty($zoneFilter) && $zoneFilter !== 'all') {
-            if (in_array($zoneFilter, ['north', 'south', 'east', 'west'])) {
+            if (in_array($zoneFilter, $validZoneKeys, true)) {
                 $query->whereHas('address', function ($q) use ($zoneFilter) {
                     $q->where('delivery_zone', $zoneFilter)
                         ->where(function ($sub) {
@@ -110,7 +116,7 @@ class CustomerController extends Controller
         $customers = $query->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString()
-            ->through(function (Customer $customer) {
+            ->through(function (Customer $customer) use ($zonesMap) {
                 $address = $customer->address;
                 $zoneLabel = 'Sin zona asignada';
                 $addressText = 'Sin domicilio registrado';
@@ -121,7 +127,8 @@ class CustomerController extends Controller
                     if (!$isHocaba) {
                         $zoneLabel = 'Otro municipio';
                     } elseif ($address->delivery_zone) {
-                        $zoneLabel = 'Zona ' . (CustomerAddress::ZONES[$address->delivery_zone] ?? $address->delivery_zone);
+                        $zoneName = $zonesMap[$address->delivery_zone] ?? $address->delivery_zone;
+                        $zoneLabel = str_starts_with(strtolower($zoneName), 'zona') ? $zoneName : "Zona {$zoneName}";
                     } else {
                         $zoneLabel = 'Sin zona asignada';
                     }
@@ -167,7 +174,7 @@ class CustomerController extends Controller
                 'access' => $accessFilter ?? 'all',
                 'zone' => $zoneFilter ?? 'all',
             ],
-            'zones' => CustomerAddress::ZONES,
+            'zones' => $zonesMap,
             'totalCustomersCount' => Customer::count(),
         ]);
     }

@@ -7,6 +7,8 @@ use App\Http\Requests\Admin\StoreBottlePresentationRequest;
 use App\Http\Requests\Admin\UpdateBottlePresentationRequest;
 use App\Http\Requests\Admin\UpdateScheduleRequest;
 use App\Models\BottlePresentation;
+use App\Models\CustomerAddress;
+use App\Models\Order;
 use App\Services\SettingService;
 use App\Services\StoreScheduleService;
 use Illuminate\Http\RedirectResponse;
@@ -49,12 +51,68 @@ class GeneralSettingController extends Controller
             'updated_at' => $twentyLiters->updated_at?->format('d/m/Y H:i'),
         ];
 
+        $settingService = app(SettingService::class);
+        $addressCounts = CustomerAddress::query()
+            ->select('delivery_zone', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('delivery_zone')
+            ->groupBy('delivery_zone')
+            ->pluck('total', 'delivery_zone');
+
+        $deliveryZones = array_map(function ($zone) use ($addressCounts) {
+            $zone['usage_count'] = (int) ($addressCounts[$zone['key']] ?? 0);
+            return $zone;
+        }, $settingService->getDeliveryZones());
+
         return Inertia::render('Admin/Settings/Index', [
             'schedule' => $scheduleSummary,
             'bottlePresentation' => $presentationData,
             'bottlePresentations' => [$presentationData],
-            'max_pending_payment_bottles' => app(SettingService::class)->getMaxPendingPaymentBottles(),
+            'max_pending_payment_bottles' => $settingService->getMaxPendingPaymentBottles(),
+            'deliveryZones' => $deliveryZones,
         ]);
+    }
+
+    /**
+     * Actualiza el catálogo editable de zonas disponibles de entrega.
+     */
+    public function updateDeliveryZones(Request $request, SettingService $settingService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'zones' => ['required', 'array', 'min:4'],
+            'zones.*.key' => ['nullable', 'string', 'max:50'],
+            'zones.*.name' => ['required', 'string', 'min:2', 'max:60'],
+            'zones.*.color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'zones.*.is_active' => ['required', 'boolean'],
+        ], [
+            'zones.required' => 'Debes conservar al menos las zonas base del sistema.',
+            'zones.*.name.required' => 'Cada zona debe tener un nombre.',
+            'zones.*.name.min' => 'El nombre de cada zona debe tener al menos 2 caracteres.',
+            'zones.*.name.max' => 'El nombre de cada zona no debe exceder 60 caracteres.',
+        ]);
+
+        // Evitar eliminar zonas personalizadas que ya tienen domicilios o pedidos asociados
+        $submittedKeys = collect($validated['zones'])
+            ->pluck('key')
+            ->filter()
+            ->values()
+            ->all();
+
+        $existingZones = $settingService->getDeliveryZones();
+        foreach ($existingZones as $existing) {
+            if (!in_array($existing['key'], $submittedKeys, true) && !$existing['is_base']) {
+                $inAddresses = CustomerAddress::where('delivery_zone', $existing['key'])->exists();
+                $inOrders = Order::where('delivery_zone', $existing['key'])->exists();
+                if ($inAddresses || $inOrders) {
+                    return back()->withErrors([
+                        'zones' => "La zona '{$existing['name']}' ya tiene clientes o pedidos registrados; paúsala en lugar de eliminarla.",
+                    ]);
+                }
+            }
+        }
+
+        $settingService->saveDeliveryZones($validated['zones']);
+
+        return redirect()->back()->with('success', 'Las zonas de reparto se actualizaron correctamente.');
     }
 
     /**

@@ -19,7 +19,7 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Confirmar Contraseña - Puritronic" />
+        <Head title="Confirmar" />
 
         <div class="text-center mb-6">
             <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-xs">

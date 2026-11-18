@@ -417,4 +417,55 @@ class FixedBottlesFullCycleTest extends TestCase
         $this->assertEquals(2, $order1->items()->first()->loaded_quantity);
         $this->assertEquals(3, $order2->items()->first()->loaded_quantity);
     }
+
+    public function test_planta_receive_and_fill_in_one_step_and_merged_por_entregar_tab(): void
+    {
+        $order = $this->createFixedOrder(2);
+        $item = $order->items()->first();
+
+        $this->actingAs($this->driver)->post(route('repartidor.orders.collect-fixed', $order->id), [
+            'quantity' => 2,
+        ])->assertRedirect();
+
+        // 1. Planta recibe y marca llenos en un solo paso
+        $respOneStep = $this->actingAs($this->operator)->post(route('planta.fijos.receive-and-fill'), [
+            'order_item_id' => $item->id,
+        ]);
+        $respOneStep->assertRedirect();
+        $respOneStep->assertSessionHas('success');
+
+        $fresh = $item->fresh();
+        $this->assertEquals(2, $fresh->received_at_plant_quantity);
+        $this->assertEquals(2, $fresh->prepared_quantity);
+        $this->assertEquals(OrderItem::STATUS_READY_FOR_DELIVERY, $fresh->status);
+
+        // 2. El repartidor lo ve directamente dentro de Reparto -> Por entregar (ready_state = in_plant)
+        $respReparto = $this->actingAs($this->driver)->get(route('repartidor.reparto', ['tab' => 'por_entregar']));
+        $respReparto->assertOk();
+        $respReparto->assertInertia(fn ($page) =>
+            $page->has('items', 1)
+                ->where('items.0.id', $order->id)
+                ->where('items.0.ready_state', 'in_plant')
+                ->where('items.0.fixed_ready_to_load', 2)
+                ->where('tabCounts.ready_in_plant_bottles', 2)
+        );
+    }
+
+    public function test_repartidor_order_incident_persists_without_route_stop(): void
+    {
+        $order = $this->createFixedOrder(2);
+
+        $resp = $this->actingAs($this->driver)->post(route('repartidor.orders.incident', $order->id), [
+            'reason' => 'Cliente ausente en domicilio',
+            'notes' => 'Tocamos timbre 2 veces',
+            'stage' => 'por_recoger',
+        ]);
+        $resp->assertRedirect();
+        $resp->assertSessionHas('warning');
+
+        $this->assertStringContainsString('Cliente ausente en domicilio', (string) $order->fresh()->notes);
+        $this->assertDatabaseHas('order_status_histories', [
+            'order_id' => $order->id,
+        ]);
+    }
 }

@@ -33,7 +33,7 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Restablecer Contraseña - Puritronic" />
+        <Head title="Nueva clave" />
 
         <div class="text-center mb-6">
             <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-xl shadow-xs">

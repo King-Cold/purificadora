@@ -20,10 +20,10 @@ export default defineConfig({
         VitePWA({
             registerType: 'autoUpdate',
             manifest: {
-                name: 'Purificadora',
-                short_name: 'Purificadora',
-                description: 'Sistema de Gestión de Purificadora de Agua',
-                theme_color: '#0284c7',
+                name: 'Puritronic',
+                short_name: 'Puritronic',
+                description: 'Sistema de Gestión Puritronic',
+                theme_color: '#1E1545',
                 background_color: '#ffffff',
                 display: 'standalone',
                 orientation: 'portrait',

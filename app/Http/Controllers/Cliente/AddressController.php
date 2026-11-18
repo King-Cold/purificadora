@@ -86,7 +86,7 @@ class AddressController extends Controller
                 'name' => $customer->name,
                 'nickname' => $customer->nickname,
             ],
-            'zones' => CustomerAddress::ZONES,
+            'zones' => CustomerAddress::zonesMap(false),
         ]);
     }
 
@@ -105,7 +105,7 @@ class AddressController extends Controller
         }
 
         return Inertia::render('Cliente/Addresses/Create', [
-            'zones' => CustomerAddress::ZONES,
+            'zones' => CustomerAddress::zonesMap(true),
         ]);
     }
 
@@ -143,6 +143,12 @@ class AddressController extends Controller
 
         $isHocaba = empty($addr->city) || in_array(strtolower(trim($addr->city)), ['hocaba', 'hocabá', 'hocabá, yucatán', 'hocaba, yucatan']);
 
+        $zones = CustomerAddress::zonesMap(true);
+        if ($addr->delivery_zone && !isset($zones[$addr->delivery_zone])) {
+            $allZones = CustomerAddress::zonesMap(false);
+            $zones[$addr->delivery_zone] = $allZones[$addr->delivery_zone] ?? $addr->delivery_zone;
+        }
+
         return Inertia::render('Cliente/Addresses/Edit', [
             'address' => [
                 'id' => $addr->id,
@@ -152,7 +158,7 @@ class AddressController extends Controller
                 'delivery_zone' => $addr->delivery_zone,
                 'reference' => $addr->reference,
             ],
-            'zones' => CustomerAddress::ZONES,
+            'zones' => $zones,
         ]);
     }
 

@@ -78,6 +78,16 @@ class CustomerAddress extends Model
     }
 
     /**
+     * Mapa dinámico de zonas configuradas (con respaldo en las 4 base).
+     *
+     * @return array<string, string>
+     */
+    public static function zonesMap(bool $onlyActive = false): array
+    {
+        return app(\App\Services\SettingService::class)->getDeliveryZonesMap($onlyActive);
+    }
+
+    /**
      * Accesor para el nombre legible de la zona de reparto.
      */
     protected function zoneLabel(): Attribute
@@ -85,8 +95,9 @@ class CustomerAddress extends Model
         return Attribute::make(
             get: function () {
                 if ($this->delivery_zone) {
-                    $name = self::ZONES[$this->delivery_zone] ?? $this->delivery_zone;
-                    return str_starts_with($name, 'Zona') ? $name : "Zona {$name}";
+                    $zones = self::zonesMap();
+                    $name = $zones[$this->delivery_zone] ?? (self::ZONES[$this->delivery_zone] ?? $this->delivery_zone);
+                    return str_starts_with(strtolower($name), 'zona') ? $name : "Zona {$name}";
                 }
 
                 $isHocaba = empty($this->city) || in_array(strtolower(trim($this->city)), ['hocaba', 'hocabá', 'hocabá, yucatán', 'hocaba, yucatan']);

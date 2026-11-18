@@ -50,7 +50,7 @@ class CustomerAddressController extends Controller
                 'name' => $customer->name,
                 'nickname' => $customer->nickname,
             ],
-            'zones' => CustomerAddress::ZONES,
+            'zones' => CustomerAddress::zonesMap(true),
         ]);
     }
 
@@ -106,6 +106,12 @@ class CustomerAddressController extends Controller
 
         $isHocaba = empty($address->city) || in_array(strtolower(trim($address->city)), ['hocaba', 'hocabá', 'hocabá, yucatán', 'hocaba, yucatan']);
 
+        $zones = CustomerAddress::zonesMap(true);
+        if ($address->delivery_zone && !isset($zones[$address->delivery_zone])) {
+            $allZones = CustomerAddress::zonesMap(false);
+            $zones[$address->delivery_zone] = $allZones[$address->delivery_zone] ?? $address->delivery_zone;
+        }
+
         return Inertia::render('Admin/Customers/Addresses/Edit', [
             'customer' => [
                 'id' => $customer->id,
@@ -122,7 +128,7 @@ class CustomerAddressController extends Controller
                 'delivery_zone' => $address->delivery_zone,
                 'reference' => $address->reference,
             ],
-            'zones' => CustomerAddress::ZONES,
+            'zones' => $zones,
         ]);
     }
 

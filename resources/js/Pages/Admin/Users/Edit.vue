@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -65,44 +65,36 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Editar Usuario: ${user.name} - Puritronic`" />
+    <Head :title="`Editar · ${user.name}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Usuarios', href: route('admin.users.index'), icon: 'fa-solid fa-users' },
-                            { label: user.name, href: route('admin.users.show', user.id), icon: 'fa-solid fa-user' },
-                            { label: 'Editar', icon: 'fa-solid fa-user-pen' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                            {{ getInitials(user.name) }}
-                        </div>
-                        <div>
-                            <h2 class="text-xl font-bold leading-tight text-slate-900">
-                                Modificar Cuenta: {{ user.name }}
-                            </h2>
-                            <p class="text-xs sm:text-sm text-slate-500">
-                                Actualice las credenciales y datos permitidos de la cuenta
-                            </p>
-                        </div>
-                    </div>
-                </div>
+            <AdminPageHeader
+                :title="`Modificar Cuenta: ${user.name}`"
+                subtitle="Actualice las credenciales y datos permitidos de la cuenta."
+                icon="fa-solid fa-user-pen"
+                accent="purple"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Usuarios', href: route('admin.users.index') },
+                    { label: user.name, href: route('admin.users.show', user.id) },
+                    { label: 'Editar' },
+                ]"
+            >
+                <template #icon>
+                    <span class="font-bold text-sm tracking-tight">{{ getInitials(user.name) }}</span>
+                </template>
 
-                <div class="flex items-center gap-2 self-start sm:self-auto">
+                <template #actions>
                     <Link
                         :href="route('admin.users.show', user.id)"
-                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition shadow-xs"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
                     >
-                        <i class="fa-solid fa-arrow-left text-xs text-slate-500"></i>
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
                         <span>Cancelar</span>
                     </Link>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

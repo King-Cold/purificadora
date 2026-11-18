@@ -203,7 +203,7 @@ const totalExchangeInBatches = computed(() => {
 </script>
 
 <template>
-    <Head title="Lavado y Llenado - Puritronic" />
+    <Head title="Producción" />
 
     <AuthenticatedLayout>
         <template #header>

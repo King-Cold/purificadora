@@ -19,12 +19,18 @@ const props = defineProps({
 const page = usePage();
 const newlyCreated = ref(props.createdCustomer || null);
 
-const availableZones = [
-    { id: 'north', label: 'Norte' },
-    { id: 'south', label: 'Sur' },
-    { id: 'east', label: 'Este' },
-    { id: 'west', label: 'Oeste' },
-];
+const availableZones = computed(() => {
+    const shared = page.props.deliveryZones;
+    if (Array.isArray(shared) && shared.length > 0) {
+        return shared.map((z) => ({ id: z.key, label: z.name }));
+    }
+    return [
+        { id: 'north', label: 'Norte' },
+        { id: 'south', label: 'Sur' },
+        { id: 'east', label: 'Este' },
+        { id: 'west', label: 'Oeste' },
+    ];
+});
 
 const bottleType = ref('none'); // 'none', 'exchange', 'fixed'
 const bottlesCount = ref(1);
@@ -70,7 +76,7 @@ const submitCustomer = () => {
         return;
     }
     if (!form.delivery_zone) {
-        alertWarning('Por favor especifica la zona de reparto (Norte, Sur, Este u Oeste).');
+        alertWarning('Por favor selecciona la zona de reparto del cliente.');
         return;
     }
     syncCounts();
@@ -99,7 +105,7 @@ const registerAnother = () => {
 </script>
 
 <template>
-    <Head title="Agregar Cliente - Reparto Móvil" />
+    <Head title="Nuevo cliente" />
 
     <AuthenticatedLayout>
         <template #header>

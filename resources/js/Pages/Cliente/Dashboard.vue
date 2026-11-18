@@ -60,7 +60,7 @@ const getStageBadgeClass = (stageKey) => {
 </script>
 
 <template>
-    <Head title="Panel de Cliente - Puritronic" />
+    <Head title="Inicio" />
 
     <AuthenticatedLayout>
         <!-- 1. ENCABEZADO ÚNICO: Saludo breve y acciones de pedidos -->

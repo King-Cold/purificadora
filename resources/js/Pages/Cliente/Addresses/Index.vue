@@ -115,7 +115,7 @@ const deleteAddress = () => {
 </script>
 
 <template>
-    <Head title="Mi domicilio - Puritronic" />
+    <Head title="Mi domicilio" />
 
     <AuthenticatedLayout>
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">

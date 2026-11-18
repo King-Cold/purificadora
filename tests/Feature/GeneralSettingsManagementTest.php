@@ -590,4 +590,48 @@ class GeneralSettingsManagementTest extends TestCase
             $resBottle->assertSessionHas('success');
         }
     }
+
+    /**
+     * 18. El administrador puede renombrar zonas base, pausar y agregar nuevas zonas de entrega.
+     */
+    public function test_admin_can_manage_delivery_zones_and_rename_base_zones(): void
+    {
+        $response = $this->actingAs($this->adminUser)->put(route('admin.settings.zones.update'), [
+            'zones' => [
+                ['key' => 'north', 'name' => 'Centro', 'color' => '#0071BA', 'is_active' => true],
+                ['key' => 'south', 'name' => 'Sur', 'color' => '#26845B', 'is_active' => true],
+                ['key' => 'east', 'name' => 'Este', 'color' => '#1E1545', 'is_active' => true],
+                ['key' => 'west', 'name' => 'Oeste', 'color' => '#D99A27', 'is_active' => false],
+                ['key' => '', 'name' => 'Sahcabá', 'color' => '#E82147', 'is_active' => true],
+            ],
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $settingService = app(\App\Services\SettingService::class);
+        $allZones = $settingService->getDeliveryZones();
+        $activeZones = $settingService->getDeliveryZones(true);
+
+        $this->assertCount(5, $allZones);
+        $this->assertCount(4, $activeZones); // 'west' pausada no aparece en activas
+        $this->assertEquals('Centro', $settingService->resolveDeliveryZoneLabel('north'));
+        $this->assertEquals('Sahcabá', $settingService->resolveDeliveryZoneLabel('sahcaba'));
+
+        // Verificar que la nueva zona pasa validación al guardar domicilio en Clientes
+        $customer = Customer::create([
+            'code' => 'CLI-ZONA-1',
+            'nickname' => 'Cliente Sahcabá',
+            'fixed_bottles_count' => 2,
+            'exchange_bottles_count' => 0,
+        ]);
+
+        $this->actingAs($this->adminUser)->post(route('admin.customers.addresses.store', $customer->id), [
+            'municipality_type' => 'hocaba',
+            'delivery_zone' => 'sahcaba',
+            'street_and_number' => 'Calle Principal #10',
+        ])->assertRedirect();
+
+        $this->assertEquals('Zona Sahcabá', $customer->address()->first()->zone_label);
+    }
 }

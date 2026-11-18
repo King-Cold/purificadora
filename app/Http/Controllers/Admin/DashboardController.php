@@ -145,12 +145,15 @@ class DashboardController extends Controller
             ->groupBy('delivery_zone')
             ->pluck('total', 'delivery_zone');
 
-        $zonesBreakdown = [
-            ['key' => 'north', 'label' => 'Norte', 'count' => (int) ($zoneCountsRaw['north'] ?? 0), 'color' => '#0071BA'],
-            ['key' => 'south', 'label' => 'Sur', 'count' => (int) ($zoneCountsRaw['south'] ?? 0), 'color' => '#34785A'],
-            ['key' => 'east', 'label' => 'Este', 'count' => (int) ($zoneCountsRaw['east'] ?? 0), 'color' => '#1E1545'],
-            ['key' => 'west', 'label' => 'Oeste', 'count' => (int) ($zoneCountsRaw['west'] ?? 0), 'color' => '#A97827'],
-        ];
+        $zonesBreakdown = collect(app(\App\Services\SettingService::class)->getDeliveryZones())
+            ->map(fn (array $z) => [
+                'key' => $z['key'],
+                'label' => $z['name'],
+                'count' => (int) ($zoneCountsRaw[$z['key']] ?? 0),
+                'color' => $z['color'],
+            ])
+            ->values()
+            ->all();
 
         // 6. Balance financiero del mes + fiados pendientes por cobrar
         $routeMonthRevenue = (float) OrderPayment::whereBetween('created_at', [$monthStartUtc, $monthEndUtc])->sum('amount');

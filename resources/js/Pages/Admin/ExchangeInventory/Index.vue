@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 
 const props = defineProps({
     summary: {
@@ -326,10 +327,53 @@ const showResolvedIncidents = ref(false);
 </script>
 
 <template>
-    <Head title="Inventario de cambios · Supervisión" />
+    <Head title="Inventario" />
 
     <AuthenticatedLayout wide>
-        <div class="py-5 sm:py-7 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
+        <template #header>
+            <AdminPageHeader
+                title="Inventario de cambios"
+                subtitle="Control general de botellones de cambio de 20 L en planta y camión · Excluye fijos de clientes."
+                icon="fa-solid fa-bottle-water"
+                accent="amber"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Supervisión' },
+                    { label: 'Inventario de cambios' },
+                ]"
+            >
+                <template #actions>
+                    <button
+                        type="button"
+                        @click="openTargetModal"
+                        class="min-h-[40px] px-3.5 py-2 rounded-xl bg-white hover:bg-[#F5F4F8] text-[#211B35] border border-[#E7E4ED] font-semibold text-xs sm:text-sm flex items-center gap-2 transition duration-150 cursor-pointer shadow-2xs"
+                    >
+                        <i class="fa-solid fa-bullseye text-[#0071BA]"></i>
+                        <span>Editar meta</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="openInconvenienceModal"
+                        class="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#FEF6E7] hover:bg-[#FDEBC8] text-[#9A630C] border border-[#F5DFB5] font-semibold text-xs sm:text-sm flex items-center gap-2 transition duration-150 cursor-pointer shadow-2xs"
+                    >
+                        <i class="fa-solid fa-triangle-exclamation text-[#D99A27]"></i>
+                        <span>Reportar inconveniente</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="openNewBottlesModal"
+                        class="min-h-[40px] px-4 py-2 rounded-xl bg-[#1E1545] hover:bg-[#2B1F60] text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition duration-150 cursor-pointer shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
+                    >
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Registrar botellones nuevos</span>
+                    </button>
+                </template>
+            </AdminPageHeader>
+        </template>
+
+        <div class="py-6 sm:py-8 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
 
             <div
                 v-if="Object.keys(page.props.errors || {}).length > 0"
@@ -341,55 +385,6 @@ const showResolvedIncidents = ref(false);
                 </div>
                 <div class="text-sm font-bold flex-1">
                     <p v-for="(err, key) in page.props.errors" :key="key">{{ err }}</p>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- ENCABEZADO Y ACCIONES DEL ADMINISTRADOR                                   -->
-            <!-- ========================================================================= -->
-            <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-900">
-                        <span>Administración</span>
-                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
-                        <span>Supervisión</span>
-                    </div>
-                    <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                        Inventario de cambios
-                    </h1>
-                    <p class="text-sm sm:text-base text-slate-600">
-                        Control general de botellones de cambio de 20 L en Planta y camión · Excluye fijos de clientes
-                    </p>
-                </div>
-
-                <!-- Botones de acción separados y táctiles (mínimo 44x44px) -->
-                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                    <button
-                        type="button"
-                        @click="openTargetModal"
-                        class="min-h-[44px] px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer shadow-2xs"
-                    >
-                        <i class="fa-solid fa-bullseye text-blue-900"></i>
-                        <span>Editar meta</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="openInconvenienceModal"
-                        class="min-h-[44px] px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer shadow-2xs"
-                    >
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>Reportar inconveniente</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="openNewBottlesModal"
-                        class="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#0E1E42] hover:bg-blue-900 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer shadow-2xs"
-                    >
-                        <i class="fa-solid fa-plus text-sky-400"></i>
-                        <span>Registrar botellones nuevos</span>
-                    </button>
                 </div>
             </div>
 

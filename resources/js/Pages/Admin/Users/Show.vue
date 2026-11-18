@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { confirmAction } from '@/utils/swal';
 
@@ -68,62 +68,53 @@ const handleToggleStatus = async () => {
 </script>
 
 <template>
-    <Head :title="`Detalles: ${user.name} - Puritronic`" />
+    <Head :title="`Usuario · ${user.name}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Usuarios', href: route('admin.users.index'), icon: 'fa-solid fa-users' },
-                            { label: user.name, icon: 'fa-solid fa-user' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-xl font-bold leading-tight text-gray-900">
-                            {{ user.name }}
-                        </h2>
-                        <!-- Badge Estado de Cuenta -->
-                        <span
-                            v-if="user.is_active"
-                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        >
-                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                            Cuenta Activa
-                        </span>
-                        <span
-                            v-else
-                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200"
-                        >
-                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                            Cuenta Inactiva
-                        </span>
-                    </div>
-                    <p class="text-sm text-gray-500 mt-0.5">
-                        Ficha detallada del usuario y credenciales operativas registradas
-                    </p>
-                </div>
+            <AdminPageHeader
+                :title="user.name"
+                subtitle="Ficha detallada del usuario y credenciales operativas registradas."
+                icon="fa-solid fa-user"
+                accent="purple"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Usuarios', href: route('admin.users.index') },
+                    { label: user.name },
+                ]"
+            >
+                <template #badges>
+                    <span
+                        v-if="user.is_active"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E8F5EE] text-[#26845B] border border-[#BBE4CE]"
+                    >
+                        <span class="h-1.5 w-1.5 rounded-full bg-[#26845B]"></span>
+                        Cuenta Activa
+                    </span>
+                    <span
+                        v-else
+                        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FDECF3] text-[#B91C3C] border border-[#F6C8DB]"
+                    >
+                        <span class="h-1.5 w-1.5 rounded-full bg-[#D9266F]"></span>
+                        Cuenta Inactiva
+                    </span>
+                </template>
 
-                <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+                <template #actions>
                     <Link
                         :href="route('admin.users.index')"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
                     >
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
                         <span>Volver</span>
                     </Link>
 
                     <Link
                         v-if="canEdit"
                         :href="route('admin.users.edit', user.id)"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg hover:bg-blue-800 transition shadow-sm"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] rounded-xl transition duration-150 shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
                     >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
                         <span>Editar</span>
                     </Link>
 
@@ -134,19 +125,14 @@ const handleToggleStatus = async () => {
                         type="button"
                         :disabled="isSelf"
                         :title="isSelf ? 'No puedes desactivar tu propia cuenta' : (user.is_active ? 'Desactivar cuenta de usuario' : 'Activar cuenta de usuario')"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg border transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                        :class="user.is_active ? 'text-rose-700 bg-white border-rose-300 hover:bg-rose-50' : 'text-emerald-700 bg-white border-emerald-300 hover:bg-emerald-50'"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl border transition duration-150 shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        :class="user.is_active ? 'text-[#B91C3C] bg-[#FDECF3] border-[#F6C8DB] hover:bg-[#FADCE8]' : 'text-[#26845B] bg-[#E8F5EE] border-[#BBE4CE] hover:bg-[#D9EFE2]'"
                     >
-                        <svg v-if="user.is_active" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
-                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <i :class="user.is_active ? 'fa-solid fa-ban' : 'fa-solid fa-circle-check'" class="text-xs"></i>
                         <span>{{ user.is_active ? 'Desactivar' : 'Activar' }}</span>
                     </button>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

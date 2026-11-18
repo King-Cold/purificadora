@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Services\SettingService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CustomerAddressRequest extends FormRequest
 {
@@ -53,7 +55,8 @@ class CustomerAddressRequest extends FormRequest
             'delivery_zone' => [
                 'required_if:municipality_type,hocaba',
                 'nullable',
-                'in:north,south,east,west',
+                'string',
+                Rule::in(app(SettingService::class)->getDeliveryZoneKeys()),
             ],
             'street_and_number' => ['required', 'string', 'max:200'],
             'reference' => ['nullable', 'string', 'max:500'],
@@ -70,8 +73,8 @@ class CustomerAddressRequest extends FormRequest
             'municipality_type.in' => 'El tipo de municipio seleccionado no es válido.',
             'other_municipality.required_if' => 'Debe ingresar el nombre del municipio cuando selecciona "Otro municipio".',
             'other_municipality.max' => 'El municipio no debe exceder los 100 caracteres.',
-            'delivery_zone.required_if' => 'Para Hocabá es obligatorio seleccionar la zona de reparto (Norte, Sur, Este u Oeste).',
-            'delivery_zone.in' => 'La zona de reparto debe ser Norte, Sur, Este u Oeste.',
+            'delivery_zone.required_if' => 'Para Hocabá es obligatorio seleccionar una zona de reparto disponible.',
+            'delivery_zone.in' => 'La zona de reparto seleccionada no es válida.',
             'street_and_number.required' => 'La calle y número de la casa son obligatorios.',
             'street_and_number.max' => 'La calle y número no deben exceder los 200 caracteres.',
             'reference.max' => 'Las referencias para el repartidor no deben exceder los 500 caracteres.',

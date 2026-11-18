@@ -781,7 +781,7 @@ class RouteExecutionController extends Controller
                     'street' => ['nullable', 'string', 'max:150'],
                     'exterior_number' => ['nullable', 'string', 'max:20'],
                     'neighborhood' => ['nullable', 'string', 'max:100'],
-                    'delivery_zone' => ['nullable', 'string', 'in:north,south,east,west'],
+                    'delivery_zone' => ['nullable', 'string', \Illuminate\Validation\Rule::in(app(\App\Services\SettingService::class)->getDeliveryZoneKeys())],
                     'reference' => ['nullable', 'string', 'max:500'],
                 ]);
 
@@ -1064,6 +1064,59 @@ class RouteExecutionController extends Controller
         } catch (\Exception $e) {
             return back()->withErrors(['cancel' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Registra una incidencia de recogida o entrega directamente sobre un pedido (con o sin parada de ruta).
+     */
+    public function reportOrderIncident(Order $order, Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'stage' => ['nullable', 'string', 'in:por_recoger,por_entregar'],
+        ]);
+
+        $user = $request->user();
+        $stageLabel = ($validated['stage'] ?? 'por_recoger') === 'por_entregar' ? 'entrega' : 'recogida';
+        $detail = trim((string) ($validated['notes'] ?? ''));
+        $summary = "Incidencia en {$stageLabel}: {$validated['reason']}" . ($detail !== '' ? " — {$detail}" : '');
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $user, $summary, $validated) {
+            $timestamp = now('America/Merida')->format('d/m H:i');
+            $existingNotes = trim((string) $order->notes);
+            $newNotes = $existingNotes !== ''
+                ? "{$existingNotes}\n[{$timestamp}] {$summary}"
+                : "[{$timestamp}] {$summary}";
+
+            $order->update([
+                'notes' => $newNotes,
+            ]);
+
+            OrderStatusHistory::create([
+                'order_id' => $order->id,
+                'previous_status' => $order->status,
+                'new_status' => $order->status,
+                'user_id' => $user->id,
+                'reason' => $summary,
+                'created_at' => now(),
+            ]);
+
+            $pendingStop = RouteStop::where('order_id', $order->id)
+                ->where('status', RouteStop::STATUS_PENDING)
+                ->latest('id')
+                ->first();
+
+            if ($pendingStop) {
+                $pendingStop->update([
+                    'status' => RouteStop::STATUS_FAILED,
+                    'failure_reason' => $validated['reason'],
+                    'notes' => $validated['notes'] ?: $validated['reason'],
+                ]);
+            }
+        });
+
+        return back()->with('warning', "Incidencia guardada en el pedido {$order->folio}: {$validated['reason']}.");
     }
 
     /**
@@ -1666,8 +1719,12 @@ class RouteExecutionController extends Controller
             $activeTab = 'por_recoger';
         }
 
+        $settingService = app(\App\Services\SettingService::class);
+        $configuredZones = $settingService->getDeliveryZones();
+        $validZoneKeys = array_column($configuredZones, 'key');
+
         $activeZone = $request->query('zone', 'all');
-        if (!in_array($activeZone, ['all', 'north', 'south', 'east', 'west', 'none'], true)) {
+        if (!in_array($activeZone, array_merge(['all', 'none'], $validZoneKeys), true)) {
             $activeZone = 'all';
         }
 
@@ -1782,18 +1839,15 @@ class RouteExecutionController extends Controller
             ->pluck('total', 'customer_id')
             ->all();
 
-        // Mapeo canónico de zona
-        $mapOrderZone = function ($order) {
-            $z = strtolower(trim((string) ($order->delivery_zone ?: ($order->customer?->address?->delivery_zone ?? ''))));
-            if (in_array($z, ['north', 'norte'], true)) return 'north';
-            if (in_array($z, ['south', 'sur'], true)) return 'south';
-            if (in_array($z, ['east', 'este'], true)) return 'east';
-            if (in_array($z, ['west', 'oeste'], true)) return 'west';
-            return 'none';
+        // Mapeo canónico de zona desde configuración general
+        $mapOrderZone = function ($order) use ($settingService) {
+            $raw = $order->delivery_zone ?: ($order->customer?->address?->delivery_zone ?? '');
+            return $settingService->normalizeDeliveryZoneKey($raw);
         };
 
         // Formateador de tarjeta
-        $formatOrderCard = function ($order, $stop = null) use ($mapOrderZone, $exchangeAvailable, $loadedFixedByCustomer, $deliveredFixedByCustomer, $proposedFixedByCustomer, $refillPrice) {
+        $zonesMap = $settingService->getDeliveryZonesMap();
+        $formatOrderCard = function ($order, $stop = null) use ($mapOrderZone, $zonesMap, $exchangeAvailable, $loadedFixedByCustomer, $deliveredFixedByCustomer, $proposedFixedByCustomer, $refillPrice) {
             $customer = $order->customer;
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
@@ -1820,6 +1874,9 @@ class RouteExecutionController extends Controller
             if ($fixedInTruck === 0 && $fixedAvailableOnTruck > 0) {
                 $fixedInTruck = min($fixedToDeliver, $fixedAvailableOnTruck);
             }
+            $fixedReadyToLoad = $fixedItem
+                ? max(0, (int) $fixedItem->prepared_quantity - (int) $fixedItem->loaded_quantity - (int) $fixedItem->damaged_quantity)
+                : 0;
 
             // Análisis de pagos anticipados para botellones fijos
             $advancePaidBottles = (int) $order->payments->sum('bottles_covered_count');
@@ -1941,13 +1998,7 @@ class RouteExecutionController extends Controller
                 'address_summary' => $addressFull,
                 'address_reference' => $order->address_snapshot['delivery_reference'] ?? $order->delivery_notes ?? null,
                 'zone_key' => $mapOrderZone($order),
-                'zone_label' => match ($mapOrderZone($order)) {
-                    'north' => 'Norte',
-                    'south' => 'Sur',
-                    'east' => 'Este',
-                    'west' => 'Oeste',
-                    default => 'Sin zona',
-                },
+                'zone_label' => $zonesMap[$mapOrderZone($order)] ?? 'Sin zona',
                 'operation_type' => $opType,
                 'operation_label' => $opLabel,
                 'exchange_quantity' => $exchangeQty,
@@ -1956,7 +2007,10 @@ class RouteExecutionController extends Controller
                 'fixed_to_collect' => $fixedToCollect,
                 'fixed_to_deliver' => $fixedToDeliver,
                 'fixed_item_id' => $fixedItem?->id,
+                'order_item_id' => $fixedItem?->id,
                 'fixed_in_truck' => $fixedInTruck,
+                'fixed_ready_to_load' => $fixedReadyToLoad,
+                'ready_state' => $fixedInTruck > 0 ? 'in_truck' : ($fixedReadyToLoad > 0 ? 'in_plant' : null),
                 'is_advance_paid' => $isAdvancePaid,
                 'advance_paid_bottles' => $coveredRemaining,
                 'unpaid_bottles' => $unpaidInTruck,
@@ -2010,18 +2064,19 @@ class RouteExecutionController extends Controller
             return $card;
         })->values();
 
-        // 3. Por entregar (en camión)
+        // 3. Por entregar (listos en Planta para subir al camión + ya cargados en camión)
         $porEntregarList = $allOrders->filter(function ($order) use ($loadedFixedByCustomer, $deliveredFixedByCustomer) {
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
             $hasExchange = $exchangeItem && ($exchangeItem->quantity > $exchangeItem->delivered_quantity);
-            $fixedInTruck = $fixedItem ? max(0, (int)$fixedItem->loaded_quantity - (int)$fixedItem->delivered_quantity) : 0;
-            $custAvail = max(0, (int)($loadedFixedByCustomer[$order->customer_id] ?? 0) - (int)($deliveredFixedByCustomer[$order->customer_id] ?? 0));
-            return $hasExchange || ($fixedInTruck > 0) || ($custAvail > 0);
+            $fixedInTruck = $fixedItem ? max(0, (int) $fixedItem->loaded_quantity - (int) $fixedItem->delivered_quantity) : 0;
+            $readyToLoad = $fixedItem ? max(0, (int) $fixedItem->prepared_quantity - (int) $fixedItem->loaded_quantity - (int) $fixedItem->damaged_quantity) : 0;
+            $custAvail = max(0, (int) ($loadedFixedByCustomer[$order->customer_id] ?? 0) - (int) ($deliveredFixedByCustomer[$order->customer_id] ?? 0));
+            return $hasExchange || ($fixedInTruck > 0) || ($readyToLoad > 0) || ($custAvail > 0);
         })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
             $stop = $pendingStopMap->get($order->id);
             return $formatOrderCard($order, $stop);
-        })->values();
+        })->sortBy(fn ($card) => ($card['ready_state'] === 'in_plant' && ($card['fixed_in_truck'] ?? 0) === 0) ? 0 : 1)->values();
 
         $pendientesList = $porRecogerList;
         $enProcesoList = collect();
@@ -2032,6 +2087,8 @@ class RouteExecutionController extends Controller
             'por_recoger' => $porRecogerList->count(),
             'por_recoger_planta' => $porRecogerPlantaList->count(),
             'por_entregar' => $porEntregarList->count(),
+            'ready_in_plant_orders' => $porRecogerPlantaList->count(),
+            'ready_in_plant_bottles' => (int) $porRecogerPlantaList->sum('fixed_ready_to_load'),
             'pendientes' => $allOrders->count(),
             'en_proceso' => 0,
             'atendidos' => 0,
@@ -2044,15 +2101,14 @@ class RouteExecutionController extends Controller
             default => $porRecogerList,
         };
 
-        // Conteo por zonas de la colección activa
+        // Conteo dinámico por zonas configuradas
         $zoneCounts = [
             'all' => $currentCollection->count(),
-            'north' => $currentCollection->where('zone_key', 'north')->count(),
-            'south' => $currentCollection->where('zone_key', 'south')->count(),
-            'east' => $currentCollection->where('zone_key', 'east')->count(),
-            'west' => $currentCollection->where('zone_key', 'west')->count(),
             'none' => $currentCollection->where('zone_key', 'none')->count(),
         ];
+        foreach ($validZoneKeys as $zKey) {
+            $zoneCounts[$zKey] = $currentCollection->where('zone_key', $zKey)->count();
+        }
 
         // Elementos filtrados
         $filteredItems = $activeZone === 'all'
@@ -2085,6 +2141,7 @@ class RouteExecutionController extends Controller
             'activeZone' => $activeZone,
             'tabCounts' => $tabCounts,
             'zoneCounts' => $zoneCounts,
+            'zones' => $configuredZones,
             'items' => $filteredItems,
             'lastUpdatedAt' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);

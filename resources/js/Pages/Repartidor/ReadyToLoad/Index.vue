@@ -89,7 +89,7 @@ const submitAcceptAll = () => {
 </script>
 
 <template>
-    <Head title="Listos para cargar · Repartidor Puritronic" />
+    <Head title="Por cargar" />
 
     <AuthenticatedLayout wide>
         <div class="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 pb-28 md:pb-16">

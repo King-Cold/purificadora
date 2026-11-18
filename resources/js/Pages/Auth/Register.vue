@@ -2,6 +2,7 @@
 import InputError from '@/Components/InputError.vue';
 import Modal from '@/Components/Modal.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff, Home, Lock, Mail, User } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 const form = useForm({
@@ -31,282 +32,276 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Crear Cuenta - Puritronic" />
+    <Head title="Crear cuenta" />
 
-    <div class="min-h-screen w-full bg-white font-['Poppins',sans-serif] text-slate-800 flex flex-col justify-between selection:bg-[#0084ff] selection:text-white">
-        
-        <!-- Header superior / Barra de navegación -->
-        <header class="w-full px-4 py-3 sm:px-8 sm:py-4 flex items-center justify-between">
+    <div class="min-h-screen w-full bg-[#F5F4F8] font-sans antialiased text-[#211B35] flex flex-col justify-between selection:bg-[#1E1545] selection:text-white">
+        <!-- Barra superior -->
+        <header class="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-5 pb-3 flex items-center justify-between">
             <Link
                 :href="route('auth.portal')"
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-200/90 text-slate-600 hover:text-[#0084ff] hover:border-[#0084ff]/40 hover:bg-blue-50/50 shadow-xs transition-all"
+                class="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-[#E7E4ED] text-[#777386] hover:text-[#1E1545] hover:border-[#CFC8E0] shadow-[0_1px_2px_rgba(33,27,53,0.04)] transition duration-150"
                 title="Volver"
                 aria-label="Volver"
             >
-                <i class="fa-solid fa-chevron-left text-xs sm:text-sm"></i>
+                <ArrowLeft class="w-4 h-4" />
             </Link>
 
             <Link href="/" class="flex items-center">
                 <img
                     src="/images/logo.png"
                     alt="Puritronic"
-                    class="h-7 sm:h-9 w-auto object-contain drop-shadow-xs"
+                    class="h-8 sm:h-9 w-auto object-contain"
                 />
             </Link>
 
             <Link
                 href="/"
-                class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-200/90 text-slate-600 hover:text-[#0084ff] hover:border-[#0084ff]/40 hover:bg-blue-50/50 shadow-xs transition-all"
+                class="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-[#E7E4ED] text-[#777386] hover:text-[#1E1545] hover:border-[#CFC8E0] shadow-[0_1px_2px_rgba(33,27,53,0.04)] transition duration-150"
                 title="Ir al inicio"
                 aria-label="Ir al inicio"
             >
-                <i class="fa-solid fa-house text-xs sm:text-sm"></i>
+                <Home class="w-4 h-4" />
             </Link>
         </header>
 
-        <!-- Contenido principal a Pantalla Completa: ilustración reducida en móvil para visibilidad total de los 4 campos -->
-        <main class="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 lg:px-12 py-2 sm:py-4 flex flex-col lg:flex-row items-center justify-center gap-3 sm:gap-6 lg:gap-14">
-            
-            <!-- Columna Ilustración (Tamaño balanceado y nítido) -->
-            <div class="w-full lg:w-1/2 flex justify-center items-center">
-                <div class="w-56 sm:w-68 md:w-80 lg:w-full lg:max-w-lg">
-                    <img
-                        src="/images/register.svg"
-                        alt="Crear Cuenta"
-                        class="w-full h-auto max-h-[210px] sm:max-h-[280px] lg:max-h-[480px] object-contain drop-shadow-sm transform hover:scale-[1.02] transition-transform duration-300 mx-auto"
-                    />
-                </div>
-            </div>
-
-            <!-- Columna Formulario Registro -->
-            <div class="w-full lg:w-1/2 flex justify-center">
-                <div class="w-full max-w-sm sm:max-w-md space-y-3 sm:space-y-4">
-                    
-                    <!-- Encabezado del Formulario -->
-                    <div class="space-y-0.5 sm:space-y-1 text-center lg:text-left">
-                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-black text-[#0e1c2e] tracking-tight">
-                            Crear Cuenta
-                        </h1>
-                        <p class="text-xs sm:text-sm text-slate-500 font-normal">
-                            Completa tus datos para empezar a pedir agua.
-                        </p>
+        <!-- Contenedor principal -->
+        <main class="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex items-center justify-center">
+            <div class="w-full bg-white border border-[#E7E4ED] rounded-3xl shadow-[0_10px_36px_rgba(30,21,69,0.06)] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+                <!-- Columna ilustración -->
+                <div class="lg:col-span-5 bg-[#F5F4F8]/80 border-b lg:border-b-0 lg:border-r border-[#E7E4ED] p-6 sm:p-8 flex items-center justify-center">
+                    <div class="w-32 sm:w-44 lg:w-full max-w-[290px] mx-auto">
+                        <img
+                            src="/images/register.svg"
+                            alt="Crear cuenta"
+                            class="w-full h-auto object-contain mx-auto"
+                        />
                     </div>
+                </div>
 
-                    <!-- Formulario de Registro compacto -->
-                    <form @submit.prevent="submit" class="space-y-2 sm:space-y-3">
-                        
-                        <!-- Campo: Nombre Completo -->
-                        <div class="space-y-0.5">
-                            <label for="name" class="block text-xs font-bold text-slate-700">
-                                Nombre Completo
-                            </label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                    <i class="fa-regular fa-user text-xs sm:text-sm"></i>
-                                </div>
-                                <input
-                                    id="name"
-                                    type="text"
-                                    v-model="form.name"
-                                    required
-                                    autofocus
-                                    autocomplete="name"
-                                    placeholder="Tu nombre y apellido"
-                                    class="w-full pl-9 pr-4 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
-                                />
-                            </div>
-                            <InputError class="mt-0.5" :message="form.errors.name" />
-                        </div>
-
-                        <!-- Campo: Correo Electrónico -->
-                        <div class="space-y-0.5">
-                            <label for="email" class="block text-xs font-bold text-slate-700">
-                                Correo Electrónico
-                            </label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                    <i class="fa-regular fa-envelope text-xs sm:text-sm"></i>
-                                </div>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    v-model="form.email"
-                                    required
-                                    autocomplete="username"
-                                    placeholder="ejemplo@correo.com"
-                                    class="w-full pl-9 pr-4 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
-                                />
-                            </div>
-                            <InputError class="mt-0.5" :message="form.errors.email" />
-                        </div>
-
-                        <!-- Campo: Contraseña -->
-                        <div class="space-y-0.5">
-                            <label for="password" class="block text-xs font-bold text-slate-700">
-                                Contraseña
-                            </label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                    <i class="fa-solid fa-lock text-xs sm:text-sm"></i>
-                                </div>
-                                <input
-                                    id="password"
-                                    :type="showPassword ? 'text' : 'password'"
-                                    v-model="form.password"
-                                    required
-                                    autocomplete="new-password"
-                                    placeholder="Mínimo 8 caracteres"
-                                    class="w-full pl-9 pr-9 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPassword = !showPassword"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-                                >
-                                    <i :class="showPassword ? 'fa-regular fa-eye-slash text-xs sm:text-sm' : 'fa-regular fa-eye text-xs sm:text-sm'"></i>
-                                </button>
-                            </div>
-                            <InputError class="mt-0.5" :message="form.errors.password" />
-                        </div>
-
-                        <!-- Campo: Confirmar Contraseña -->
-                        <div class="space-y-0.5">
-                            <label for="password_confirmation" class="block text-xs font-bold text-slate-700">
-                                Confirmar Contraseña
-                            </label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                    <i class="fa-solid fa-lock-open text-xs sm:text-sm"></i>
-                                </div>
-                                <input
-                                    id="password_confirmation"
-                                    :type="showConfirmPassword ? 'text' : 'password'"
-                                    v-model="form.password_confirmation"
-                                    required
-                                    autocomplete="new-password"
-                                    placeholder="Repite tu contraseña"
-                                    class="w-full pl-9 pr-9 py-2 sm:py-2.5 rounded-2xl border border-slate-200 focus:border-[#0084ff] focus:ring-4 focus:ring-blue-500/10 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all outline-none bg-slate-50/50 hover:bg-white"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showConfirmPassword = !showConfirmPassword"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-                                >
-                                    <i :class="showConfirmPassword ? 'fa-regular fa-eye-slash text-xs sm:text-sm' : 'fa-regular fa-eye text-xs sm:text-sm'"></i>
-                                </button>
-                            </div>
-                            <InputError class="mt-0.5" :message="form.errors.password_confirmation" />
-                        </div>
-
-                        <!-- Botellones de 20L Iniciales (Opcional) -->
-                        <div class="p-3 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                        <i class="fa-solid fa-bottle-water text-[#0084ff]"></i>
-                                        Tus Botellones de 20L
-                                    </span>
-                                    <button
-                                        type="button"
-                                        @click="showBottlesModal = true"
-                                        class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[#0084ff] hover:text-[#0070dc] hover:bg-blue-100/70 transition cursor-pointer"
-                                        title="¿Qué son botellones fijos y de cambio?"
-                                        aria-label="Ver explicación de botellones fijos y de cambio"
-                                    >
-                                        <i class="fa-solid fa-circle-exclamation text-xs"></i>
-                                    </button>
-                                </div>
-                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                    Total: {{ totalBottles }}
-                                </span>
-                            </div>
-                            <p class="text-[11px] text-slate-500 leading-tight">
-                                Indica cuántos envases tienes para tus pedidos a domicilio (puedes ajustarlo después).
+                <!-- Columna formulario -->
+                <div class="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center">
+                    <div class="w-full max-w-md mx-auto space-y-5">
+                        <div class="space-y-1 text-center lg:text-left">
+                            <h1 class="text-2xl sm:text-[26px] font-bold text-[#211B35] tracking-tight">
+                                Crear cuenta
+                            </h1>
+                            <p class="text-xs sm:text-sm text-[#777386]">
+                                Completa tus datos para comenzar a realizar pedidos.
                             </p>
+                        </div>
 
-                            <div class="grid grid-cols-2 gap-2 pt-1">
-                                <div>
-                                    <label for="reg_fixed_bottles" class="block text-[11px] font-medium text-slate-700">
-                                        Fijos (Puritronic)
-                                    </label>
+                        <form @submit.prevent="submit" class="space-y-3.5">
+                            <!-- Nombre Completo -->
+                            <div class="space-y-1.5">
+                                <label for="name" class="block text-xs font-medium text-[#211B35]">
+                                    Nombre completo
+                                </label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#777386]">
+                                        <User class="w-4 h-4" />
+                                    </div>
                                     <input
-                                        id="reg_fixed_bottles"
-                                        type="number"
-                                        min="0"
-                                        max="500"
-                                        v-model.number="form.fixed_bottles_count"
-                                        class="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:border-[#0084ff] focus:ring-2 focus:ring-blue-500/10 text-slate-800 bg-white"
+                                        id="name"
+                                        type="text"
+                                        v-model="form.name"
+                                        required
+                                        autofocus
+                                        autocomplete="name"
+                                        placeholder="Tu nombre y apellido"
+                                        class="w-full pl-10 pr-4 min-h-[42px] rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 text-sm text-[#211B35] placeholder-[#9B96AA] transition duration-150 outline-none"
                                     />
-                                    <InputError class="mt-0.5" :message="form.errors.fixed_bottles_count" />
                                 </div>
-                                <div>
-                                    <label for="reg_exchange_bottles" class="block text-[11px] font-medium text-slate-700">
-                                        De Cambio
-                                    </label>
+                                <InputError :message="form.errors.name" />
+                            </div>
+
+                            <!-- Correo Electrónico -->
+                            <div class="space-y-1.5">
+                                <label for="email" class="block text-xs font-medium text-[#211B35]">
+                                    Correo electrónico
+                                </label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#777386]">
+                                        <Mail class="w-4 h-4" />
+                                    </div>
                                     <input
-                                        id="reg_exchange_bottles"
-                                        type="number"
-                                        min="0"
-                                        max="500"
-                                        v-model.number="form.exchange_bottles_count"
-                                        class="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:border-[#0084ff] focus:ring-2 focus:ring-blue-500/10 text-slate-800 bg-white"
+                                        id="email"
+                                        type="email"
+                                        v-model="form.email"
+                                        required
+                                        autocomplete="username"
+                                        placeholder="ejemplo@correo.com"
+                                        class="w-full pl-10 pr-4 min-h-[42px] rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 text-sm text-[#211B35] placeholder-[#9B96AA] transition duration-150 outline-none"
                                     />
-                                    <InputError class="mt-0.5" :message="form.errors.exchange_bottles_count" />
+                                </div>
+                                <InputError :message="form.errors.email" />
+                            </div>
+
+                            <!-- Contraseña y Confirmación en 2 columnas en tablet/desktop -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="space-y-1.5">
+                                    <label for="password" class="block text-xs font-medium text-[#211B35]">
+                                        Contraseña
+                                    </label>
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#777386]">
+                                            <Lock class="w-4 h-4" />
+                                        </div>
+                                        <input
+                                            id="password"
+                                            :type="showPassword ? 'text' : 'password'"
+                                            v-model="form.password"
+                                            required
+                                            autocomplete="new-password"
+                                            placeholder="Mín. 8 caracteres"
+                                            class="w-full pl-10 pr-9 min-h-[42px] rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 text-sm text-[#211B35] placeholder-[#9B96AA] transition duration-150 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="showPassword = !showPassword"
+                                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-[#777386] hover:text-[#211B35] focus:outline-none cursor-pointer"
+                                            aria-label="Mostrar u ocultar contraseña"
+                                        >
+                                            <EyeOff v-if="showPassword" class="w-4 h-4" />
+                                            <Eye v-else class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <InputError :message="form.errors.password" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <label for="password_confirmation" class="block text-xs font-medium text-[#211B35]">
+                                        Confirmar contraseña
+                                    </label>
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#777386]">
+                                            <Lock class="w-4 h-4" />
+                                        </div>
+                                        <input
+                                            id="password_confirmation"
+                                            :type="showConfirmPassword ? 'text' : 'password'"
+                                            v-model="form.password_confirmation"
+                                            required
+                                            autocomplete="new-password"
+                                            placeholder="Repítela aquí"
+                                            class="w-full pl-10 pr-9 min-h-[42px] rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 text-sm text-[#211B35] placeholder-[#9B96AA] transition duration-150 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            @click="showConfirmPassword = !showConfirmPassword"
+                                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-[#777386] hover:text-[#211B35] focus:outline-none cursor-pointer"
+                                            aria-label="Mostrar u ocultar confirmación"
+                                        >
+                                            <EyeOff v-if="showConfirmPassword" class="w-4 h-4" />
+                                            <Eye v-else class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <InputError :message="form.errors.password_confirmation" />
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Botón de Envío -->
-                        <div class="pt-1">
-                            <button
-                                type="submit"
-                                :disabled="form.processing"
-                                class="w-full py-2.5 sm:py-3 px-6 rounded-2xl bg-gradient-to-r from-[#0084ff] to-[#009bf5] hover:from-[#0070dc] hover:to-[#008fe0] text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-                            >
-                                <span v-if="form.processing">Creando cuenta...</span>
-                                <span v-else>CREAR MI CUENTA</span>
-                                <i class="fa-solid fa-arrow-right text-xs"></i>
-                            </button>
-                        </div>
-                    </form>
+                            <!-- Botellones de 20L Iniciales (Opcional) -->
+                            <div class="p-3.5 bg-[#F5F4F8] border border-[#E7E4ED] rounded-2xl space-y-2.5">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-semibold text-[#211B35] inline-flex items-center gap-1.5">
+                                            <i class="fa-solid fa-bottle-water text-[#0071BA]"></i>
+                                            Tus botellones de 20 L
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="showBottlesModal = true"
+                                            class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[#0071BA] hover:bg-[#EAF4FB] transition cursor-pointer"
+                                            title="¿Qué son botellones fijos y de cambio?"
+                                            aria-label="Ver explicación de botellones fijos y de cambio"
+                                        >
+                                            <AlertCircle class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                    <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#EAF4FB] border border-[#C8E3F6] text-[#0071BA] tabular-nums">
+                                        Total: {{ totalBottles }}
+                                    </span>
+                                </div>
 
-                    <!-- Enlace a Login -->
-                    <div class="pt-2 border-t border-slate-100 text-center">
-                        <p class="text-xs text-slate-500">
-                            ¿Ya tienes una cuenta registrada?
-                            <Link
-                                :href="route('login')"
-                                class="font-bold text-[#0084ff] hover:text-[#006bd6] ml-1 transition-colors underline"
-                            >
-                                Inicia sesión aquí
-                            </Link>
-                        </p>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div>
+                                        <label for="reg_fixed_bottles" class="block text-[11px] font-medium text-[#777386] mb-1">
+                                            Fijos (Puritronic)
+                                        </label>
+                                        <input
+                                            id="reg_fixed_bottles"
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            v-model.number="form.fixed_bottles_count"
+                                            class="w-full min-h-[38px] px-3 text-sm font-semibold text-[#211B35] tabular-nums rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 outline-none transition"
+                                        />
+                                        <InputError class="mt-1" :message="form.errors.fixed_bottles_count" />
+                                    </div>
+                                    <div>
+                                        <label for="reg_exchange_bottles" class="block text-[11px] font-medium text-[#777386] mb-1">
+                                            De cambio
+                                        </label>
+                                        <input
+                                            id="reg_exchange_bottles"
+                                            type="number"
+                                            min="0"
+                                            max="500"
+                                            v-model.number="form.exchange_bottles_count"
+                                            class="w-full min-h-[38px] px-3 text-sm font-semibold text-[#211B35] tabular-nums rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 outline-none transition"
+                                        />
+                                        <InputError class="mt-1" :message="form.errors.exchange_bottles_count" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Botón de Envío -->
+                            <div class="pt-1">
+                                <button
+                                    type="submit"
+                                    :disabled="form.processing"
+                                    class="w-full min-h-[46px] px-6 rounded-xl bg-[#1E1545] hover:bg-[#2B1F60] text-white font-semibold text-sm shadow-[0_2px_8px_rgba(30,21,69,0.16)] transition duration-150 disabled:opacity-55 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <span>{{ form.processing ? 'Creando cuenta...' : 'Crear cuenta' }}</span>
+                                    <ArrowRight class="w-4 h-4" />
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Enlace a Login -->
+                        <div class="pt-4 border-t border-[#E7E4ED] text-center">
+                            <p class="text-xs text-[#777386]">
+                                ¿Ya tienes una cuenta registrada?
+                                <Link
+                                    :href="route('login')"
+                                    class="font-semibold text-[#0071BA] hover:text-[#005994] ml-1 transition-colors"
+                                >
+                                    Inicia sesión aquí
+                                </Link>
+                            </p>
+                        </div>
                     </div>
-
                 </div>
             </div>
-
         </main>
 
-        <!-- Footer inferior simple -->
-        <footer class="w-full py-2.5 sm:py-3 text-center text-[11px] sm:text-xs text-slate-400">
+        <!-- Footer -->
+        <footer class="w-full py-3.5 text-center text-xs text-[#777386]">
             Puritronic &copy; {{ new Date().getFullYear() }}
         </footer>
 
         <!-- Modal Informativo: Botellones Fijos vs Botellones de Cambio -->
         <Modal :show="showBottlesModal" @close="showBottlesModal = false" max-width="md">
             <div class="p-5 sm:p-6 space-y-4">
-                <!-- Header del Modal -->
-                <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div class="flex items-start justify-between gap-3 border-b border-[#E7E4ED] pb-3">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-[#0084ff] flex items-center justify-center shrink-0 shadow-xs">
-                            <i class="fa-solid fa-circle-exclamation text-lg"></i>
+                        <div class="w-10 h-10 rounded-xl bg-[#EAF4FB] text-[#0071BA] flex items-center justify-center shrink-0">
+                            <AlertCircle class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-base font-bold text-slate-900 leading-tight">
-                                Tipos de Botellones de 20L
+                            <h3 class="text-base font-bold text-[#211B35] leading-tight">
+                                Tipos de botellones de 20 L
                             </h3>
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs text-[#777386]">
                                 ¿Cómo funcionan los envases fijos y de cambio?
                             </p>
                         </div>
@@ -314,62 +309,57 @@ const submit = () => {
                     <button
                         type="button"
                         @click="showBottlesModal = false"
-                        class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+                        class="w-8 h-8 rounded-lg text-[#777386] hover:text-[#211B35] hover:bg-[#F5F4F8] flex items-center justify-center transition cursor-pointer"
                         aria-label="Cerrar ventana"
                     >
                         <i class="fa-solid fa-xmark text-sm"></i>
                     </button>
                 </div>
 
-                <!-- Contenido con las 2 modalidades -->
                 <div class="space-y-3">
-                    <!-- 1. Botellones Fijos -->
-                    <div class="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
+                    <div class="p-3.5 rounded-xl bg-[#EEEAF7]/55 border border-[#D8CEEE] space-y-1.5">
                         <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-1.5 text-blue-900 font-bold text-xs sm:text-sm">
-                                <i class="fa-solid fa-tag text-xs text-[#0084ff]"></i>
+                            <div class="flex items-center gap-1.5 text-[#1E1545] font-semibold text-xs sm:text-sm">
+                                <i class="fa-solid fa-tag text-xs text-[#1E1545]"></i>
                                 <span>Botellones Fijos</span>
                             </div>
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#1E1545] bg-white border border-[#D8CEEE] px-2 py-0.5 rounded-full">
                                 Con tu nombre
                             </span>
                         </div>
-                        <p class="text-xs text-slate-600 leading-relaxed">
-                            Son envases rotulados o marcados con tu nombre. Al pedir a domicilio, el repartidor recoge tus botellones vacíos, los llevamos a planta para su lavado a presión y llenado, y te regresamos <strong>exactamente tus mismos envases</strong>.
+                        <p class="text-xs text-[#777386] leading-relaxed">
+                            Son envases rotulados o marcados con tu nombre. Al pedir a domicilio, el repartidor recoge tus botellones vacíos, los llevamos a planta para lavado y llenado, y te regresamos <strong>exactamente tus mismos envases</strong>.
                         </p>
                     </div>
 
-                    <!-- 2. Botellones de Cambio -->
-                    <div class="p-3.5 rounded-xl bg-sky-50/60 border border-sky-200/80 space-y-1.5">
+                    <div class="p-3.5 rounded-xl bg-[#EAF4FB]/70 border border-[#C8E3F6] space-y-1.5">
                         <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-1.5 text-sky-950 font-bold text-xs sm:text-sm">
-                                <i class="fa-solid fa-arrow-right-arrow-left text-xs text-sky-600"></i>
-                                <span>Botellones De Cambio</span>
+                            <div class="flex items-center gap-1.5 text-[#0071BA] font-semibold text-xs sm:text-sm">
+                                <i class="fa-solid fa-arrow-right-arrow-left text-xs text-[#0071BA]"></i>
+                                <span>Botellones de Cambio</span>
                             </div>
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-sky-700 bg-sky-100/80 px-2 py-0.5 rounded-full">
-                                Comerciales estándar
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#0071BA] bg-white border border-[#C8E3F6] px-2 py-0.5 rounded-full">
+                                Estándar 20 L
                             </span>
                         </div>
-                        <p class="text-xs text-slate-600 leading-relaxed">
-                            Son envases comerciales estándar de 20 litros (limpios y en buen estado). Al momento de la entrega, entregas tus botellones vacíos al repartidor y recibes otros botellones limpios, llenos y sellados <strong>al instante</strong>.
+                        <p class="text-xs text-[#777386] leading-relaxed">
+                            Son envases comerciales estándar de 20 litros. Al momento de la entrega, entregas tus botellones vacíos al repartidor y recibes otros botellones llenos y sellados <strong>al instante</strong>.
                         </p>
                     </div>
                 </div>
 
-                <!-- Aclaración útil -->
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-600 flex items-start gap-2 leading-relaxed">
-                    <i class="fa-solid fa-circle-info text-[#0084ff] text-xs mt-0.5 shrink-0"></i>
+                <div class="p-3 rounded-xl bg-[#F5F4F8] border border-[#E7E4ED] text-[11px] text-[#777386] flex items-start gap-2 leading-relaxed">
+                    <i class="fa-solid fa-circle-info text-[#0071BA] text-xs mt-0.5 shrink-0"></i>
                     <span>
-                        <strong>Nota:</strong> Si no estás seguro de cuántos envases tienes en este momento, puedes dejarlo en 0 o indicar una cantidad estimada. Podrás ajustarlo cuando gustes desde tu perfil de cliente.
+                        <strong>Nota:</strong> Si no estás seguro de cuántos envases tienes, puedes dejarlo en 0 o poner una cantidad aproximada y ajustarlo después en tu perfil.
                     </span>
                 </div>
 
-                <!-- Botón de Cierre -->
                 <div class="pt-1 flex justify-end">
                     <button
                         type="button"
                         @click="showBottlesModal = false"
-                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0084ff] hover:bg-[#0070dc] text-white font-bold text-xs shadow-xs hover:shadow transition cursor-pointer"
+                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1E1545] hover:bg-[#2B1F60] text-white font-semibold text-xs transition cursor-pointer"
                     >
                         Entendido
                     </button>

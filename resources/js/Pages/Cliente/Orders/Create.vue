@@ -138,7 +138,7 @@ const submitOrder = () => {
 </script>
 
 <template>
-    <Head title="Nuevo Pedido - Puritronic" />
+    <Head title="Nuevo pedido" />
 
     <AuthenticatedLayout>
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">

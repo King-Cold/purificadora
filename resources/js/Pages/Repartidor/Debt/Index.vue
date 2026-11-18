@@ -110,7 +110,7 @@ const submitSettle = () => {
 </script>
 
 <template>
-    <Head title="Cobrar Pendientes · Repartidor Puritronic" />
+    <Head title="Cobros" />
 
     <AuthenticatedLayout>
         <div class="max-w-2xl mx-auto px-4 sm:px-6 space-y-5 pb-24 md:pb-16 pt-4">

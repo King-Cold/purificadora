@@ -31,7 +31,7 @@ defineProps({
 </script>
 
 <template>
-    <Head :title="isClient ? 'Mi Perfil - Puritronic' : 'Perfil de Usuario - Puritronic'" />
+    <Head title="Mi perfil" />
 
     <AuthenticatedLayout>
         <template #header v-if="!isClient">

@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import { confirmAction } from '@/utils/swal';
@@ -93,20 +93,25 @@ const getInitials = (customer) => {
 };
 
 const getZoneBadgeClass = (zoneLabel) => {
-    switch (zoneLabel) {
-        case 'Zona Norte':
-            return 'bg-[#E9F3F8] text-[#0071BA] border-[#DCECF7] font-semibold';
-        case 'Zona Sur':
-            return 'bg-[#E8F2EC] text-[#34785A] border-[#34785A]/25 font-semibold';
-        case 'Zona Este':
-            return 'bg-[#F4F3F8] text-[#1E1545] border-[#DAD6E8] font-semibold';
-        case 'Zona Oeste':
-            return 'bg-[#F8F0DF] text-[#A97827] border-[#A97827]/25 font-semibold';
-        case 'Otro municipio':
-            return 'bg-[#FCECEF] text-[#E82147] border-[#E82147]/20 font-semibold';
-        default:
-            return 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0] font-medium';
+    if (!zoneLabel || zoneLabel === 'Sin zona asignada') {
+        return 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0] font-medium';
     }
+    if (zoneLabel === 'Otro municipio') {
+        return 'bg-[#FCECEF] text-[#E82147] border-[#E82147]/20 font-semibold';
+    }
+    if (zoneLabel.includes('Norte')) {
+        return 'bg-[#E9F3F8] text-[#0071BA] border-[#DCECF7] font-semibold';
+    }
+    if (zoneLabel.includes('Sur')) {
+        return 'bg-[#E8F2EC] text-[#34785A] border-[#34785A]/25 font-semibold';
+    }
+    if (zoneLabel.includes('Este')) {
+        return 'bg-[#F4F3F8] text-[#1E1545] border-[#DAD6E8] font-semibold';
+    }
+    if (zoneLabel.includes('Oeste')) {
+        return 'bg-[#F8F0DF] text-[#A97827] border-[#A97827]/25 font-semibold';
+    }
+    return 'bg-[#E9F3F8] text-[#0071BA] border-[#DCECF7] font-semibold';
 };
 
 // Control de borrado de cliente con SweetAlert2
@@ -129,38 +134,31 @@ const confirmDelete = async (customer) => {
 </script>
 
 <template>
-    <Head title="Directorio de Clientes - Puritronic" />
+    <Head title="Clientes" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Clientes', icon: 'fa-solid fa-address-book' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3 mt-1">
-                        <h2 class="text-xl font-bold leading-tight tracking-tight text-[#292638]">
-                            Directorio de Clientes
-                        </h2>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E9F3F8] text-[#0071BA] border border-[#DCECF7] tabular-nums">
-                            {{ totalCustomersCount }} registrados
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Botón Nuevo Cliente -->
-                <div class="self-start sm:self-auto">
+            <AdminPageHeader
+                title="Directorio de Clientes"
+                subtitle="Control de clientes, envases registrados y zonas de reparto."
+                icon="fa-solid fa-address-book"
+                accent="green"
+                :badge-text="`${totalCustomersCount} registrados`"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Clientes' },
+                ]"
+            >
+                <template #actions>
                     <Link
                         :href="route('admin.customers.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1E1545] hover:bg-[#2C2061] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#1E1545]/30 focus:ring-offset-1"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1E1545] hover:bg-[#2B1F60] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-[0_1px_2px_rgba(30,21,69,0.12)] transition duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]/30"
                     >
                         <i class="fa-solid fa-plus text-xs"></i>
                         <span>Nuevo Cliente</span>
                     </Link>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-6 sm:py-8">
@@ -191,10 +189,9 @@ const confirmDelete = async (customer) => {
                                 class="block w-full py-2 px-3 text-sm bg-[#F4F3F8]/60 focus:bg-white border border-[#E9E7F0] rounded-xl focus:ring-2 focus:ring-[#0071BA]/15 focus:border-[#0071BA] text-[#292638] font-medium transition"
                             >
                                 <option value="all">Todas las zonas</option>
-                                <option value="north">Zona Norte</option>
-                                <option value="south">Zona Sur</option>
-                                <option value="east">Zona Este</option>
-                                <option value="west">Zona Oeste</option>
+                                <option v-for="(label, key) in zones" :key="key" :value="key">
+                                    {{ String(label).toLowerCase().startsWith('zona') ? label : `Zona ${label}` }}
+                                </option>
                                 <option value="no_zone">Sin zona asignada</option>
                                 <option value="other_municipality">Otros municipios</option>
                             </select>

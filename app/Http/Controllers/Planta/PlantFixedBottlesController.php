@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Planta;
 
+use App\Exceptions\OrderBusinessRuleException;
 use App\Http\Controllers\Controller;
 use App\Models\BottleCustodyMovement;
 use App\Models\BottleIncident;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\User;
 use App\Services\PlantInventoryService;
 use App\Services\TruckInventoryService;
 use Illuminate\Http\RedirectResponse;
@@ -152,36 +154,12 @@ class PlantFixedBottlesController extends Controller
         }
 
         DB::transaction(function () use ($item, $qty, $request) {
-            $order = $item->order;
-            $operator = $request->user();
-
-            $newWashing = max((int)$item->washing_quantity, (int)$item->prepared_quantity + $qty);
-            $newPrepared = (int)$item->prepared_quantity + $qty;
-            $isFinished = ($newPrepared + (int)$item->damaged_quantity) >= (int)$item->received_at_plant_quantity;
-
-            $item->update([
-                'washing_quantity' => $newWashing,
-                'prepared_quantity' => $newPrepared,
-                'status' => $isFinished ? OrderItem::STATUS_READY_FOR_DELIVERY : OrderItem::STATUS_WASHING,
-            ]);
-
-            BottleCustodyMovement::create([
-                'order_id' => $order->id,
-                'order_item_id' => $item->id,
-                'customer_id' => $order->customer_id,
-                'user_id' => $operator->id,
-                'movement_type' => BottleCustodyMovement::TYPE_PLANT_PREPARED_FIXED,
-                'bottle_type' => OrderItem::TYPE_FIXED,
-                'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
-                'quantity' => $qty,
-                'origin' => 'plant',
-                'destination' => 'plant',
-                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
-                'notes' => "Llenado finalizado en Planta ({$qty} u.) - Listos para cargar",
-                'confirmed_by_user_id' => $operator->id,
-                'confirmed_at' => now(),
-                'created_at' => now(),
-            ]);
+            $this->markOrderItemAsFilled(
+                $item,
+                $qty,
+                $request->user(),
+                "Llenado finalizado en Planta ({$qty} u.) - Listos para cargar"
+            );
         });
 
         return back()->with('success', "{$qty} botellón(es) fijos marcados como llenados. Aparecen listos para cargar en Reparto.");
@@ -196,6 +174,9 @@ class PlantFixedBottlesController extends Controller
             ->where('type', OrderItem::TYPE_FIXED)
             ->where('received_at_plant_quantity', '>', 0)
             ->whereRaw('(received_at_plant_quantity - prepared_quantity - damaged_quantity) > 0')
+            ->whereHas('order', function ($q) {
+                $q->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_DELIVERED]);
+            })
             ->get();
 
         $confirmedOrders = 0;
@@ -203,37 +184,17 @@ class PlantFixedBottlesController extends Controller
 
         DB::transaction(function () use ($items, $request, &$confirmedOrders, &$confirmedBottles) {
             foreach ($items as $item) {
-                $pending = max(0, (int)$item->received_at_plant_quantity - (int)$item->prepared_quantity - (int)$item->damaged_quantity);
+                $pending = max(0, (int) $item->received_at_plant_quantity - (int) $item->prepared_quantity - (int) $item->damaged_quantity);
                 if ($pending <= 0) {
                     continue;
                 }
 
-                $newWashing = max((int)$item->washing_quantity, (int)$item->prepared_quantity + $pending);
-                $newPrepared = (int)$item->prepared_quantity + $pending;
-
-                $item->update([
-                    'washing_quantity' => $newWashing,
-                    'prepared_quantity' => $newPrepared,
-                    'status' => OrderItem::STATUS_READY_FOR_DELIVERY,
-                ]);
-
-                BottleCustodyMovement::create([
-                    'order_id' => $item->order_id,
-                    'order_item_id' => $item->id,
-                    'customer_id' => $item->order->customer_id,
-                    'user_id' => $request->user()->id,
-                    'movement_type' => BottleCustodyMovement::TYPE_PLANT_PREPARED_FIXED,
-                    'bottle_type' => OrderItem::TYPE_FIXED,
-                    'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
-                    'quantity' => $pending,
-                    'origin' => 'plant',
-                    'destination' => 'plant',
-                    'status' => BottleCustodyMovement::STATUS_ACCEPTED,
-                    'notes' => "Llenado masivo en Planta ({$pending} u.) - Listos para cargar",
-                    'confirmed_by_user_id' => $request->user()->id,
-                    'confirmed_at' => now(),
-                    'created_at' => now(),
-                ]);
+                $this->markOrderItemAsFilled(
+                    $item,
+                    $pending,
+                    $request->user(),
+                    "Llenado masivo en Planta ({$pending} u.) - Listos para cargar"
+                );
 
                 $confirmedOrders++;
                 $confirmedBottles += $pending;
@@ -241,6 +202,153 @@ class PlantFixedBottlesController extends Controller
         });
 
         return back()->with('success', "{$confirmedBottles} fijos marcados como llenados ({$confirmedOrders} pedidos). Disponibles en Reparto.");
+    }
+
+    /**
+     * Flujo rápido en un paso: confirma recepción física y deja los fijos llenados y listos para cargar.
+     */
+    public function receiveAndFill(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'order_item_id' => ['required', 'integer', 'exists:order_items,id'],
+        ]);
+
+        $item = OrderItem::with('order')->findOrFail($validated['order_item_id']);
+        $pending = max(0, (int) $item->collected_quantity - (int) $item->received_at_plant_quantity - (int) $item->damaged_quantity);
+
+        if ($pending <= 0) {
+            return back()->withErrors(['received_quantity' => 'No hay botellones pendientes por recibir en este pedido.']);
+        }
+
+        try {
+            DB::transaction(function () use ($item, $pending, $request) {
+                $user = $request->user();
+                $this->plantInventoryService->confirmFixedReception(
+                    $user,
+                    $item,
+                    $pending,
+                    null,
+                    true,
+                    0,
+                    null,
+                    null
+                );
+
+                $freshItem = OrderItem::with('order')->findOrFail($item->id);
+                $readyToFill = max(0, (int) $freshItem->received_at_plant_quantity - (int) $freshItem->prepared_quantity - (int) $freshItem->damaged_quantity);
+                if ($readyToFill > 0) {
+                    $this->markOrderItemAsFilled(
+                        $freshItem,
+                        $readyToFill,
+                        $user,
+                        "Recepción y llenado directo en Planta ({$readyToFill} u.)"
+                    );
+                }
+            });
+
+            return back()->with('success', "{$pending} botellón(es) fijos recibidos y llenados. Listos en Reparto.");
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Flujo rápido masivo: recibe y deja llenos todos los fijos pendientes sin incidencias previas.
+     */
+    public function receiveAndFillAll(Request $request): RedirectResponse
+    {
+        $items = OrderItem::with('order')
+            ->where('type', OrderItem::TYPE_FIXED)
+            ->where('collected_quantity', '>', 0)
+            ->whereColumn('collected_quantity', '>', 'received_at_plant_quantity')
+            ->get();
+
+        $processedOrders = 0;
+        $processedBottles = 0;
+        $excludedCount = 0;
+
+        DB::transaction(function () use ($items, $request, &$processedOrders, &$processedBottles, &$excludedCount) {
+            $user = $request->user();
+
+            foreach ($items as $item) {
+                $pending = max(0, (int) $item->collected_quantity - (int) $item->received_at_plant_quantity - (int) $item->damaged_quantity);
+                if ($pending <= 0) {
+                    continue;
+                }
+
+                if ((int) $item->damaged_quantity > 0) {
+                    $excludedCount++;
+                    continue;
+                }
+
+                $this->plantInventoryService->confirmFixedReception(
+                    $user,
+                    $item,
+                    $pending,
+                    null,
+                    true,
+                    0,
+                    null,
+                    null
+                );
+
+                $freshItem = OrderItem::with('order')->findOrFail($item->id);
+                $readyToFill = max(0, (int) $freshItem->received_at_plant_quantity - (int) $freshItem->prepared_quantity - (int) $freshItem->damaged_quantity);
+                if ($readyToFill > 0) {
+                    $this->markOrderItemAsFilled(
+                        $freshItem,
+                        $readyToFill,
+                        $user,
+                        "Recepción y llenado masivo en Planta ({$readyToFill} u.)"
+                    );
+                }
+
+                $processedOrders++;
+                $processedBottles += $pending;
+            }
+        });
+
+        $msg = "{$processedBottles} fijos recibidos y llenados ({$processedOrders} pedidos). Disponibles en Reparto.";
+        if ($excludedCount > 0) {
+            $msg .= " Se omitieron {$excludedCount} con incidencias previas.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Registra el avance físico de lavado/llenado y su movimiento de custodia en Planta.
+     */
+    private function markOrderItemAsFilled(OrderItem $item, int $qty, User $operator, string $note): void
+    {
+        $order = $item->order;
+        $newWashing = max((int) $item->washing_quantity, (int) $item->prepared_quantity + $qty);
+        $newPrepared = (int) $item->prepared_quantity + $qty;
+        $isFinished = ($newPrepared + (int) $item->damaged_quantity) >= (int) $item->received_at_plant_quantity;
+
+        $item->update([
+            'washing_quantity' => $newWashing,
+            'prepared_quantity' => $newPrepared,
+            'status' => $isFinished ? OrderItem::STATUS_READY_FOR_DELIVERY : OrderItem::STATUS_WASHING,
+        ]);
+
+        BottleCustodyMovement::create([
+            'order_id' => $order->id,
+            'order_item_id' => $item->id,
+            'customer_id' => $order->customer_id,
+            'user_id' => $operator->id,
+            'movement_type' => BottleCustodyMovement::TYPE_PLANT_PREPARED_FIXED,
+            'bottle_type' => OrderItem::TYPE_FIXED,
+            'bottle_condition' => BottleCustodyMovement::CONDITION_FULL,
+            'quantity' => $qty,
+            'origin' => 'plant',
+            'destination' => 'plant',
+            'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+            'notes' => $note,
+            'confirmed_by_user_id' => $operator->id,
+            'confirmed_at' => now(),
+            'created_at' => now(),
+        ]);
     }
 
     /**

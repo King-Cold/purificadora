@@ -56,6 +56,9 @@ class HandleInertiaRequests extends Middleware
                         ->count()
                     : 0,
             ],
+            'deliveryZones' => fn () => $user
+                ? app(\App\Services\SettingService::class)->getDeliveryZones(true)
+                : [],
         ];
     }
 }

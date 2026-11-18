@@ -146,7 +146,7 @@ const getStatusBadge = (status) => {
 </script>
 
 <template>
-    <Head title="Cargas al Repartidor - Puritronic" />
+    <Head title="Cargas" />
 
     <AuthenticatedLayout>
         <template #header>

@@ -168,7 +168,7 @@ const translateStage = (stage) => {
 </script>
 
 <template>
-    <Head title="Existencias e Inventario de Planta - Puritronic" />
+    <Head title="Existencias" />
 
     <AuthenticatedLayout>
         <template #header>

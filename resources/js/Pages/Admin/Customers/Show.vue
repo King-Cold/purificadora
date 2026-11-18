@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { confirmAction } from '@/utils/swal';
 
@@ -57,66 +57,62 @@ const getInitials = (name) => {
 </script>
 
 <template>
-    <Head :title="`Cliente: ${customer.name || customer.nickname || 'Particular'} (${customer.code}) - Puritronic`" />
+    <Head :title="`Cliente ${customer.code}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Clientes', href: route('admin.customers.index'), icon: 'fa-solid fa-address-book' },
-                            { label: customer.code, icon: 'fa-solid fa-id-badge' }
-                        ]"
-                    />
-                    <div class="flex flex-wrap items-center gap-2.5">
-                        <h2 class="text-xl font-bold leading-tight text-slate-900">
-                            {{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Cliente Particular') }}
-                        </h2>
-                        <!-- Badge Apodo si existe -->
-                        <span
-                            v-if="customer.nickname"
-                            class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200"
-                        >
-                            "{{ customer.nickname }}"
-                        </span>
-                        <!-- Badge Código -->
-                        <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
-                            {{ customer.code }}
-                        </span>
-                        <!-- Badge Estado de Cuenta Único -->
-                        <span
-                            v-if="customer.has_account"
-                            class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200"
-                        >
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                            Con cuenta
-                        </span>
-                        <span
-                            v-else
-                            class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300"
-                        >
-                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                            Sin cuenta
-                        </span>
-                    </div>
-                </div>
+            <AdminPageHeader
+                :title="customer.name || (customer.nickname || 'Cliente Particular')"
+                :subtitle="`Ficha de cliente ${customer.code} · Control de envases y domicilio.`"
+                icon="fa-solid fa-address-card"
+                accent="green"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Clientes', href: route('admin.customers.index') },
+                    { label: customer.code },
+                ]"
+            >
+                <template #badges>
+                    <span
+                        v-if="customer.nickname"
+                        class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#EAF4FB] text-[#0071BA] border border-[#C8E3F6]"
+                    >
+                        "{{ customer.nickname }}"
+                    </span>
+                    <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-[#F5F4F8] text-[#211B35] border border-[#E7E4ED]">
+                        {{ customer.code }}
+                    </span>
+                    <span
+                        v-if="customer.has_account"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EAF4FB] text-[#0071BA] border border-[#C8E3F6]"
+                    >
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#0071BA]"></span>
+                        Con cuenta
+                    </span>
+                    <span
+                        v-else
+                        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F5F4F8] text-[#777386] border border-[#E7E4ED]"
+                    >
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#A6A3B2]"></span>
+                        Sin cuenta
+                    </span>
+                </template>
 
-                <div class="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                <template #actions>
                     <button
                         type="button"
                         @click="deleteCustomer"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition shadow-xs cursor-pointer"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-[#B91C3C] bg-[#FDECF3] border border-[#F6C8DB] rounded-xl hover:bg-[#FADCE8] transition duration-150 shadow-2xs cursor-pointer"
                         title="Borrar este cliente"
                     >
-                        <i class="fa-solid fa-trash-can text-xs text-rose-600"></i>
+                        <i class="fa-solid fa-trash-can text-xs"></i>
                         <span>Borrar cliente</span>
                     </button>
 
                     <Link
                         v-if="canEdit"
                         :href="route('admin.customers.edit', customer.id)"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-blue-900 border border-transparent rounded-xl hover:bg-blue-800 transition shadow-xs"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] rounded-xl transition duration-150 shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
                     >
                         <i class="fa-solid fa-user-pen text-xs"></i>
                         <span>Editar cliente</span>
@@ -124,13 +120,13 @@ const getInitials = (name) => {
 
                     <Link
                         :href="route('admin.customers.index')"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition shadow-xs"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
                     >
-                        <i class="fa-solid fa-arrow-left text-xs text-slate-500"></i>
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
                         <span>Volver al directorio</span>
                     </Link>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import { toastError } from '@/utils/swal';
@@ -12,17 +12,20 @@ import {
     Clock,
     Coffee,
     Image as ImageIcon,
+    MapPin,
     Minus,
     Moon,
     PackagePlus,
     Plus,
     RotateCcw,
     Save,
+    Settings,
     ShieldCheck,
     ShoppingBag,
     Store,
     Sunrise,
     Tag,
+    Trash2,
     Truck,
     Upload,
 } from 'lucide-vue-next';
@@ -44,6 +47,10 @@ const props = defineProps({
         type: Number,
         default: 5,
     },
+    deliveryZones: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const breadcrumbs = [
@@ -54,7 +61,7 @@ const breadcrumbs = [
 const getInitialTab = () => {
     if (typeof window !== 'undefined') {
         const tab = new URLSearchParams(window.location.search).get('tab');
-        if (['prices', 'schedule', 'debt'].includes(tab)) return tab;
+        if (['prices', 'schedule', 'debt', 'zones'].includes(tab)) return tab;
     }
     return 'prices';
 };
@@ -392,6 +399,100 @@ const submitDebtLimit = () => {
     });
 };
 
+/* =========================================================================
+   4. ZONAS DISPONIBLES DE ENTREGA (4 BASE EDITABLES + PERSONALIZADAS)
+   ========================================================================= */
+const zoneColorSwatches = ['#0071BA', '#26845B', '#1E1545', '#D99A27', '#E82147', '#6B4C9A'];
+
+const cloneZones = (list) => (list || []).map((z) => ({
+    key: z.key,
+    name: z.name,
+    color: z.color || '#0071BA',
+    is_active: Boolean(z.is_active),
+    is_base: Boolean(z.is_base),
+    usage_count: Number(z.usage_count || 0),
+}));
+
+const zonesForm = useForm({
+    zones: cloneZones(props.deliveryZones),
+});
+
+const newZoneName = ref('');
+const newZoneColor = ref('#0071BA');
+
+const addZone = () => {
+    const cleanName = newZoneName.value.trim();
+    if (cleanName.length < 2) {
+        toastError('Escribe un nombre de al menos 2 caracteres para la nueva zona.');
+        return;
+    }
+    const exists = zonesForm.zones.some((z) => z.name.trim().toLowerCase() === cleanName.toLowerCase());
+    if (exists) {
+        toastError('Ya existe una zona con ese nombre.');
+        return;
+    }
+
+    zonesForm.zones.push({
+        key: '',
+        name: cleanName.slice(0, 60),
+        color: newZoneColor.value || '#0071BA',
+        is_active: true,
+        is_base: false,
+        usage_count: 0,
+    });
+    newZoneName.value = '';
+};
+
+const cycleZoneColor = (zoneItem) => {
+    const idx = zoneColorSwatches.indexOf(zoneItem.color);
+    zoneItem.color = zoneColorSwatches[(idx + 1) % zoneColorSwatches.length];
+};
+
+const removeZone = (index) => {
+    const z = zonesForm.zones[index];
+    if (!z || z.is_base) return;
+    if ((z.usage_count || 0) > 0) {
+        toastError(`"${z.name}" tiene ${z.usage_count} domicilio(s) asignados. Paúsala en lugar de eliminarla.`);
+        return;
+    }
+    zonesForm.zones.splice(index, 1);
+};
+
+const resetZonesForm = () => {
+    zonesForm.zones = cloneZones(props.deliveryZones);
+    zonesForm.clearErrors();
+};
+
+const activeZonesCount = computed(() => zonesForm.zones.filter((z) => z.is_active).length);
+
+const isZonesFormDirty = computed(() => {
+    const orig = props.deliveryZones || [];
+    if (zonesForm.zones.length !== orig.length) return true;
+    return zonesForm.zones.some((z, i) => {
+        const o = orig[i];
+        return !o || z.name !== o.name || z.color !== o.color || Boolean(z.is_active) !== Boolean(o.is_active);
+    });
+});
+
+const submitZones = () => {
+    zonesForm.put(route('admin.settings.zones.update'), {
+        preserveScroll: true,
+        onError: () => {
+            toastError('Revisa los nombres de las zonas antes de guardar.');
+        },
+    });
+};
+
+watch(
+    () => props.deliveryZones,
+    (next) => {
+        if (Array.isArray(next)) {
+            zonesForm.zones = cloneZones(next);
+        }
+    },
+    { deep: true }
+);
+
 watch(
     () => props.schedule,
     (next) => {
@@ -426,109 +527,138 @@ const formatCurrency = (val) => {
 </script>
 
 <template>
-    <Head title="Configuración general" />
+    <Head title="Configuración" />
 
     <AuthenticatedLayout :wide="true">
-        <div class="py-5 sm:py-7 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-5">
-            <!-- Encabezado compacto -->
-            <div>
-                <Breadcrumbs :items="breadcrumbs" />
-                <h1 class="mt-2 text-2xl sm:text-[26px] font-bold text-[#292638] tracking-tight">
-                    Configuración general
-                </h1>
-                <p class="text-xs sm:text-sm text-[#747181] mt-0.5">
-                    Tarifas de 20 L, horario operativo y límite de fiado.
-                </p>
-            </div>
+        <template #header>
+            <AdminPageHeader
+                title="Configuración general"
+                subtitle="Administra tarifas de 20 L, horario operativo, límite de fiado y zonas de entrega."
+                :icon-component="Settings"
+                accent="magenta"
+                :breadcrumbs="breadcrumbs"
+            />
+        </template>
 
-            <!-- 3 tarjetas selectoras compactas y coloridas -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3" role="tablist" aria-label="Secciones de configuración">
-                <!-- Tab 1: Precios -->
+        <div class="py-6 sm:py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6 font-sans antialiased text-[#211B35]">
+            <!-- Selector de secciones con acentos armónicos -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5" role="tablist" aria-label="Secciones de configuración">
+                <!-- Tab 1: Precios (Azul) -->
                 <button
                     type="button"
                     role="tab"
                     :aria-selected="activeTab === 'prices'"
                     @click="selectTab('prices')"
-                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    class="group text-left p-4 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0071BA]/40"
                     :class="activeTab === 'prices'
-                        ? 'bg-white border-[#0071BA] ring-1 ring-[#0071BA]/30 shadow-[0_6px_18px_rgba(0,113,186,0.08)]'
-                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#BDDDF0]'"
+                        ? 'bg-gradient-to-br from-white to-[#EAF4FB]/50 border-[#0071BA]/70 shadow-[0_4px_16px_rgba(0,113,186,0.08)]'
+                        : 'bg-white border-[#E7E4ED] hover:border-[#B6D8EE] hover:shadow-[0_2px_8px_rgba(0,113,186,0.04)]'"
                 >
                     <div
-                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
-                        :class="activeTab === 'prices' ? 'bg-[#0071BA] text-white' : 'bg-[#E9F3F8] text-[#0071BA]'"
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-150"
+                        :class="activeTab === 'prices' ? 'bg-[#0071BA] text-white' : 'bg-[#EAF4FB] text-[#0071BA] group-hover:bg-[#DCEEF9]'"
                     >
                         <Tag class="w-4 h-4" />
                     </div>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between gap-2">
-                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                            <h2 class="text-[13.5px] font-semibold text-[#211B35] truncate">
                                 Tarifas y 20 L
                             </h2>
                             <span v-if="isPriceFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
                         </div>
-                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                        <p class="text-xs text-[#777386] tabular-nums truncate mt-0.5">
                             {{ formatCurrency(bottleForm.store_price) || '—' }} planta · {{ formatCurrency(bottleForm.refill_price) || '—' }} ruta
                         </p>
                     </div>
                 </button>
 
-                <!-- Tab 2: Horarios -->
+                <!-- Tab 2: Horarios (Morado) -->
                 <button
                     type="button"
                     role="tab"
                     :aria-selected="activeTab === 'schedule'"
                     @click="selectTab('schedule')"
-                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    class="group text-left p-4 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]/40"
                     :class="activeTab === 'schedule'
-                        ? 'bg-white border-[#1E1545] ring-1 ring-[#1E1545]/25 shadow-[0_6px_18px_rgba(30,21,69,0.08)]'
-                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#CBC4DD]'"
+                        ? 'bg-gradient-to-br from-white to-[#EEEAF7]/60 border-[#1E1545]/75 shadow-[0_4px_16px_rgba(30,21,69,0.08)]'
+                        : 'bg-white border-[#E7E4ED] hover:border-[#CFC8E0] hover:shadow-[0_2px_8px_rgba(30,21,69,0.04)]'"
                 >
                     <div
-                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
-                        :class="activeTab === 'schedule' ? 'bg-[#1E1545] text-white' : 'bg-[#EEEAF7] text-[#1E1545]'"
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-150"
+                        :class="activeTab === 'schedule' ? 'bg-[#1E1545] text-white' : 'bg-[#EEEAF7] text-[#1E1545] group-hover:bg-[#E4DDF3]'"
                     >
                         <Clock class="w-4 h-4" />
                     </div>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between gap-2">
-                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                            <h2 class="text-[13.5px] font-semibold text-[#211B35] truncate">
                                 Horario
                             </h2>
                             <span v-if="isScheduleFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
                         </div>
-                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                        <p class="text-xs text-[#777386] tabular-nums truncate mt-0.5">
                             {{ scheduleForm.opening_time }} – {{ scheduleForm.closing_time }} · Corte {{ scheduleAnalysis.cutoffTime }}
                         </p>
                     </div>
                 </button>
 
-                <!-- Tab 3: Fiado -->
+                <!-- Tab 3: Fiado (Verde) -->
                 <button
                     type="button"
                     role="tab"
                     :aria-selected="activeTab === 'debt'"
                     @click="selectTab('debt')"
-                    class="group text-left p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
+                    class="group text-left p-4 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26845B]/40"
                     :class="activeTab === 'debt'
-                        ? 'bg-white border-[#26845B] ring-1 ring-[#26845B]/25 shadow-[0_6px_18px_rgba(38,132,91,0.08)]'
-                        : 'bg-white/90 border-[#E9E7F0] hover:bg-white hover:border-[#BBE4CE]'"
+                        ? 'bg-gradient-to-br from-white to-[#E8F5EE]/55 border-[#26845B]/75 shadow-[0_4px_16px_rgba(38,132,91,0.08)]'
+                        : 'bg-white border-[#E7E4ED] hover:border-[#BBE4CE] hover:shadow-[0_2px_8px_rgba(38,132,91,0.04)]'"
                 >
                     <div
-                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors"
-                        :class="activeTab === 'debt' ? 'bg-[#26845B] text-white' : 'bg-[#E8F2EC] text-[#26845B]'"
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-150"
+                        :class="activeTab === 'debt' ? 'bg-[#26845B] text-white' : 'bg-[#E8F5EE] text-[#26845B] group-hover:bg-[#D9EFE2]'"
                     >
                         <ShieldCheck class="w-4 h-4" />
                     </div>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between gap-2">
-                            <h2 class="text-sm font-bold text-[#292638] truncate">
+                            <h2 class="text-[13.5px] font-semibold text-[#211B35] truncate">
                                 Límite de fiado
                             </h2>
                             <span v-if="isDebtFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
                         </div>
-                        <p class="text-xs text-[#747181] tabular-nums truncate mt-0.5">
+                        <p class="text-xs text-[#777386] tabular-nums truncate mt-0.5">
                             Máximo {{ debtLimitForm.max_pending_payment_bottles }} {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón' : 'botellones' }}
+                        </p>
+                    </div>
+                </button>
+
+                <!-- Tab 4: Zonas (Magenta) -->
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'zones'"
+                    @click="selectTab('zones')"
+                    class="group text-left p-4 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D9266F]/40"
+                    :class="activeTab === 'zones'
+                        ? 'bg-gradient-to-br from-white to-[#FDECF3]/55 border-[#D9266F]/70 shadow-[0_4px_16px_rgba(217,38,111,0.08)]'
+                        : 'bg-white border-[#E7E4ED] hover:border-[#F4C4D8] hover:shadow-[0_2px_8px_rgba(217,38,111,0.04)]'"
+                >
+                    <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-150"
+                        :class="activeTab === 'zones' ? 'bg-[#D9266F] text-white' : 'bg-[#FDECF3] text-[#D9266F] group-hover:bg-[#FADCE8]'"
+                    >
+                        <MapPin class="w-4 h-4" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="text-[13.5px] font-semibold text-[#211B35] truncate">
+                                Zonas
+                            </h2>
+                            <span v-if="isZonesFormDirty" class="w-2 h-2 rounded-full bg-[#E82147] shrink-0" title="Cambios sin guardar" />
+                        </div>
+                        <p class="text-xs text-[#777386] tabular-nums truncate mt-0.5">
+                            {{ activeZonesCount }} de {{ zonesForm.zones.length }} activas
                         </p>
                     </div>
                 </button>
@@ -541,72 +671,86 @@ const formatCurrency = (val) => {
                 <!-- Formulario principal -->
                 <form
                     @submit.prevent="submitBottleForm"
-                    class="lg:col-span-8 bg-white border border-[#E9E7F0] border-t-4 border-t-[#0071BA] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                    class="lg:col-span-8 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] overflow-hidden"
                 >
-                    <div class="p-5 sm:p-6 space-y-5">
+                    <div class="px-6 py-4 border-b border-[#E7E4ED] flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-[#EAF4FB] text-[#0071BA] flex items-center justify-center shrink-0">
+                            <Tag class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-[15px] font-semibold text-[#211B35]">
+                                Tarifas y presentación
+                            </h3>
+                            <p class="text-xs text-[#777386] mt-0.5">
+                                Define los precios del garrafón de 20 L, modalidad de entrega e imagen pública.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-6">
                         <!-- Precios -->
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
-                                <label for="store_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                <label for="store_price" class="flex items-center gap-1.5 text-xs font-medium text-[#211B35] mb-1.5">
                                     <Store class="w-3.5 h-3.5 text-[#26845B]" />
                                     En planta
                                 </label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#26845B] text-sm font-semibold">$</span>
                                     <TextInput
                                         id="store_price"
                                         v-model="bottleForm.store_price"
                                         type="number"
                                         step="0.01"
                                         min="0.01"
-                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#0071BA] focus:ring-[#0071BA]/15 rounded-xl min-h-[42px]"
+                                        class="w-full pl-7 pr-12 text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#26845B] focus:ring-2 focus:ring-[#26845B]/15 rounded-xl min-h-[44px] transition duration-150"
                                         placeholder="10.00"
                                         required
                                     />
-                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
+                                    <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#777386] text-[11px] font-medium">MXN</span>
                                 </div>
                                 <InputError :message="bottleForm.errors.store_price" class="mt-1" />
                             </div>
 
                             <div>
-                                <label for="refill_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                <label for="refill_price" class="flex items-center gap-1.5 text-xs font-medium text-[#211B35] mb-1.5">
                                     <Truck class="w-3.5 h-3.5 text-[#0071BA]" />
                                     A domicilio
                                 </label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0071BA] text-sm font-semibold">$</span>
                                     <TextInput
                                         id="refill_price"
                                         v-model="bottleForm.refill_price"
                                         type="number"
                                         step="0.01"
                                         min="0.01"
-                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#0071BA] focus:ring-[#0071BA]/15 rounded-xl min-h-[42px]"
+                                        class="w-full pl-7 pr-12 text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#0071BA] focus:ring-2 focus:ring-[#0071BA]/15 rounded-xl min-h-[44px] transition duration-150"
                                         placeholder="15.00"
                                         required
                                     />
-                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
+                                    <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#777386] text-[11px] font-medium">MXN</span>
                                 </div>
                                 <InputError :message="bottleForm.errors.refill_price" class="mt-1" />
                             </div>
 
                             <div>
-                                <label for="new_bottle_price" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
-                                    <PackagePlus class="w-3.5 h-3.5 text-[#1E1545]" />
+                                <label for="new_bottle_price" class="flex items-center gap-1.5 text-xs font-medium text-[#211B35] mb-1.5">
+                                    <PackagePlus class="w-3.5 h-3.5 text-[#D9266F]" />
                                     Envase nuevo
                                 </label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#747181] text-sm font-semibold">$</span>
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#D9266F] text-sm font-semibold">$</span>
                                     <TextInput
                                         id="new_bottle_price"
                                         v-model="bottleForm.new_bottle_price"
                                         type="number"
                                         step="0.01"
                                         min="0.01"
-                                        class="w-full pl-7 pr-12 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                        class="w-full pl-7 pr-12 text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#D9266F] focus:ring-2 focus:ring-[#D9266F]/15 rounded-xl min-h-[44px] transition duration-150"
                                         placeholder="95.00"
                                     />
-                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-[11px] font-medium">MXN</span>
+                                    <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#777386] text-[11px] font-medium">MXN</span>
                                 </div>
                                 <InputError :message="bottleForm.errors.new_bottle_price" class="mt-1" />
                             </div>
@@ -614,15 +758,15 @@ const formatCurrency = (val) => {
 
                         <!-- Entrega a domicilio -->
                         <div
-                            class="px-4 py-3.5 rounded-xl border transition-colors flex items-center justify-between gap-4"
-                            :class="bottleForm.is_available_for_delivery ? 'bg-[#E9F3F8]/65 border-[#BDDDF0]' : 'bg-[#F4F3F8] border-[#E9E7F0]'"
+                            class="px-4 py-3.5 rounded-xl border transition-colors duration-150 flex items-center justify-between gap-4"
+                            :class="bottleForm.is_available_for_delivery ? 'bg-[#E8F5EE]/75 border-[#BBE4CE]' : 'bg-[#FDECF3]/50 border-[#F6C8DB]'"
                         >
                             <div>
-                                <p class="text-sm font-semibold text-[#292638]">
+                                <p class="text-sm font-semibold text-[#211B35]">
                                     Entrega a domicilio
                                 </p>
-                                <p class="text-xs text-[#747181]">
-                                    {{ bottleForm.is_available_for_delivery ? 'Activa para pedidos en ruta y planta.' : 'Pausada — solo recargas en sucursal.' }}
+                                <p class="text-xs text-[#777386] mt-0.5">
+                                    {{ bottleForm.is_available_for_delivery ? 'Disponible para pedidos en ruta y planta.' : 'Pausada — solo recargas en sucursal.' }}
                                 </p>
                             </div>
 
@@ -631,8 +775,8 @@ const formatCurrency = (val) => {
                                 role="switch"
                                 :aria-checked="bottleForm.is_available_for_delivery"
                                 @click="bottleForm.is_available_for_delivery = !bottleForm.is_available_for_delivery"
-                                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]"
-                                :class="bottleForm.is_available_for_delivery ? 'bg-[#1E1545]' : 'bg-[#CBC4DD]'"
+                                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26845B]/40"
+                                :class="bottleForm.is_available_for_delivery ? 'bg-[#26845B]' : 'bg-[#CFC8E0]'"
                                 title="Alternar disponibilidad a domicilio"
                             >
                                 <span
@@ -643,20 +787,20 @@ const formatCurrency = (val) => {
                         </div>
 
                         <!-- Imagen -->
-                        <div class="pt-4 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-4">
+                        <div class="pt-5 border-t border-[#E7E4ED] flex flex-wrap items-center justify-between gap-4">
                             <div>
-                                <p class="text-xs font-semibold text-[#292638]">Imagen pública</p>
-                                <p class="text-[11px] text-[#747181]">Mostrada en catálogo y pedidos.</p>
+                                <p class="text-xs font-semibold text-[#211B35]">Imagen pública</p>
+                                <p class="text-xs text-[#777386] mt-0.5">Mostrada en catálogo y pedidos.</p>
                             </div>
 
                             <div class="flex flex-wrap items-center gap-2">
                                 <button
                                     type="button"
                                     @click="useStandardImage"
-                                    class="px-3 py-2 rounded-xl text-xs font-medium border transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                                    class="px-3.5 py-2 rounded-xl text-xs font-medium border transition duration-150 cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
                                     :class="bottleForm.image_path === '/images/garrafon-20l.png' && !bottleForm.image
-                                        ? 'bg-[#EEEAF7] text-[#1E1545] border-[#CBC4DD]'
-                                        : 'bg-white text-[#747181] border-[#E9E7F0] hover:bg-[#F4F3F8] hover:text-[#292638]'"
+                                        ? 'bg-[#EEEAF7] text-[#1E1545] border-[#CFC4EA]'
+                                        : 'bg-white text-[#777386] border-[#E7E4ED] hover:bg-[#F5F4F8] hover:text-[#211B35]'"
                                 >
                                     <ImageIcon class="w-3.5 h-3.5" />
                                     Estándar
@@ -665,9 +809,9 @@ const formatCurrency = (val) => {
                                 <button
                                     type="button"
                                     @click="triggerImageUpload"
-                                    class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white hover:bg-[#E9F3F8]/60 text-[#292638] cursor-pointer min-h-[38px] transition inline-flex items-center gap-1.5"
+                                    class="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E7E4ED] bg-white hover:bg-[#FDECF3]/50 hover:border-[#F4C4D8] text-[#211B35] cursor-pointer min-h-[38px] transition duration-150 inline-flex items-center gap-1.5"
                                 >
-                                    <Upload class="w-3.5 h-3.5 text-[#0071BA]" />
+                                    <Upload class="w-3.5 h-3.5 text-[#D9266F]" />
                                     Subir imagen
                                 </button>
 
@@ -684,9 +828,9 @@ const formatCurrency = (val) => {
                     </div>
 
                     <!-- Pie -->
-                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
-                        <span class="text-xs inline-flex items-center gap-1.5" :class="isPriceFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium'">
-                            <span v-if="isPriceFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                    <div class="px-6 py-4 bg-[#F5F4F8]/70 border-t border-[#E7E4ED] flex flex-wrap items-center justify-between gap-3">
+                        <span class="text-xs inline-flex items-center gap-1.5" :class="isPriceFormDirty ? 'text-[#D9266F] font-semibold' : 'text-[#26845B] font-medium'">
+                            <span v-if="isPriceFormDirty" class="w-2 h-2 rounded-full bg-[#D9266F]" />
                             <CheckCircle2 v-else class="w-3.5 h-3.5" />
                             {{ isPriceFormDirty ? 'Cambios sin guardar' : 'Tarifas al día' }}
                         </span>
@@ -696,7 +840,7 @@ const formatCurrency = (val) => {
                                 v-if="isPriceFormDirty"
                                 type="button"
                                 @click="resetBottleForm"
-                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                                class="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E7E4ED] bg-white text-[#777386] hover:text-[#211B35] hover:bg-[#F5F4F8] transition duration-150 cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
                             >
                                 <RotateCcw class="w-3.5 h-3.5" />
                                 Restablecer
@@ -705,7 +849,7 @@ const formatCurrency = (val) => {
                             <button
                                 type="submit"
                                 :disabled="bottleForm.processing"
-                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition duration-150 cursor-pointer inline-flex items-center gap-2 min-h-[38px] shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
                             >
                                 <Save class="w-3.5 h-3.5" />
                                 {{ bottleForm.processing ? 'Guardando...' : 'Guardar tarifas' }}
@@ -715,32 +859,54 @@ const formatCurrency = (val) => {
                 </form>
 
                 <!-- Ficha compacta 20 L -->
-                <div class="lg:col-span-4 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden">
-                    <div class="bg-[#E9F3F8]/70 px-5 py-5 flex flex-col items-center text-center relative">
+                <div class="lg:col-span-4 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] overflow-hidden">
+                    <div class="bg-gradient-to-br from-[#EAF4FB]/75 via-[#F9F4FA] to-[#E8F5EE]/75 border-b border-[#E7E4ED] px-6 py-6 flex flex-col items-center text-center">
                         <span
-                            class="self-end inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold mb-2"
-                            :class="bottleForm.is_available_for_delivery ? 'bg-white text-[#0071BA] border border-[#BDDDF0]' : 'bg-[#FEF5E6] text-[#9A670E] border border-[#F5DFB5]'"
+                            class="self-end inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border"
+                            :class="bottleForm.is_available_for_delivery
+                                ? 'bg-[#E8F5EE] text-[#1D6B48] border-[#BBE4CE]'
+                                : 'bg-[#FDECF3] text-[#B31D58] border-[#F6C8DB]'"
                         >
+                            <span
+                                class="w-1.5 h-1.5 rounded-full"
+                                :class="bottleForm.is_available_for_delivery ? 'bg-[#26845B]' : 'bg-[#D9266F]'"
+                            />
                             {{ bottleForm.is_available_for_delivery ? 'Planta y domicilio' : 'Solo planta' }}
                         </span>
-                        <div class="w-24 h-24 rounded-full bg-white border border-[#E9E7F0] flex items-center justify-center p-2.5 shadow-2xs">
+
+                        <div class="mt-3 w-28 h-28 rounded-full bg-white border border-[#E7E4ED] flex items-center justify-center p-3 shadow-[0_4px_14px_rgba(33,27,53,0.05)]">
                             <img :src="imagePreview" alt="Botellón 20 L" class="max-h-full max-w-full object-contain" />
                         </div>
-                        <h3 class="mt-2.5 text-sm font-bold text-[#292638]">Botellón 20 L</h3>
+
+                        <h3 class="mt-4 text-base font-bold text-[#211B35] tracking-tight">
+                            Botellón de 20 L
+                        </h3>
+                        <p class="text-[11px] text-[#777386] mt-0.5">
+                            Vista previa en catálogo
+                        </p>
                     </div>
 
-                    <div class="p-4 divide-y divide-[#E9E7F0] text-xs">
-                        <div class="py-2 flex items-center justify-between">
-                            <span class="text-[#747181]">Planta</span>
-                            <span class="font-bold text-[#26845B] tabular-nums">{{ formatCurrency(bottleForm.store_price) || '—' }}</span>
+                    <div class="px-5 py-2 divide-y divide-[#E7E4ED]">
+                        <div class="py-3 flex items-center justify-between text-xs">
+                            <span class="inline-flex items-center gap-2 text-[#777386]">
+                                <span class="w-2 h-2 rounded-full bg-[#26845B]" />
+                                En planta
+                            </span>
+                            <span class="text-sm font-bold text-[#26845B] tabular-nums">{{ formatCurrency(bottleForm.store_price) || '—' }}</span>
                         </div>
-                        <div class="py-2 flex items-center justify-between">
-                            <span class="text-[#747181]">Domicilio</span>
-                            <span class="font-bold text-[#0071BA] tabular-nums">{{ formatCurrency(bottleForm.refill_price) || '—' }}</span>
+                        <div class="py-3 flex items-center justify-between text-xs">
+                            <span class="inline-flex items-center gap-2 text-[#777386]">
+                                <span class="w-2 h-2 rounded-full bg-[#0071BA]" />
+                                A domicilio
+                            </span>
+                            <span class="text-sm font-bold text-[#0071BA] tabular-nums">{{ formatCurrency(bottleForm.refill_price) || '—' }}</span>
                         </div>
-                        <div class="pt-2 flex items-center justify-between">
-                            <span class="text-[#747181]">Envase nuevo</span>
-                            <span class="font-bold text-[#1E1545] tabular-nums">{{ formatCurrency(bottleForm.new_bottle_price) || '—' }}</span>
+                        <div class="py-3 flex items-center justify-between text-xs">
+                            <span class="inline-flex items-center gap-2 text-[#777386]">
+                                <span class="w-2 h-2 rounded-full bg-[#D9266F]" />
+                                Envase nuevo
+                            </span>
+                            <span class="text-sm font-bold text-[#D9266F] tabular-nums">{{ formatCurrency(bottleForm.new_bottle_price) || '—' }}</span>
                         </div>
                     </div>
                 </div>
@@ -753,13 +919,27 @@ const formatCurrency = (val) => {
                 <!-- Editor -->
                 <form
                     @submit.prevent="submitSchedule"
-                    class="lg:col-span-7 bg-white border border-[#E9E7F0] border-t-4 border-t-[#1E1545] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                    class="lg:col-span-7 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] overflow-hidden"
                 >
-                    <div class="p-5 sm:p-6 space-y-5">
+                    <div class="px-6 py-4 border-b border-[#E7E4ED] flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-[#EEEAF7] text-[#1E1545] flex items-center justify-center shrink-0">
+                            <Clock class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-[15px] font-semibold text-[#211B35]">
+                                Horario operativo
+                            </h3>
+                            <p class="text-xs text-[#777386] mt-0.5">
+                                Configura la jornada de atención, horario de descanso y corte para pedidos.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-6">
                         <!-- Apertura y cierre -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label for="opening_time" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                <label for="opening_time" class="flex items-center gap-1.5 text-xs font-medium text-[#211B35] mb-1.5">
                                     <Sunrise class="w-3.5 h-3.5 text-[#D99A27]" />
                                     Apertura
                                 </label>
@@ -767,14 +947,14 @@ const formatCurrency = (val) => {
                                     id="opening_time"
                                     v-model="scheduleForm.opening_time"
                                     type="time"
-                                    class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                    class="w-full text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 rounded-xl min-h-[44px] transition duration-150"
                                     required
                                 />
                                 <InputError :message="scheduleForm.errors.opening_time || scheduleAnalysis.errors.opening_time" class="mt-1" />
                             </div>
 
                             <div>
-                                <label for="closing_time" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638] mb-1.5">
+                                <label for="closing_time" class="flex items-center gap-1.5 text-xs font-medium text-[#211B35] mb-1.5">
                                     <Moon class="w-3.5 h-3.5 text-[#1E1545]" />
                                     Cierre
                                 </label>
@@ -782,7 +962,7 @@ const formatCurrency = (val) => {
                                     id="closing_time"
                                     v-model="scheduleForm.closing_time"
                                     type="time"
-                                    class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                    class="w-full text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 rounded-xl min-h-[44px] transition duration-150"
                                     required
                                 />
                                 <InputError :message="scheduleForm.errors.closing_time || scheduleAnalysis.errors.closing_time" class="mt-1" />
@@ -790,37 +970,37 @@ const formatCurrency = (val) => {
                         </div>
 
                         <!-- Descanso -->
-                        <div class="pt-4 border-t border-[#E9E7F0] space-y-3">
+                        <div class="pt-5 border-t border-[#E7E4ED] space-y-3">
                             <div class="flex items-center justify-between">
-                                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#292638]">
-                                    <Coffee class="w-3.5 h-3.5 text-[#D99A27]" />
+                                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#211B35]">
+                                    <Coffee class="w-3.5 h-3.5 text-[#D9266F]" />
                                     Descanso
                                 </span>
-                                <span v-if="scheduleAnalysis.isValid" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FEF5E6] text-[#9A670E]">
+                                <span v-if="scheduleAnalysis.isValid" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#FDECF3] border border-[#F6C8DB] text-[#B31D58]">
                                     {{ scheduleAnalysis.breakDurationText }}
                                 </span>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="break_start_time" class="block text-xs font-medium text-[#747181] mb-1.5">Inicio</label>
+                                    <label for="break_start_time" class="block text-xs font-medium text-[#777386] mb-1.5">Inicio</label>
                                     <TextInput
                                         id="break_start_time"
                                         v-model="scheduleForm.break_start_time"
                                         type="time"
-                                        class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                        class="w-full text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 rounded-xl min-h-[44px] transition duration-150"
                                         required
                                     />
                                     <InputError :message="scheduleForm.errors.break_start_time || scheduleAnalysis.errors.break_start_time" class="mt-1" />
                                 </div>
 
                                 <div>
-                                    <label for="break_end_time" class="block text-xs font-medium text-[#747181] mb-1.5">Fin</label>
+                                    <label for="break_end_time" class="block text-xs font-medium text-[#777386] mb-1.5">Fin</label>
                                     <TextInput
                                         id="break_end_time"
                                         v-model="scheduleForm.break_end_time"
                                         type="time"
-                                        class="w-full text-sm font-semibold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                        class="w-full text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 rounded-xl min-h-[44px] transition duration-150"
                                         required
                                     />
                                     <InputError :message="scheduleForm.errors.break_end_time || scheduleAnalysis.errors.break_end_time" class="mt-1" />
@@ -829,9 +1009,9 @@ const formatCurrency = (val) => {
                         </div>
 
                         <!-- Corte de pedidos -->
-                        <div class="pt-4 border-t border-[#E9E7F0] space-y-2.5">
-                            <label for="order_cutoff_advance_minutes" class="flex items-center gap-1.5 text-xs font-semibold text-[#292638]">
-                                <ShoppingBag class="w-3.5 h-3.5 text-[#0071BA]" />
+                        <div class="pt-5 border-t border-[#E7E4ED] space-y-3">
+                            <label for="order_cutoff_advance_minutes" class="flex items-center gap-1.5 text-xs font-semibold text-[#211B35]">
+                                <ShoppingBag class="w-3.5 h-3.5 text-[#26845B]" />
                                 Corte antes del cierre
                             </label>
 
@@ -843,10 +1023,10 @@ const formatCurrency = (val) => {
                                         type="number"
                                         min="0"
                                         max="1440"
-                                        class="w-full pl-3.5 pr-11 text-sm font-bold text-[#292638] tabular-nums border-[#E9E7F0] focus:border-[#1E1545] focus:ring-[#1E1545]/15 rounded-xl min-h-[42px]"
+                                        class="w-full pl-3.5 pr-11 text-sm font-semibold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 rounded-xl min-h-[44px] transition duration-150"
                                         required
                                     />
-                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#747181] text-xs">min</span>
+                                    <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#777386] text-xs">min</span>
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-1.5">
@@ -855,10 +1035,10 @@ const formatCurrency = (val) => {
                                         :key="mins"
                                         type="button"
                                         @click="scheduleForm.order_cutoff_advance_minutes = mins"
-                                        class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-medium border transition duration-150 cursor-pointer"
                                         :class="Number(scheduleForm.order_cutoff_advance_minutes) === mins
                                             ? 'bg-[#1E1545] text-white border-[#1E1545]'
-                                            : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                            : 'bg-white text-[#777386] border-[#E7E4ED] hover:bg-[#EAF4FB]/50 hover:border-[#B6D8EE] hover:text-[#0071BA]'"
                                     >
                                         {{ mins }} min
                                     </button>
@@ -869,13 +1049,13 @@ const formatCurrency = (val) => {
                     </div>
 
                     <!-- Pie -->
-                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                    <div class="px-6 py-4 bg-[#F5F4F8]/70 border-t border-[#E7E4ED] flex flex-wrap items-center justify-between gap-3">
                         <span
                             class="text-xs inline-flex items-center gap-1.5"
-                            :class="!scheduleAnalysis.isValid ? 'text-[#E82147] font-semibold' : (isScheduleFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium')"
+                            :class="!scheduleAnalysis.isValid ? 'text-[#E82147] font-semibold' : (isScheduleFormDirty ? 'text-[#D9266F] font-semibold' : 'text-[#26845B] font-medium')"
                         >
                             <AlertTriangle v-if="!scheduleAnalysis.isValid" class="w-3.5 h-3.5" />
-                            <span v-else-if="isScheduleFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                            <span v-else-if="isScheduleFormDirty" class="w-2 h-2 rounded-full bg-[#D9266F]" />
                             <CheckCircle2 v-else class="w-3.5 h-3.5" />
                             {{ !scheduleAnalysis.isValid ? 'Horario inválido' : (isScheduleFormDirty ? 'Cambios sin guardar' : 'Horario vigente') }}
                         </span>
@@ -885,7 +1065,7 @@ const formatCurrency = (val) => {
                                 v-if="isScheduleFormDirty"
                                 type="button"
                                 @click="resetScheduleForm"
-                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                                class="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E7E4ED] bg-white text-[#777386] hover:text-[#211B35] hover:bg-[#F5F4F8] transition duration-150 cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
                             >
                                 <RotateCcw class="w-3.5 h-3.5" />
                                 Restablecer
@@ -894,7 +1074,7 @@ const formatCurrency = (val) => {
                             <button
                                 type="submit"
                                 :disabled="scheduleForm.processing || !scheduleAnalysis.isValid"
-                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-50 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-50 transition duration-150 cursor-pointer inline-flex items-center gap-2 min-h-[38px] shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
                             >
                                 <Save class="w-3.5 h-3.5" />
                                 {{ scheduleForm.processing ? 'Guardando...' : 'Guardar horario' }}
@@ -904,7 +1084,7 @@ const formatCurrency = (val) => {
                 </form>
 
                 <!-- Línea de tiempo compacta -->
-                <div class="lg:col-span-5 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] p-5 space-y-4">
+                <div class="lg:col-span-5 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] p-6 space-y-5">
                     <div
                         v-if="!scheduleAnalysis.isValid"
                         class="bg-[#FCECEF] border border-[#F6C8D2] rounded-xl p-4 text-[#B91C3C] space-y-1.5 text-xs"
@@ -919,26 +1099,26 @@ const formatCurrency = (val) => {
                     </div>
 
                     <template v-else>
-                        <div class="p-3.5 rounded-xl bg-[#E9F3F8] border border-[#BDDDF0] flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-lg bg-[#0071BA] text-white flex items-center justify-center shrink-0">
+                        <div class="p-4 rounded-xl bg-gradient-to-r from-[#EAF4FB]/85 to-[#E8F5EE]/80 border border-[#C6E1F0] flex items-center gap-3.5">
+                            <div class="w-10 h-10 rounded-xl bg-[#0071BA] text-white flex items-center justify-center shrink-0 shadow-[0_2px_6px_rgba(0,113,186,0.2)]">
                                 <ShoppingBag class="w-4 h-4" />
                             </div>
                             <div>
-                                <p class="text-sm font-bold text-[#1E1545] tabular-nums">
+                                <p class="text-sm font-bold text-[#211B35] tabular-nums">
                                     Pedidos hasta las {{ scheduleAnalysis.cutoffTime }}
                                 </p>
-                                <p class="text-[11px] text-[#0071BA]">Lunes a domingo</p>
+                                <p class="text-xs text-[#26845B] font-medium mt-0.5">Lunes a domingo</p>
                             </div>
                         </div>
 
-                        <div class="space-y-2.5 pt-1">
-                            <div class="flex justify-between text-[11px] font-semibold text-[#747181] tabular-nums">
+                        <div class="space-y-3 pt-1">
+                            <div class="flex justify-between text-[11px] font-semibold text-[#777386] tabular-nums">
                                 <span>{{ scheduleForm.opening_time }}</span>
                                 <span>{{ scheduleForm.break_start_time }}–{{ scheduleForm.break_end_time }}</span>
                                 <span>{{ scheduleForm.closing_time }}</span>
                             </div>
 
-                            <div class="h-3 w-full rounded-full overflow-hidden flex bg-[#F4F3F8] gap-0.5 p-0.5 border border-[#E9E7F0]">
+                            <div class="h-3 w-full rounded-full overflow-hidden flex bg-[#F5F4F8] gap-0.5 p-0.5 border border-[#E7E4ED]">
                                 <div
                                     v-for="seg in scheduleAnalysis.segments"
                                     :key="seg.key"
@@ -949,7 +1129,7 @@ const formatCurrency = (val) => {
                                 />
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#747181]">
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#777386]">
                                 <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#0071BA]" />Mañana</span>
                                 <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#D99A27]" />Descanso</span>
                                 <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#26845B]" />Pedidos tarde</span>
@@ -967,21 +1147,35 @@ const formatCurrency = (val) => {
                 <!-- Editor -->
                 <form
                     @submit.prevent="submitDebtLimit"
-                    class="lg:col-span-7 bg-white border border-[#E9E7F0] border-t-4 border-t-[#26845B] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] overflow-hidden"
+                    class="lg:col-span-7 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] overflow-hidden"
                 >
-                    <div class="p-5 sm:p-6 space-y-5">
+                    <div class="px-6 py-4 border-b border-[#E7E4ED] flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-[#E8F5EE] text-[#26845B] flex items-center justify-center shrink-0">
+                            <ShieldCheck class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-[15px] font-semibold text-[#211B35]">
+                                Política de fiado
+                            </h3>
+                            <p class="text-xs text-[#777386] mt-0.5">
+                                Establece el límite máximo de botellones pendientes de pago por cliente.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-5">
                         <div class="space-y-3">
-                            <label for="debt_limit" class="block text-xs font-semibold text-[#292638]">
+                            <label for="debt_limit" class="block text-xs font-medium text-[#211B35]">
                                 Máximo de botellones pendientes por cliente
                             </label>
 
                             <div class="flex flex-wrap items-center gap-3">
-                                <div class="inline-flex items-center rounded-xl border border-[#E9E7F0] bg-[#F4F3F8] p-1 gap-1">
+                                <div class="inline-flex items-center rounded-xl border border-[#E7E4ED] bg-[#F5F4F8] p-1 gap-1">
                                     <button
                                         type="button"
                                         @click="adjustDebtLimit(-1)"
                                         :disabled="Number(debtLimitForm.max_pending_payment_bottles) <= 0"
-                                        class="w-10 h-10 rounded-lg bg-white text-[#292638] border border-[#E9E7F0] hover:bg-[#EEEAF7] disabled:opacity-40 transition cursor-pointer inline-flex items-center justify-center"
+                                        class="w-10 h-10 rounded-lg bg-white text-[#211B35] border border-[#E7E4ED] hover:bg-[#FDECF3] hover:text-[#D9266F] hover:border-[#F4C4D8] disabled:opacity-40 transition duration-150 cursor-pointer inline-flex items-center justify-center"
                                         title="Disminuir en 1"
                                     >
                                         <Minus class="w-4 h-4" />
@@ -992,21 +1186,21 @@ const formatCurrency = (val) => {
                                         v-model="debtLimitForm.max_pending_payment_bottles"
                                         type="number"
                                         min="0"
-                                        class="w-24 text-center text-lg font-extrabold text-[#1E1545] tabular-nums bg-white border-[#E9E7F0] focus:border-[#26845B] focus:ring-[#26845B]/15 rounded-lg min-h-[40px]"
+                                        class="w-24 text-center text-lg font-bold text-[#211B35] tabular-nums bg-white border-[#E7E4ED] focus:border-[#26845B] focus:ring-2 focus:ring-[#26845B]/15 rounded-lg min-h-[40px] transition duration-150"
                                         required
                                     />
 
                                     <button
                                         type="button"
                                         @click="adjustDebtLimit(1)"
-                                        class="w-10 h-10 rounded-lg bg-white text-[#292638] border border-[#E9E7F0] hover:bg-[#EEEAF7] transition cursor-pointer inline-flex items-center justify-center"
+                                        class="w-10 h-10 rounded-lg bg-white text-[#211B35] border border-[#E7E4ED] hover:bg-[#E8F5EE] hover:text-[#26845B] hover:border-[#BBE4CE] transition duration-150 cursor-pointer inline-flex items-center justify-center"
                                         title="Aumentar en 1"
                                     >
                                         <Plus class="w-4 h-4" />
                                     </button>
                                 </div>
 
-                                <span class="text-xs font-medium text-[#747181]">
+                                <span class="text-xs font-medium text-[#777386]">
                                     {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón de 20 L' : 'botellones de 20 L' }}
                                 </span>
                             </div>
@@ -1018,10 +1212,10 @@ const formatCurrency = (val) => {
                                     :key="preset"
                                     type="button"
                                     @click="debtLimitForm.max_pending_payment_bottles = preset"
-                                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-medium border transition duration-150 cursor-pointer"
                                     :class="Number(debtLimitForm.max_pending_payment_bottles) === preset
-                                        ? 'bg-[#1E1545] text-white border-[#1E1545]'
-                                        : 'bg-white text-[#747181] border-[#E9E7F0] hover:text-[#292638]'"
+                                        ? 'bg-[#26845B] text-white border-[#26845B]'
+                                        : 'bg-white text-[#777386] border-[#E7E4ED] hover:bg-[#E8F5EE]/60 hover:border-[#BBE4CE] hover:text-[#26845B]'"
                                 >
                                     {{ preset === 0 ? 'Sin fiado (0)' : preset }}
                                 </button>
@@ -1030,15 +1224,15 @@ const formatCurrency = (val) => {
                             <InputError :message="debtLimitForm.errors.max_pending_payment_bottles" />
                         </div>
 
-                        <p class="text-xs text-[#747181] bg-[#F4F3F8] border border-[#E9E7F0] rounded-xl px-4 py-3">
+                        <p class="text-xs text-[#777386] bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl px-4 py-3 leading-relaxed">
                             Al llegar a este límite, el cliente podrá seguir recibiendo pedidos si paga en la entrega.
                         </p>
                     </div>
 
                     <!-- Pie -->
-                    <div class="px-5 sm:px-6 py-3.5 bg-[#F4F3F8]/75 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
-                        <span class="text-xs inline-flex items-center gap-1.5" :class="isDebtFormDirty ? 'text-[#E82147] font-semibold' : 'text-[#26845B] font-medium'">
-                            <span v-if="isDebtFormDirty" class="w-2 h-2 rounded-full bg-[#E82147]" />
+                    <div class="px-6 py-4 bg-[#F5F4F8]/70 border-t border-[#E7E4ED] flex flex-wrap items-center justify-between gap-3">
+                        <span class="text-xs inline-flex items-center gap-1.5" :class="isDebtFormDirty ? 'text-[#D9266F] font-semibold' : 'text-[#26845B] font-medium'">
+                            <span v-if="isDebtFormDirty" class="w-2 h-2 rounded-full bg-[#D9266F]" />
                             <CheckCircle2 v-else class="w-3.5 h-3.5" />
                             {{ isDebtFormDirty ? 'Cambios sin guardar' : 'Política vigente' }}
                         </span>
@@ -1048,7 +1242,7 @@ const formatCurrency = (val) => {
                                 v-if="isDebtFormDirty"
                                 type="button"
                                 @click="resetDebtLimitForm"
-                                class="px-3 py-2 rounded-xl text-xs font-medium border border-[#E9E7F0] bg-white text-[#747181] hover:text-[#292638] transition cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                                class="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E7E4ED] bg-white text-[#777386] hover:text-[#211B35] hover:bg-[#F5F4F8] transition duration-150 cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
                             >
                                 <RotateCcw class="w-3.5 h-3.5" />
                                 Restablecer
@@ -1057,7 +1251,7 @@ const formatCurrency = (val) => {
                             <button
                                 type="submit"
                                 :disabled="debtLimitForm.processing"
-                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition cursor-pointer inline-flex items-center gap-2 min-h-[38px]"
+                                class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition duration-150 cursor-pointer inline-flex items-center gap-2 min-h-[38px] shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
                             >
                                 <Save class="w-3.5 h-3.5" />
                                 {{ debtLimitForm.processing ? 'Guardando...' : 'Guardar límite' }}
@@ -1066,31 +1260,197 @@ const formatCurrency = (val) => {
                     </div>
                 </form>
 
-                <!-- Resumen compacto -->
-                <div class="lg:col-span-5 bg-white border border-[#E9E7F0] rounded-2xl shadow-[0_1px_2px_rgba(30,21,69,0.04)] p-5 space-y-3">
-                    <div class="p-4 rounded-xl border flex items-center justify-between gap-3" :class="debtPolicyMeta.boxClass">
+                <!-- Resumen compacto dinámico -->
+                <div class="lg:col-span-5 bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] p-6 space-y-4">
+                    <div class="p-4 rounded-xl border flex items-center justify-between gap-3 transition-colors duration-200" :class="debtPolicyMeta.boxClass">
                         <div>
-                            <span class="text-xs text-[#747181] block">Tope actual</span>
+                            <span class="text-xs text-[#777386] block">Tope actual</span>
                             <div class="flex items-baseline gap-1.5 mt-0.5">
-                                <span class="text-3xl font-black text-[#1E1545] tabular-nums">
+                                <span class="text-3xl font-bold text-[#211B35] tabular-nums">
                                     {{ debtLimitForm.max_pending_payment_bottles || 0 }}
                                 </span>
-                                <span class="text-xs font-semibold text-[#292638]">
+                                <span class="text-xs font-medium text-[#777386]">
                                     {{ Number(debtLimitForm.max_pending_payment_bottles) === 1 ? 'botellón' : 'botellones' }}
                                 </span>
                             </div>
                         </div>
 
-                        <span class="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0" :class="debtPolicyMeta.badgeClass">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold border shrink-0" :class="debtPolicyMeta.badgeClass">
                             {{ debtPolicyMeta.label }}
                         </span>
                     </div>
 
-                    <p class="text-xs text-[#747181] leading-relaxed">
+                    <p class="text-xs text-[#777386] leading-relaxed">
                         {{ debtPolicyMeta.description }}
                     </p>
                 </div>
             </div>
+
+            <!-- ========================================================================= -->
+            <!-- 4. ZONAS DISPONIBLES DE ENTREGA                                           -->
+            <!-- ========================================================================= -->
+            <form
+                v-if="activeTab === 'zones'"
+                @submit.prevent="submitZones"
+                class="bg-white border border-[#E7E4ED] rounded-2xl shadow-[0_1px_3px_rgba(33,27,53,0.03)] overflow-hidden"
+            >
+                <div class="px-6 py-4 border-b border-[#E7E4ED] flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-[#FDECF3] text-[#D9266F] flex items-center justify-center shrink-0">
+                        <MapPin class="w-4 h-4" />
+                    </div>
+                    <div>
+                        <h3 class="text-[15px] font-semibold text-[#211B35]">
+                            Zonas de entrega
+                        </h3>
+                        <p class="text-xs text-[#777386] mt-0.5">
+                            Edita los nombres de las zonas base o agrega nuevas áreas disponibles para pedidos y rutas.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-5">
+                    <!-- Barra rápida para agregar nueva zona -->
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-[#F5F4F8] to-[#FDECF3]/45 border border-[#E7E4ED]">
+                        <input
+                            v-model="newZoneName"
+                            type="text"
+                            maxlength="60"
+                            placeholder="Nueva zona (ej. Centro, Sahcabá, San Román)..."
+                            @keydown.enter.prevent="addZone"
+                            class="flex-1 text-sm bg-white border border-[#E7E4ED] focus:border-[#D9266F] focus:ring-2 focus:ring-[#D9266F]/15 rounded-xl min-h-[42px] px-3.5 text-[#211B35] placeholder-[#777386] transition duration-150"
+                        />
+
+                        <div class="flex items-center justify-between sm:justify-end gap-2.5">
+                            <div class="flex items-center gap-1.5" title="Color identificador">
+                                <button
+                                    v-for="swatch in zoneColorSwatches"
+                                    :key="swatch"
+                                    type="button"
+                                    @click="newZoneColor = swatch"
+                                    class="w-6 h-6 rounded-full transition-transform duration-150 cursor-pointer border-2"
+                                    :style="{ backgroundColor: swatch }"
+                                    :class="newZoneColor === swatch ? 'border-[#211B35] scale-110' : 'border-white opacity-80 hover:opacity-100'"
+                                />
+                            </div>
+
+                            <button
+                                type="button"
+                                @click="addZone"
+                                class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1E1545] hover:bg-[#2B1F60] text-white inline-flex items-center gap-1.5 cursor-pointer min-h-[40px] shrink-0 transition duration-150 shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <InputError :message="zonesForm.errors.zones" />
+
+                    <!-- Lista editable de zonas -->
+                    <div class="divide-y divide-[#E7E4ED] border border-[#E7E4ED] rounded-xl overflow-hidden">
+                        <div
+                            v-for="(zoneItem, idx) in zonesForm.zones"
+                            :key="zoneItem.key || `new-${idx}`"
+                            class="px-4 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-white hover:bg-[#F5F4F8]/55 transition duration-150"
+                        >
+                            <div class="flex items-center gap-3 flex-1 min-w-0">
+                                <button
+                                    type="button"
+                                    @click="cycleZoneColor(zoneItem)"
+                                    class="w-7 h-7 rounded-lg shrink-0 border border-black/10 cursor-pointer transition-transform duration-150 hover:scale-105"
+                                    :style="{ backgroundColor: zoneItem.color }"
+                                    title="Cambiar color"
+                                />
+
+                                <input
+                                    v-model="zoneItem.name"
+                                    type="text"
+                                    maxlength="60"
+                                    required
+                                    class="flex-1 min-w-[140px] text-sm font-semibold text-[#211B35] bg-transparent border border-transparent hover:border-[#E7E4ED] focus:bg-white focus:border-[#1E1545] rounded-lg px-2.5 py-1.5 transition duration-150"
+                                />
+
+                                <span
+                                    v-if="zoneItem.is_base"
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#EEEAF7] text-[#1E1545] shrink-0"
+                                >
+                                    Base
+                                </span>
+                                <span
+                                    v-if="(zoneItem.usage_count || 0) > 0"
+                                    class="text-[11px] text-[#777386] tabular-nums shrink-0 hidden sm:inline"
+                                >
+                                    {{ zoneItem.usage_count }} {{ zoneItem.usage_count === 1 ? 'cliente' : 'clientes' }}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-3 shrink-0 ml-auto">
+                                <span
+                                    class="text-xs font-semibold"
+                                    :class="zoneItem.is_active ? 'text-[#26845B]' : 'text-[#777386]'"
+                                >
+                                    {{ zoneItem.is_active ? 'Activa' : 'Pausada' }}
+                                </span>
+
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    :aria-checked="zoneItem.is_active"
+                                    @click="zoneItem.is_active = !zoneItem.is_active"
+                                    class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26845B]/40"
+                                    :class="zoneItem.is_active ? 'bg-[#26845B]' : 'bg-[#CFC8E0]'"
+                                >
+                                    <span
+                                        class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200"
+                                        :class="zoneItem.is_active ? 'translate-x-5' : 'translate-x-0'"
+                                    />
+                                </button>
+
+                                <button
+                                    v-if="!zoneItem.is_base"
+                                    type="button"
+                                    @click="removeZone(idx)"
+                                    class="w-8 h-8 rounded-lg flex items-center justify-center text-[#D9266F] hover:bg-[#FDECF3] transition duration-150 cursor-pointer"
+                                    title="Eliminar zona"
+                                >
+                                    <Trash2 class="w-4 h-4" />
+                                </button>
+                                <span v-else class="w-8" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pie -->
+                <div class="px-6 py-4 bg-[#F5F4F8]/70 border-t border-[#E7E4ED] flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-xs inline-flex items-center gap-1.5" :class="isZonesFormDirty ? 'text-[#D9266F] font-semibold' : 'text-[#26845B] font-medium'">
+                        <span v-if="isZonesFormDirty" class="w-2 h-2 rounded-full bg-[#D9266F]" />
+                        <CheckCircle2 v-else class="w-3.5 h-3.5" />
+                        {{ isZonesFormDirty ? 'Cambios sin guardar' : `${activeZonesCount} zonas activas` }}
+                    </span>
+
+                    <div class="flex items-center gap-2">
+                        <button
+                            v-if="isZonesFormDirty"
+                            type="button"
+                            @click="resetZonesForm"
+                            class="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E7E4ED] bg-white text-[#777386] hover:text-[#211B35] hover:bg-[#F5F4F8] transition duration-150 cursor-pointer inline-flex items-center gap-1.5 min-h-[38px]"
+                        >
+                            <RotateCcw class="w-3.5 h-3.5" />
+                            Restablecer
+                        </button>
+
+                        <button
+                            type="submit"
+                            :disabled="zonesForm.processing"
+                            class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1E1545] hover:bg-[#2B1F60] disabled:opacity-60 transition duration-150 cursor-pointer inline-flex items-center gap-2 min-h-[38px] shadow-[0_1px_2px_rgba(30,21,69,0.12)]"
+                        >
+                            <Save class="w-3.5 h-3.5" />
+                            {{ zonesForm.processing ? 'Guardando...' : 'Guardar zonas' }}
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </AuthenticatedLayout>
 </template>

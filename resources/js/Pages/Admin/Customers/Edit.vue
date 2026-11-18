@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -93,59 +93,50 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Editar Cliente: ${customer.name || customer.nickname || customer.code} - Puritronic`" />
+    <Head :title="`Editar ${customer.code}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Clientes', href: route('admin.customers.index'), icon: 'fa-solid fa-address-book' },
-                            { label: customer.code, href: route('admin.customers.show', customer.id), icon: 'fa-solid fa-id-badge' },
-                            { label: 'Editar', icon: 'fa-solid fa-user-pen' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                            <i class="fa-solid fa-user-pen text-base"></i>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2.5">
-                                <h2 class="text-xl font-bold leading-tight text-slate-900">
-                                    Editar Cliente
-                                </h2>
-                                <span class="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-800 font-mono font-bold text-xs border border-slate-200">
-                                    {{ customer.code }}
-                                </span>
-                                <span
-                                    v-if="customer.has_account"
-                                    class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200"
-                                >
-                                    Con cuenta
-                                </span>
-                                <span
-                                    v-else
-                                    class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300"
-                                >
-                                    Sin cuenta
-                                </span>
-                            </div>
-                            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
-                                Actualice los datos del cliente y la cantidad de botellones registrados
-                            </p>
-                        </div>
-                    </div>
-                </div>
+            <AdminPageHeader
+                title="Editar Cliente"
+                subtitle="Actualice los datos del cliente y la cantidad de botellones registrados."
+                icon="fa-solid fa-user-pen"
+                accent="green"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Clientes', href: route('admin.customers.index') },
+                    { label: customer.code, href: route('admin.customers.show', customer.id) },
+                    { label: 'Editar' },
+                ]"
+            >
+                <template #badges>
+                    <span class="px-2.5 py-0.5 rounded-lg bg-[#F5F4F8] text-[#211B35] font-mono font-bold text-xs border border-[#E7E4ED]">
+                        {{ customer.code }}
+                    </span>
+                    <span
+                        v-if="customer.has_account"
+                        class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EAF4FB] text-[#0071BA] border border-[#C8E3F6]"
+                    >
+                        Con cuenta
+                    </span>
+                    <span
+                        v-else
+                        class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F5F4F8] text-[#777386] border border-[#E7E4ED]"
+                    >
+                        Sin cuenta
+                    </span>
+                </template>
 
-                <Link
-                    :href="route('admin.customers.show', customer.id)"
-                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition self-start sm:self-auto shadow-xs"
-                >
-                    <i class="fa-solid fa-arrow-left text-xs text-slate-500"></i>
-                    <span>Ver ficha del cliente</span>
-                </Link>
-            </div>
+                <template #actions>
+                    <Link
+                        :href="route('admin.customers.show', customer.id)"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
+                    >
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Ver ficha del cliente</span>
+                    </Link>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import { confirmAction } from '@/utils/swal';
@@ -128,37 +128,31 @@ const handleToggleStatus = async (user) => {
 </script>
 
 <template>
-    <Head title="Gestión de Usuarios - Puritronic" />
+    <Head title="Usuarios" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Usuarios', icon: 'fa-solid fa-users' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3 mt-1">
-                        <h2 class="text-xl font-bold leading-tight tracking-tight text-[#292638]">
-                            Gestión de Usuarios
-                        </h2>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E9F3F8] text-[#0071BA] border border-[#DCECF7] tabular-nums">
-                            {{ totalUsersCount }} registrados
-                        </span>
-                    </div>
-                </div>
-
-                <div class="self-start sm:self-auto">
+            <AdminPageHeader
+                title="Gestión de Usuarios"
+                subtitle="Cuentas internas del personal, roles operativos y control de acceso."
+                icon="fa-solid fa-users"
+                accent="purple"
+                :badge-text="`${totalUsersCount} registrados`"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Usuarios' },
+                ]"
+            >
+                <template #actions>
                     <Link
                         :href="route('admin.users.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1E1545] hover:bg-[#2C2061] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#1E1545]/30 focus:ring-offset-1"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1E1545] hover:bg-[#2B1F60] text-white text-xs sm:text-sm font-semibold rounded-xl shadow-[0_1px_2px_rgba(30,21,69,0.12)] transition duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E1545]/30"
                     >
                         <i class="fa-solid fa-user-plus text-xs"></i>
                         <span>Nuevo Usuario</span>
                     </Link>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-6 sm:py-8">

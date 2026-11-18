@@ -166,12 +166,18 @@ const setClientMode = (mode) => {
 };
 
 // Formulario de nuevo cliente rápido
-const availableZones = [
-    { id: 'north', label: 'Norte' },
-    { id: 'south', label: 'Sur' },
-    { id: 'east', label: 'Este' },
-    { id: 'west', label: 'Oeste' },
-];
+const availableZones = computed(() => {
+    const shared = page.props.deliveryZones;
+    if (Array.isArray(shared) && shared.length > 0) {
+        return shared.map((z) => ({ id: z.key, label: z.name }));
+    }
+    return [
+        { id: 'north', label: 'Norte' },
+        { id: 'south', label: 'Sur' },
+        { id: 'east', label: 'Este' },
+        { id: 'west', label: 'Oeste' },
+    ];
+});
 
 const newCustomer = ref({
     nickname: '',
@@ -232,7 +238,7 @@ const submitDirectOrder = () => {
             return;
         }
         if (!newCustomer.value.delivery_zone) {
-            alertWarning('Por favor especifica la zona de reparto del nuevo cliente (Norte, Sur, Este u Oeste).');
+            alertWarning('Por favor selecciona la zona de reparto del nuevo cliente.');
             return;
         }
     }
@@ -289,7 +295,7 @@ const submitDirectOrder = () => {
 </script>
 
 <template>
-    <Head title="Pedido al paso · Reparto" />
+    <Head title="Al paso" />
 
     <AuthenticatedLayout>
         <div class="max-w-2xl mx-auto space-y-4 pb-16 px-2 sm:px-4">

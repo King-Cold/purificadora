@@ -32,7 +32,7 @@ const clearSearch = () => {
 </script>
 
 <template>
-    <Head title="Directorio de Clientes" />
+    <Head title="Clientes" />
 
     <AuthenticatedLayout wide>
         <template #header>

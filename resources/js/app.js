@@ -8,14 +8,18 @@ import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import { showFlashNotifications } from './utils/swal';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const rawAppName = import.meta.env.VITE_APP_NAME;
+const appName = rawAppName && rawAppName !== 'Laravel' ? rawAppName : 'Puritronic';
 
 router.on('success', (event) => {
     showFlashNotifications(event.detail?.page?.props?.flash);
 });
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => {
+        if (!title) return appName;
+        return /puritronic/i.test(title) ? title : `${title} · ${appName}`;
+    },
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.vue`,

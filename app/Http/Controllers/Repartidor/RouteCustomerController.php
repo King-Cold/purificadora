@@ -96,7 +96,7 @@ class RouteCustomerController extends Controller
         $validated = $request->validate([
             'nickname' => ['required', 'string', 'max:100'],
             'name' => ['nullable', 'string', 'max:150'],
-            'delivery_zone' => ['nullable', 'string', 'in:north,south,east,west'],
+            'delivery_zone' => ['nullable', 'string', \Illuminate\Validation\Rule::in(app(\App\Services\SettingService::class)->getDeliveryZoneKeys())],
             'bottle_type' => ['nullable', 'string', 'in:fixed,exchange,none'],
             'bottles_count' => ['nullable', 'integer', 'min:0'],
             'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],

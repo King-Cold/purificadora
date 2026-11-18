@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 
@@ -106,74 +107,74 @@ const getStageIconClass = (stageKey) => {
 </script>
 
 <template>
-    <Head :title="`Supervisión Pedido ${order.folio} - Puritronic`" />
+    <Head :title="`Pedido ${order.folio}`" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div class="flex items-center gap-3.5">
+            <AdminPageHeader
+                :title="`Pedido ${order.folio}`"
+                :subtitle="`Registrado el ${order.created_at} · Botellones de 20 Litros`"
+                icon="fa-solid fa-file-invoice"
+                accent="blue"
+                :mono-title="true"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Pedidos', href: route('admin.orders.index') },
+                    { label: order.folio },
+                ]"
+            >
+                <template #badges>
+                    <span
+                        :class="[
+                            'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border',
+                            getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
+                        ]"
+                    >
+                        <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
+                        <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
+                    </span>
+                    <span
+                        v-if="order.has_collected_fixed_custody"
+                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300"
+                        title="Hay botellones fijos bajo custodia de la empresa"
+                    >
+                        <i class="fa-solid fa-shield-halved text-amber-700"></i>
+                        <span>Fijos en Custodia</span>
+                    </span>
+                </template>
+
+                <template #actions>
                     <Link
                         :href="route('admin.orders.index')"
-                        class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0 cursor-pointer"
-                        title="Volver al listado de pedidos"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] transition duration-150 shadow-2xs"
                     >
-                        <i class="fa-solid fa-arrow-left text-sm"></i>
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Volver</span>
                     </Link>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2.5">
-                            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 font-mono">
-                                Pedido {{ order.folio }}
-                            </h2>
-                            <span
-                                :class="[
-                                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                                    getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
-                                ]"
-                            >
-                                <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
-                                <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
-                            </span>
-                            <span
-                                v-if="order.has_collected_fixed_custody"
-                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
-                                title="Hay botellones fijos bajo custodia de la empresa"
-                            >
-                                <i class="fa-solid fa-shield-halved text-amber-700"></i>
-                                <span>Fijos en Custodia</span>
-                            </span>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Registrado el {{ order.created_at }} &bull; Botellones de 20 Litros
-                        </p>
-                    </div>
-                </div>
 
-                <!-- Botones de Acción Administrativa y Recarga -->
-                <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
                     <button
                         type="button"
                         @click="reloadData"
                         :disabled="isReloading"
-                        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition shadow-2xs cursor-pointer"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] transition duration-150 shadow-2xs cursor-pointer"
                         title="Recalcular supervisión operativa"
                     >
-                        <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin text-blue-900': isReloading }"></i>
+                        <i class="fa-solid fa-arrows-rotate text-xs" :class="{ 'fa-spin text-[#0071BA]': isReloading }"></i>
                         <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
                     </button>
-
 
                     <!-- Botón Cancelar Ordinario (Bloqueado si hay fijos en custodia por regla de negocio) -->
                     <button
                         v-if="order.can_cancel && (order.is_pending || order.is_confirmed) && !order.has_collected_fixed_custody"
                         type="button"
                         @click="openCancelModal"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#B91C3C] bg-[#FDECF3] hover:bg-[#FADCE8] border border-[#F6C8DB] transition duration-150 shadow-2xs cursor-pointer"
                     >
-                        <i class="fa-solid fa-ban"></i>
+                        <i class="fa-solid fa-ban text-xs"></i>
                         <span>Cancelar Pedido</span>
                     </button>
-                </div>
-            </div>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">

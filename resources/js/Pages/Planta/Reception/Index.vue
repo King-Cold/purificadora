@@ -139,7 +139,7 @@ const formatDate = (dateString) => {
 </script>
 
 <template>
-    <Head title="Por Recibir de Ruta - Puritronic" />
+    <Head title="Recepción" />
 
     <AuthenticatedLayout>
         <template #header>

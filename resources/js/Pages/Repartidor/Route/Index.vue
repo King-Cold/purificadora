@@ -212,7 +212,7 @@ const getStopStatusBadge = (status) => {
 </script>
 
 <template>
-    <Head title="Mi Ruta - Panel de Reparto" />
+    <Head title="Mi ruta" />
 
     <AuthenticatedLayout>
         <template #header>

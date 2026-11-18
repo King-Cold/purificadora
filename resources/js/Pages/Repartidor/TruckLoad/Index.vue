@@ -278,7 +278,7 @@ const getLocationLabel = (loc) => {
 </script>
 
 <template>
-    <Head title="Mi Carga - Puritronic" />
+    <Head title="Mi carga" />
 
     <AuthenticatedLayout wide>
         <div class="py-4 sm:py-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5 pb-28 md:pb-16">

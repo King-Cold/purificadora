@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -70,41 +70,31 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Nuevo Cliente Particular - Puritronic" />
+    <Head title="Nuevo cliente" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Clientes', href: route('admin.customers.index'), icon: 'fa-solid fa-address-book' },
-                            { label: 'Nuevo Cliente', icon: 'fa-solid fa-user-plus' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
-                            <i class="fa-solid fa-user-plus text-base"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-xl font-bold leading-tight text-slate-900">
-                                Registrar Cliente
-                            </h2>
-                            <p class="text-xs sm:text-sm text-slate-500">
-                                Registro administrativo para control de garrafones y reparto
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <Link
-                    :href="route('admin.customers.index')"
-                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition self-start sm:self-auto shadow-xs"
-                >
-                    <i class="fa-solid fa-arrow-left text-xs text-slate-500"></i>
-                    <span>Volver al directorio</span>
-                </Link>
-            </div>
+            <AdminPageHeader
+                title="Registrar Cliente"
+                subtitle="Registro administrativo para control de garrafones y reparto."
+                icon="fa-solid fa-user-plus"
+                accent="green"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Clientes', href: route('admin.customers.index') },
+                    { label: 'Nuevo Cliente' },
+                ]"
+            >
+                <template #actions>
+                    <Link
+                        :href="route('admin.customers.index')"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
+                    >
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Volver al directorio</span>
+                    </Link>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

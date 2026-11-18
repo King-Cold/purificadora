@@ -91,7 +91,7 @@ const getRouteStatusBadge = (status) => {
 </script>
 
 <template>
-    <Head title="Mi Jornada de Reparto - Puritronic" />
+    <Head title="Reparto" />
 
     <AuthenticatedLayout>
         <!-- ========================================================================= -->

@@ -106,7 +106,7 @@ const getStageIconClass = (stageKey) => {
 </script>
 
 <template>
-    <Head :title="`Pedido ${order.folio} - Puritronic`" />
+    <Head :title="`Pedido ${order.folio}`" />
 
     <AuthenticatedLayout>
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">

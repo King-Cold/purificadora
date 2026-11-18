@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -31,42 +31,38 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Registrar Domicilio - ${customer.name || customer.nickname || customer.code} - Puritronic`" />
+    <Head :title="`Domicilio ${customer.code}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <Breadcrumbs
-                        :items="[
-                            { label: 'Clientes', href: route('admin.customers.index'), icon: 'fa-solid fa-address-book' },
-                            { label: customer.code, href: route('admin.customers.show', customer.id), icon: 'fa-solid fa-id-badge' },
-                            { label: 'Registrar Domicilio', icon: 'fa-solid fa-map-location-dot' }
-                        ]"
-                    />
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-xl font-bold leading-tight text-gray-900">
-                            Registrar Domicilio (Casa)
-                        </h2>
-                        <span class="px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-900 font-mono font-semibold text-xs">
-                            {{ customer.code }}
-                        </span>
-                    </div>
-                    <p class="text-sm text-gray-500 mt-0.5">
-                        Cliente: <strong>{{ customer.name || (customer.nickname ? `"${customer.nickname}"` : 'Particular') }}</strong>
-                    </p>
-                </div>
+            <AdminPageHeader
+                title="Registrar Domicilio"
+                :subtitle="`Cliente: ${customer.name || customer.nickname || 'Particular'}`"
+                icon="fa-solid fa-map-location-dot"
+                accent="green"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Clientes', href: route('admin.customers.index') },
+                    { label: customer.code, href: route('admin.customers.show', customer.id) },
+                    { label: 'Registrar Domicilio' },
+                ]"
+            >
+                <template #badges>
+                    <span class="px-2.5 py-0.5 rounded-lg bg-[#F5F4F8] text-[#211B35] font-mono font-bold text-xs border border-[#E7E4ED]">
+                        {{ customer.code }}
+                    </span>
+                </template>
 
-                <Link
-                    :href="route('admin.customers.show', customer.id)"
-                    class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition self-start sm:self-auto shadow-sm"
-                >
-                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    <span>Volver a la ficha</span>
-                </Link>
-            </div>
+                <template #actions>
+                    <Link
+                        :href="route('admin.customers.show', customer.id)"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-[#777386] hover:text-[#211B35] bg-white hover:bg-[#F5F4F8] border border-[#E7E4ED] rounded-xl transition duration-150 shadow-2xs"
+                    >
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Volver a la ficha</span>
+                    </Link>
+                </template>
+            </AdminPageHeader>
         </template>
 
         <div class="py-8">

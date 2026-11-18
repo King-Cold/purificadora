@@ -117,7 +117,7 @@ const deleteRefill = () => {
 </script>
 
 <template>
-    <Head title="Planta · Llenado Rápido" />
+    <Head title="Llenado rápido" />
 
     <AuthenticatedLayout>
         <div class="py-6 sm:py-7 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-5">

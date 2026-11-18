@@ -1000,7 +1000,7 @@ class DeliveryRouteService
             $recipientPhone = $customer->phone;
             $requestedZone = !empty($orderData['delivery_zone']) ? trim((string)$orderData['delivery_zone']) : null;
             $deliveryZone = $requestedZone ?: $address?->delivery_zone;
-            $zoneLabel = $deliveryZone ? (CustomerAddress::ZONES[$deliveryZone] ?? (str_starts_with($deliveryZone, 'Zona') ? $deliveryZone : "Zona {$deliveryZone}")) : 'Sin zona asignada';
+            $zoneLabel = $deliveryZone ? app(\App\Services\SettingService::class)->resolveDeliveryZoneLabel($deliveryZone) : 'Sin zona asignada';
 
             if ($address) {
                 $addressSnapshot = [

@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdminPageHeader from '@/Components/AdminPageHeader.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -85,25 +86,20 @@ const getStatusIconClass = (statusKey) => {
 </script>
 
 <template>
-    <Head title="Gestión de Pedidos - Puritronic" />
+    <Head title="Pedidos" />
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :wide="true">
         <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div class="flex items-center gap-3.5">
-                    <div class="h-11 w-11 rounded-2xl bg-blue-900 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
-                        <i class="fa-solid fa-file-invoice text-sky-400 text-lg"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                            Gestión de Pedidos
-                        </h2>
-                        <p class="text-xs text-slate-500">
-                            Consulta global y supervisión administrativa de pedidos
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <AdminPageHeader
+                title="Gestión de Pedidos"
+                subtitle="Consulta global y supervisión administrativa de pedidos."
+                icon="fa-solid fa-clipboard-list"
+                accent="blue"
+                :breadcrumbs="[
+                    { label: 'Administración', href: route('dashboard') },
+                    { label: 'Pedidos' },
+                ]"
+            />
         </template>
 
         <div class="py-6 sm:py-8 lg:py-10 bg-slate-50/60 min-h-[calc(100vh-8rem)]">

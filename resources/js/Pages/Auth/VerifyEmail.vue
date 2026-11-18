@@ -23,7 +23,7 @@ const verificationLinkSent = computed(
 
 <template>
     <GuestLayout>
-        <Head title="Verificar Correo Electrónico - Puritronic" />
+        <Head title="Verificar correo" />
 
         <div class="text-center mb-6">
             <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-blue-50 text-[#0084ff] flex items-center justify-center text-xl shadow-xs">

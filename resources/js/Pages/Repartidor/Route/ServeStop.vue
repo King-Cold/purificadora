@@ -243,7 +243,7 @@ const getTrafficLightColor = (tl) => {
 </script>
 
 <template>
-    <Head :title="`Atender Pedido ${order.folio} · ${customer.nickname}`" />
+    <Head :title="`Entrega ${order.folio}`" />
 
     <AuthenticatedLayout>
         <div class="max-w-2xl mx-auto space-y-4 pb-16">

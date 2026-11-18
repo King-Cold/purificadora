@@ -30,7 +30,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Editar Mi Domicilio - Puritronic" />
+    <Head title="Editar domicilio" />
 
     <AuthenticatedLayout>
         <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">

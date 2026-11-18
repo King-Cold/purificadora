@@ -390,7 +390,7 @@ onUnmounted(() => {
                 <Link
                     :href="route('dashboard')"
                     @click="handleLinkClick"
-                    class="flex items-center min-w-0 rounded-xl bg-white px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-white/35"
+                    class="flex items-center min-w-0 rounded-xl"
                 >
                     <img
                         src="/images/logo.png"

@@ -101,6 +101,7 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])
                 Route::middleware('permission:settings.manage')->group(function () {
                     Route::put('/schedule', 'updateSchedule')->name('schedule.update');
                     Route::put('/debt-limit', 'updateDebtLimit')->name('debt-limit.update');
+                    Route::put('/zones', 'updateDeliveryZones')->name('zones.update');
                     Route::post('/bottle-presentations', 'storeBottlePresentation')->name('bottle-presentations.store');
                     Route::put('/bottle-presentations/{bottlePresentation}', 'updateBottlePresentation')->name('bottle-presentations.update');
                     Route::patch('/bottle-presentations/{bottlePresentation}/toggle-status', 'toggleBottlePresentationStatus')->name('bottle-presentations.toggle-status');
@@ -226,6 +227,7 @@ Route::middleware(['auth', 'role:Repartidor|Administrador|Super Admin'])
             Route::get('/por-recoger', 'porRecoger')->name('collections.index');
             Route::post('/orders/{order}/collect-fixed', 'collectFixed')->name('orders.collect-fixed');
             Route::post('/orders/{order}/cancel', 'cancelOrder')->name('orders.cancel');
+            Route::post('/orders/{order}/incident', 'reportOrderIncident')->name('orders.incident');
 
             Route::prefix('listos-para-cargar')
                 ->name('ready-to-load.')
@@ -307,6 +309,8 @@ Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])
                 Route::get('/', 'index')->name('index');
                 Route::post('/marcar-llenados', 'markFilled')->name('mark-filled');
                 Route::post('/marcar-todos-llenados', 'markAllFilled')->name('mark-all-filled');
+                Route::post('/recibir-y-llenar', 'receiveAndFill')->name('receive-and-fill');
+                Route::post('/recibir-y-llenar-todos', 'receiveAndFillAll')->name('receive-and-fill-all');
                 Route::post('/incidencia', 'reportIncident')->name('report-incident');
             });
 

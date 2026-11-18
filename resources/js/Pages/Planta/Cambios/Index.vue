@@ -197,7 +197,7 @@ const getMovementMeta = (type) => {
 </script>
 
 <template>
-    <Head title="Planta · Cambios 20L" />
+    <Head title="Cambios 20L" />
 
     <AuthenticatedLayout>
         <div class="py-5 sm:py-7 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">

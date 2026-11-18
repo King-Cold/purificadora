@@ -139,7 +139,7 @@ const submitCancelOrder = () => {
 </script>
 
 <template>
-    <Head title="Por recoger · Botellones fijos de 20 L" />
+    <Head title="Por recoger" />
 
     <AuthenticatedLayout wide>
         <div class="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 pb-28 md:pb-16">
