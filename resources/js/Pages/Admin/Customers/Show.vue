@@ -397,51 +397,29 @@ const getInitials = (name) => {
                         </div>
                     </div>
 
-                    <!-- 2. Botellones fijos, botellones de cambio y Observaciones o notas de reparto -->
+                    <!-- 2. Modalidad libre + Observaciones o notas de reparto -->
                     <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center font-bold text-sm shrink-0 border border-blue-200">
-                                    <i class="fa-solid fa-bottle-water"></i>
+                                    <i class="fa-solid fa-arrows-rotate"></i>
                                 </div>
                                 <div>
                                     <h3 class="text-base font-bold text-slate-900">
-                                        Botellones y Notas de Reparto
+                                        Modalidad y Notas de Reparto
                                     </h3>
                                     <p class="text-xs text-slate-500">
-                                        Cantidades de envases asignados e indicaciones de entrega
+                                        Operación flexible sin inventario asignado
                                     </p>
                                 </div>
                             </div>
-                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-900 text-white text-xs font-bold">
-                                <span>Total:</span>
-                                <span class="font-mono text-sm">{{ customer.total_bottles }}</span>
-                                <span>garrafones</span>
-                            </div>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                                Modalidad libre
+                            </span>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-4">
-                            <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones fijos (20L)</span>
-                                    <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">Rotulados</span>
-                                </div>
-                                <div class="text-2xl font-bold font-mono text-blue-950 mt-1">
-                                    {{ customer.fixed_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
-                                </div>
-                            </div>
-
-                            <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-bold text-slate-900 text-xs">Cantidad de botellones de cambio (20L)</span>
-                                    <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">Intercambiables</span>
-                                </div>
-                                <div class="text-2xl font-bold font-mono text-sky-950 mt-1">
-                                    {{ customer.exchange_bottles_count }}
-                                    <span class="text-xs font-normal text-slate-600">envase(s) de 20L</span>
-                                </div>
-                            </div>
+                        <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200 text-xs text-slate-700 mb-4">
+                            Al no tener cuenta en plataforma, este cliente no maneja límite ni inventario previo en su ficha: el repartidor puede registrar libremente botellones <strong>Fijos</strong> o de <strong>Cambio</strong> en cada pedido al paso.
                         </div>
 
                         <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">

@@ -291,7 +291,14 @@ const confirmDelete = async (customer) => {
                                     <span class="text-[10px] text-[#747181] font-semibold uppercase tracking-wide block">Botellones (20L)</span>
                                     <div class="mt-1">
                                         <span
-                                            v-if="customer.bottle_type === 'fixed'"
+                                            v-if="!customer.has_account"
+                                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F4F3F8] text-[#747181] border border-[#E9E7F0]"
+                                        >
+                                            <i class="fa-solid fa-sliders text-[9px]"></i>
+                                            Modalidad libre
+                                        </span>
+                                        <span
+                                            v-else-if="customer.bottle_type === 'fixed'"
                                             class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F4F3F8] text-[#1E1545] border border-[#DAD6E8] tabular-nums"
                                         >
                                             <i class="fa-solid fa-tag text-[9px]"></i>
@@ -308,7 +315,7 @@ const confirmDelete = async (customer) => {
                                             v-else
                                             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F8F0DF] text-[#A97827] border border-[#A97827]/25"
                                         >
-                                            Sin botellones
+                                            Sin configurar
                                         </span>
                                     </div>
                                 </div>
@@ -421,7 +428,14 @@ const confirmDelete = async (customer) => {
                                     <!-- Botellones (Modalidad exclusiva de 20L) -->
                                     <td class="whitespace-nowrap px-4 py-3.5 text-xs">
                                         <span
-                                            v-if="customer.bottle_type === 'fixed'"
+                                            v-if="!customer.has_account"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F4F3F8] text-[#747181] border border-[#E9E7F0]"
+                                        >
+                                            <i class="fa-solid fa-sliders text-[10px]"></i>
+                                            <span>Modalidad libre</span>
+                                        </span>
+                                        <span
+                                            v-else-if="customer.bottle_type === 'fixed'"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F4F3F8] text-[#1E1545] border border-[#DAD6E8] tabular-nums"
                                         >
                                             <i class="fa-solid fa-tag text-[10px]"></i>
@@ -438,7 +452,7 @@ const confirmDelete = async (customer) => {
                                             v-else
                                             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F8F0DF] text-[#A97827] border border-[#A97827]/25"
                                         >
-                                            Sin botellones
+                                            Sin configurar
                                         </span>
                                     </td>
 

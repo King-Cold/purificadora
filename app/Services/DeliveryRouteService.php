@@ -969,30 +969,33 @@ class DeliveryRouteService
                 throw new OrderBusinessRuleException('No se permiten pedidos combinados de botellones fijos y de cambio.', 'quantity', 422);
             }
 
-            // Regla de Exclusividad: coherencia con el tipo registrado
-            if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
-                throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones fijos.', 'exchange_quantity', 422);
-            }
+            // Solo los clientes CON cuenta (user_id !== null) quedan restringidos a su modalidad y tope registrado;
+            // los clientes SIN cuenta (user_id === null) pueden solicitar fijos o cambios libremente en cada servicio.
+            if ($customer->user_id !== null) {
+                if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
+                    throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones fijos.', 'exchange_quantity', 422);
+                }
 
-            if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
-                throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones de cambio.', 'fixed_quantity', 422);
-            }
+                if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
+                    throw new OrderBusinessRuleException('El cliente está registrado exclusivamente para botellones de cambio.', 'fixed_quantity', 422);
+                }
 
-            // Validar que las cantidades no superen las registradas del cliente
-            if ($fixedQty > (int) $customer->fixed_bottles_count) {
-                throw new OrderBusinessRuleException(
-                    "La cantidad de botellones fijos solicitada ({$fixedQty}) supera los fijos registrados del cliente ({$customer->fixed_bottles_count}).",
-                    'fixed_quantity',
-                    422
-                );
-            }
+                // Validar que las cantidades no superen las registradas del cliente
+                if ($fixedQty > (int) $customer->fixed_bottles_count) {
+                    throw new OrderBusinessRuleException(
+                        "La cantidad de botellones fijos solicitada ({$fixedQty}) supera los fijos registrados del cliente ({$customer->fixed_bottles_count}).",
+                        'fixed_quantity',
+                        422
+                    );
+                }
 
-            if ($exchangeQty > (int) $customer->exchange_bottles_count) {
-                throw new OrderBusinessRuleException(
-                    "La cantidad de botellones de cambio solicitada ({$exchangeQty}) supera los botellones de cambio registrados del cliente ({$customer->exchange_bottles_count}).",
-                    'exchange_quantity',
-                    422
-                );
+                if ($exchangeQty > (int) $customer->exchange_bottles_count) {
+                    throw new OrderBusinessRuleException(
+                        "La cantidad de botellones de cambio solicitada ({$exchangeQty}) supera los botellones de cambio registrados del cliente ({$customer->exchange_bottles_count}).",
+                        'exchange_quantity',
+                        422
+                    );
+                }
             }
 
             $address = $customer->address;

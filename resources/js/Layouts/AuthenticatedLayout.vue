@@ -69,22 +69,26 @@ const currentSectionTitle = computed(() => {
         if (route().current('admin.users.*')) return 'Usuarios';
         if (route().current('admin.customers.*')) return 'Clientes';
         if (route().current('admin.orders.*')) return 'Pedidos';
-        if (route().current('admin.exchange-inventory.*')) return 'Inventario de cambios';
+        if (route().current('admin.exchange-inventory.*')) return 'Cambios';
         if (route().current('admin.settings.*')) return 'Configuración';
 
         // Rutas de Repartidor
+        if (route().current('repartidor.dashboard')) return 'Inicio';
         if (route().current('repartidor.truck-load.*')) return 'Mi carga';
         if (route().current('repartidor.debt.*')) return 'Cobros';
         if (route().current('repartidor.customers.*')) return 'Clientes';
         if (route().current('repartidor.direct-service.*')) return 'Pedido al paso';
         if (route().current('repartidor.stops.*')) return 'Atender pedido';
-        if (route().current('repartidor.reparto') || route().current('repartidor.dashboard') || route().current('repartidor.*')) return 'Reparto';
+        if (route().current('repartidor.reparto') || route().current('repartidor.*')) return 'Reparto';
 
         // Rutas de Planta
-        if (route().current('planta.quick-refill.*') || route().current('planta.dashboard')) return 'Llenado rápido';
+        if (route().current('planta.dashboard')) return 'Inicio';
+        if (route().current('planta.quick-refill.*')) return 'Llenado rápido';
         if (route().current('planta.fijos.*')) return 'Fijos';
         if (route().current('planta.cambios.*')) return 'Cambios';
         if (route().current('planta.inventory.*')) return 'Existencias';
+        if (route().current('planta.incidents.*')) return 'Incidencias';
+        if (route().current('planta.history.*')) return 'Historial';
         if (route().current('planta.reception.*')) return 'Recepción en planta';
         if (route().current('planta.production.*')) return 'Lavado y llenado';
         if (route().current('planta.loads.*')) return 'Cargas al repartidor';

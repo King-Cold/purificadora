@@ -86,9 +86,12 @@ const formError = computed(() =>
     null
 );
 
-// 2 pestañas claras: 'por_recoger' | 'por_entregar' (cualquier URL legacy por_recoger_planta aterriza aquí)
+// 3 pestañas claras: 'por_recoger' | 'por_recoger_planta' (Por subir) | 'por_entregar'
 const currentTab = computed(() => {
-    if (props.activeTab === 'por_entregar' || props.activeTab === 'por_recoger_planta') {
+    if (props.activeTab === 'por_recoger_planta') {
+        return 'por_recoger_planta';
+    }
+    if (props.activeTab === 'por_entregar') {
         return 'por_entregar';
     }
     return 'por_recoger';
@@ -312,7 +315,7 @@ const handleDirectLoadAll = async () => {
         tone: 'primary',
     });
 
-    if (!res.isConfirmed) return;
+    if (!res) return;
 
     batchUploading.value = true;
     router.post(
@@ -578,12 +581,12 @@ const handleDeliverAction = (item) => {
                     </Link>
                 </div>
 
-                <!-- 2 pestañas reales de calle -->
-                <div class="flex items-center gap-2 border-t border-[#E9E7F0] pt-3">
+                <!-- 3 pestañas claras: Por recoger | Por subir | Por entregar -->
+                <div class="flex flex-wrap items-center gap-2 border-t border-[#E9E7F0] pt-3">
                     <button
                         type="button"
                         @click="changeTab('por_recoger')"
-                        class="px-4 py-2 rounded-xl text-xs font-bold transition min-h-[42px] inline-flex items-center gap-2 border cursor-pointer"
+                        class="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition min-h-[42px] inline-flex items-center gap-2 border cursor-pointer"
                         :class="currentTab === 'por_recoger'
                             ? 'bg-[#1E1545] text-white border-[#1E1545]'
                             : 'bg-[#F4F3F8] text-[#292638] border-[#E9E7F0] hover:bg-[#EEEAF7]'"
@@ -600,8 +603,26 @@ const handleDeliverAction = (item) => {
 
                     <button
                         type="button"
+                        @click="changeTab('por_recoger_planta')"
+                        class="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition min-h-[42px] inline-flex items-center gap-2 border cursor-pointer"
+                        :class="currentTab === 'por_recoger_planta'
+                            ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                            : 'bg-[#F4F3F8] text-[#292638] border-[#E9E7F0] hover:bg-[#EEEAF7]'"
+                    >
+                        <ArrowUpFromLine class="w-4 h-4" />
+                        <span>Por subir</span>
+                        <span
+                            class="px-2 py-0.5 rounded-full text-[11px] font-bold tabular-nums"
+                            :class="currentTab === 'por_recoger_planta' ? 'bg-white/20 text-white' : 'bg-white text-[#1E1545]'"
+                        >
+                            {{ tabCounts.por_recoger_planta || 0 }}
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
                         @click="changeTab('por_entregar')"
-                        class="px-4 py-2 rounded-xl text-xs font-bold transition min-h-[42px] inline-flex items-center gap-2 border cursor-pointer"
+                        class="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition min-h-[42px] inline-flex items-center gap-2 border cursor-pointer"
                         :class="currentTab === 'por_entregar'
                             ? 'bg-[#0071BA] text-white border-[#0071BA]'
                             : 'bg-[#F4F3F8] text-[#292638] border-[#E9E7F0] hover:bg-[#E9F3F8]'"
@@ -644,9 +665,9 @@ const handleDeliverAction = (item) => {
                 </button>
             </div>
 
-            <!-- Banner rápido en Por entregar: subir todos los fijos listos desde Planta -->
+            <!-- Banner rápido en Por subir: subir todos los fijos listos desde Planta -->
             <div
-                v-if="currentTab === 'por_entregar' && (tabCounts.ready_in_plant_bottles || 0) > 0"
+                v-if="currentTab === 'por_recoger_planta' && (tabCounts.ready_in_plant_bottles || 0) > 0"
                 class="p-3.5 sm:p-4 bg-[#EEEAF7] border border-[#D7CEF0] rounded-2xl flex flex-wrap items-center justify-between gap-3"
             >
                 <div class="flex items-center gap-3">
@@ -681,12 +702,16 @@ const handleDeliverAction = (item) => {
                         <Truck class="w-5 h-5" />
                     </div>
                     <p class="text-sm font-bold text-[#292638]">
-                        {{ currentTab === 'por_recoger' ? 'No hay fijos pendientes por recoger' : 'No hay pedidos pendientes por entregar' }}
+                        {{ currentTab === 'por_recoger'
+                            ? 'No hay fijos pendientes por recoger'
+                            : (currentTab === 'por_recoger_planta' ? 'No hay fijos listos por subir en Planta' : 'No hay pedidos pendientes por entregar') }}
                     </p>
                     <p class="text-xs text-[#747181]">
                         {{ currentTab === 'por_recoger'
                             ? 'Los nuevos pedidos de botellones fijos aparecerán aquí.'
-                            : 'Cuando Planta termine el llenado o cargues cambio, aparecerán aquí.' }}
+                            : (currentTab === 'por_recoger_planta'
+                                ? 'Cuando Planta termine de llenar tus botellones fijos, aparecerán aquí para subirlos al camión.'
+                                : 'Cuando subas fijos al camión o tengas pedidos de cambio, aparecerán aquí.') }}
                     </p>
                 </div>
 
@@ -706,12 +731,12 @@ const handleDeliverAction = (item) => {
                                 <!-- Cantidad -->
                                 <span
                                     class="px-2 py-0.5 rounded-lg text-xs font-bold tabular-nums"
-                                    :class="currentTab === 'por_recoger' ? 'bg-[#EEEAF7] text-[#1E1545]' : (item.operation_type === 'intercambio' && (item.fixed_in_truck || 0) === 0 ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#E9F3F8] text-[#0071BA]')"
+                                    :class="currentTab === 'por_recoger' || currentTab === 'por_recoger_planta' ? 'bg-[#EEEAF7] text-[#1E1545]' : (item.operation_type === 'intercambio' && (item.fixed_in_truck || 0) === 0 ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#E9F3F8] text-[#0071BA]')"
                                 >
                                     <template v-if="currentTab === 'por_recoger'">
                                         {{ item.fixed_to_collect || item.fixed_quantity }} {{ (item.fixed_to_collect || item.fixed_quantity) === 1 ? 'fijo' : 'fijos' }}
                                     </template>
-                                    <template v-else-if="item.ready_state === 'in_plant' && (item.fixed_in_truck || 0) === 0">
+                                    <template v-else-if="currentTab === 'por_recoger_planta'">
                                         {{ item.fixed_ready_to_load || item.fixed_quantity }} {{ (item.fixed_ready_to_load || item.fixed_quantity) === 1 ? 'fijo' : 'fijos' }}
                                     </template>
                                     <template v-else-if="item.operation_type === 'intercambio' && (item.fixed_in_truck || 0) === 0">
@@ -722,28 +747,26 @@ const handleDeliverAction = (item) => {
                                     </template>
                                 </span>
 
-                                <!-- Estado en Planta vs Camión y estado de pago (solo Por entregar) -->
-                                <template v-if="currentTab === 'por_entregar'">
+                                <!-- Estado en Planta (Por subir) y estado de pago (Por entregar) -->
+                                <span
+                                    v-if="currentTab === 'por_recoger_planta'"
+                                    class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EEEAF7] text-[#1E1545]"
+                                >
+                                    Listo en Planta
+                                </span>
+                                <template v-else-if="currentTab === 'por_entregar'">
                                     <span
-                                        v-if="item.ready_state === 'in_plant' && (item.fixed_in_truck || 0) === 0"
-                                        class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EEEAF7] text-[#1E1545]"
+                                        v-if="item.is_advance_paid"
+                                        class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8F2EC] text-[#26845B]"
                                     >
-                                        Listo en Planta
+                                        Pagado
                                     </span>
-                                    <template v-else>
-                                        <span
-                                            v-if="item.is_advance_paid"
-                                            class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8F2EC] text-[#26845B]"
-                                        >
-                                            Pagado
-                                        </span>
-                                        <span
-                                            v-else-if="(item.unpaid_amount || 0) > 0"
-                                            class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FEF5E6] text-[#9A670E] tabular-nums"
-                                        >
-                                            Cobrar {{ formatCurrency(item.unpaid_amount) }}
-                                        </span>
-                                    </template>
+                                    <span
+                                        v-else-if="(item.unpaid_amount || 0) > 0"
+                                        class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FEF5E6] text-[#9A670E] tabular-nums"
+                                    >
+                                        Cobrar {{ formatCurrency(item.unpaid_amount) }}
+                                    </span>
                                 </template>
                             </div>
 
@@ -811,8 +834,8 @@ const handleDeliverAction = (item) => {
                                 </button>
                             </template>
 
-                            <!-- TAB: POR ENTREGAR -> LISTO EN PLANTA (subir al camión) -->
-                            <template v-else-if="item.ready_state === 'in_plant' && (item.fixed_in_truck || 0) === 0">
+                            <!-- TAB: POR SUBIR EN PLANTA (subir al camión) -->
+                            <template v-else-if="currentTab === 'por_recoger_planta'">
                                 <button
                                     @click="openPlantLoadIncidentModal(item)"
                                     type="button"

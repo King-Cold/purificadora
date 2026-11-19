@@ -13,6 +13,7 @@ use App\Http\Controllers\Cliente\DashboardController as ClientDashboardControlle
 use App\Http\Controllers\Cliente\OrderController as ClientOrderController;
 use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\Planta\PlantCambiosController;
+use App\Http\Controllers\Planta\PlantDashboardController;
 use App\Http\Controllers\Planta\PlantFixedBottlesController;
 use App\Http\Controllers\Planta\PlantInventoryController;
 use App\Http\Controllers\Planta\PlantLoadController;
@@ -127,6 +128,7 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])
                 Route::get('/', 'index')->name('index');
                 Route::put('/meta', 'updateTarget')->name('target.update');
                 Route::post('/altas', 'storeNewBottles')->name('new-bottles.store');
+                Route::post('/reconteo-fisico', 'reconcileCount')->name('reconcile');
                 Route::post('/incidencias/{incident}/resolver', 'resolveIncident')->name('incidents.resolve');
                 Route::post('/sin-localizar/resolver', 'resolveUnlocated')->name('unlocated.resolve');
                 Route::post('/inconvenientes', 'reportInconvenience')->name('inconveniences.store');
@@ -289,9 +291,11 @@ Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])
     ->prefix('planta')
     ->name('planta.')
     ->group(function () {
-        // Llenado rápido de mostrador (vista principal)
+        // Dashboard ejecutivo del Operador de Planta
+        Route::get('/dashboard', PlantDashboardController::class)->name('dashboard');
+
+        // Llenado rápido de mostrador
         Route::controller(PlantQuickRefillController::class)->group(function () {
-            Route::get('/dashboard', 'index')->name('dashboard');
             Route::prefix('llenado-rapido')
                 ->name('quick-refill.')
                 ->group(function () {
@@ -337,16 +341,20 @@ Route::middleware(['auth', 'role:Operador Planta|Administrador|Super Admin'])
                 Route::post('/cambios', 'confirmExchange')->name('confirm-exchange');
             });
 
-        // Existencias e inventario físico
-        Route::controller(PlantInventoryController::class)
-            ->name('inventory.')
-            ->group(function () {
+        // Existencias, Incidencias e Historial de Planta (3 apartados independientes)
+        Route::controller(PlantInventoryController::class)->group(function () {
+            Route::name('inventory.')->group(function () {
                 Route::get('/existencias', 'index')->name('index');
                 Route::post('/conteo-inicial', 'storeInitialCount')->name('initial-count');
+                Route::post('/reconteo-fisico', 'reconcileCount')->name('reconcile');
                 Route::post('/incidencias', 'storeIncident')->name('incidents.store');
                 Route::post('/produccion/iniciar', 'startWashing')->name('production.start');
                 Route::post('/produccion/finalizar', 'finishWashing')->name('production.finish');
             });
+
+            Route::get('/incidencias', 'incidents')->name('incidents.index');
+            Route::get('/historial', 'history')->name('history.index');
+        });
 
         // Mesa de trabajo: lavado y llenado
         Route::controller(PlantProductionController::class)

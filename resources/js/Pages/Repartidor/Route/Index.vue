@@ -501,9 +501,9 @@ const getStopStatusBadge = (status) => {
                                         Nombre: {{ stop.customer_name }}
                                     </div>
 
-                                    <!-- Código del cliente -->
+                                    <!-- Folio del pedido -->
                                     <div class="text-xs text-slate-400 font-mono">
-                                        Código: {{ stop.customer_code }} • Folio: {{ stop.order_folio }}
+                                        Folio: {{ stop.order_folio }}
                                     </div>
                                 </div>
                             </div>
@@ -688,7 +688,7 @@ const getStopStatusBadge = (status) => {
                 </div>
 
                 <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
-                    <p><span class="font-bold">Cliente:</span> {{ selectedStop.customer_nickname || selectedStop.customer_name }} ({{ selectedStop.customer_code }})</p>
+                    <p><span class="font-bold">Cliente:</span> {{ selectedStop.customer_nickname || selectedStop.customer_name }}</p>
                     <p><span class="font-bold">Pedido:</span> {{ selectedStop.order_folio }} • {{ selectedStop.total_bottles }} garrafones</p>
                     <p class="text-[11px] text-slate-500 mt-1 italic">El pedido no será cancelado; quedará registrado el intento fallido de entrega.</p>
                 </div>

@@ -54,6 +54,8 @@ class PlantCambiosController extends Controller
                 BottleCustodyMovement::TYPE_TRUCK_LOAD_EXCHANGE,
                 BottleCustodyMovement::TYPE_PLANT_WASHING_STARTED,
                 BottleCustodyMovement::TYPE_PLANT_WASHING_FINISHED,
+                BottleCustodyMovement::TYPE_PLANT_PHYSICAL_RECOUNT,
+                BottleCustodyMovement::TYPE_EXCHANGE_NEW_ENTRY,
             ])
             ->whereIn('status', [BottleCustodyMovement::STATUS_ACCEPTED, 'accepted_with_discrepancy'])
             ->orderBy('id', 'desc')

@@ -265,6 +265,8 @@ class UserController extends Controller
             $rules['name'] = ['required', 'string', 'max:255'];
         }
         if ($user->customer) {
+            $rules['bottle_type'] = ['nullable', 'string', 'in:fixed,exchange,none'];
+            $rules['bottles_count'] = ['nullable', 'integer', 'min:0', 'max:500'];
             $rules['fixed_bottles_count'] = ['nullable', 'integer', 'min:0', 'max:500'];
             $rules['exchange_bottles_count'] = ['nullable', 'integer', 'min:0', 'max:500'];
         }
@@ -290,11 +292,17 @@ class UserController extends Controller
                     'name' => $targetName,
                     'email' => $validated['email'],
                 ];
-                if ($request->has('fixed_bottles_count')) {
-                    $customerUpdate['fixed_bottles_count'] = (int) $request->input('fixed_bottles_count');
-                }
-                if ($request->has('exchange_bottles_count')) {
-                    $customerUpdate['exchange_bottles_count'] = (int) $request->input('exchange_bottles_count');
+                if (isset($validated['bottle_type'])) {
+                    $qty = max(0, (int) ($validated['bottles_count'] ?? 0));
+                    $customerUpdate['fixed_bottles_count'] = $validated['bottle_type'] === 'fixed' ? $qty : 0;
+                    $customerUpdate['exchange_bottles_count'] = $validated['bottle_type'] === 'exchange' ? $qty : 0;
+                } else {
+                    if ($request->has('fixed_bottles_count')) {
+                        $customerUpdate['fixed_bottles_count'] = (int) $request->input('fixed_bottles_count');
+                    }
+                    if ($request->has('exchange_bottles_count')) {
+                        $customerUpdate['exchange_bottles_count'] = (int) $request->input('exchange_bottles_count');
+                    }
                 }
                 $user->customer->update($customerUpdate);
             }

@@ -123,7 +123,7 @@ const handleReceiveAndFillAll = async () => {
         tone: 'primary',
     });
 
-    if (!result.isConfirmed) return;
+    if (!result) return;
 
     batchProcessing.value = true;
     router.post(route('planta.fijos.receive-and-fill-all'), {}, {
@@ -144,7 +144,7 @@ const handleReceiveOnlyAll = async () => {
         tone: 'primary',
     });
 
-    if (!result.isConfirmed) return;
+    if (!result) return;
 
     batchProcessing.value = true;
     router.post(route('planta.reception.confirm-all-fixed'), {}, {
@@ -239,7 +239,7 @@ const handleFillAllDirect = async () => {
         tone: 'primary',
     });
 
-    if (!result.isConfirmed) return;
+    if (!result) return;
 
     batchProcessing.value = true;
     router.post(route('planta.fijos.mark-all-filled'), {}, {

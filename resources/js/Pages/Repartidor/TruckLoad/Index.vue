@@ -342,7 +342,7 @@ const getLocationLabel = (loc) => {
 
                             <div v-if="transfer.customer" class="text-xs text-[#292638] bg-[#F4F3F8] px-2.5 py-1.5 rounded-xl border border-[#E9E7F0] mt-1 inline-block">
                                 <span class="font-semibold">Propietario:</span>
-                                {{ transfer.customer.nickname ? `"${transfer.customer.nickname}" · ` : '' }}{{ transfer.customer.name }} ({{ transfer.customer.code }})
+                                {{ transfer.customer.nickname ? `"${transfer.customer.nickname}"` : '' }}<template v-if="transfer.customer.nickname && transfer.customer.name"> · </template>{{ transfer.customer.name }}
                             </div>
 
                             <p v-if="transfer.notes" class="text-xs text-[#747181] italic">
@@ -532,9 +532,6 @@ const getLocationLabel = (loc) => {
                                 <span class="font-bold text-[#292638] text-sm">
                                     {{ item.customer_nickname || item.customer_name }}
                                 </span>
-                                <span class="px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-[#F4F3F8] text-[#747181]">
-                                    {{ item.customer_code }}
-                                </span>
                             </div>
                             <p v-if="item.customer_nickname && item.customer_name && item.customer_name !== item.customer_nickname" class="text-xs text-[#747181]">
                                 {{ item.customer_name }}
@@ -615,7 +612,7 @@ const getLocationLabel = (loc) => {
                                 <span class="text-slate-400 font-normal">Flujo:</span>
                                 <span class="font-bold text-slate-900 mx-1">{{ getLocationLabel(mov.origin) }} → {{ getLocationLabel(mov.destination) }}</span>
                                 <template v-if="mov.customer">
-                                    · <span class="text-slate-500">Cliente: {{ mov.customer.nickname || mov.customer.name }} ({{ mov.customer.code }})</span>
+                                    · <span class="text-slate-500">Cliente: {{ mov.customer.nickname || mov.customer.name }}</span>
                                 </template>
                             </p>
 
@@ -980,7 +977,7 @@ const getLocationLabel = (loc) => {
                                 :key="c.customer_id"
                                 :value="c.customer_id"
                             >
-                                {{ c.customer_nickname ? `"${c.customer_nickname}" - ` : '' }}{{ c.customer_name }} ({{ c.customer_code }}) - Vacíos: {{ c.fixed_empty_collected }}
+                                {{ c.customer_nickname ? `"${c.customer_nickname}"` : '' }}<template v-if="c.customer_nickname && c.customer_name"> - </template>{{ c.customer_name }} - Vacíos: {{ c.fixed_empty_collected }}
                             </option>
                         </select>
                         <p v-if="unloadForm.errors.customer_id" class="text-xs text-rose-600 mt-1">

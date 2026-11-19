@@ -5,7 +5,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     user: {
@@ -18,17 +18,41 @@ const props = defineProps({
     },
 });
 
+const initialBottleType = Number(props.user.customer?.fixed_bottles_count || 0) > 0 ? 'fixed' : 'exchange';
+const selectedBottleType = ref(initialBottleType);
+const selectedBottleQty = ref(
+    initialBottleType === 'fixed'
+        ? Number(props.user.customer?.fixed_bottles_count || 0)
+        : Number(props.user.customer?.exchange_bottles_count || 0)
+);
+
 const form = useForm({
     name: props.user.name,
     email: props.user.email,
     password: '',
     password_confirmation: '',
+    bottle_type: selectedBottleType.value,
+    bottles_count: selectedBottleQty.value,
     fixed_bottles_count: props.user.customer?.fixed_bottles_count ?? 0,
     exchange_bottles_count: props.user.customer?.exchange_bottles_count ?? 0,
 });
 
+const syncBottleFields = () => {
+    const qty = Math.min(500, Math.max(0, parseInt(selectedBottleQty.value, 10) || 0));
+    selectedBottleQty.value = qty;
+    form.bottle_type = selectedBottleType.value;
+    form.bottles_count = qty;
+    if (selectedBottleType.value === 'fixed') {
+        form.fixed_bottles_count = qty;
+        form.exchange_bottles_count = 0;
+    } else {
+        form.fixed_bottles_count = 0;
+        form.exchange_bottles_count = qty;
+    }
+};
+
 const totalBottles = computed(() => {
-    return Number(form.fixed_bottles_count || 0) + Number(form.exchange_bottles_count || 0);
+    return Math.max(0, parseInt(selectedBottleQty.value, 10) || 0);
 });
 
 const getRoleBadge = (role) => {
@@ -125,14 +149,6 @@ const submit = () => {
                             >
                                 <i :class="`fa-solid ${getRoleBadge(user.role).icon} text-xs`"></i>
                                 Rol: {{ user.role }}
-                            </span>
-
-                            <span
-                                v-if="user.has_customer"
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-100 text-sky-900 border border-sky-300 font-mono font-bold text-xs shadow-2xs"
-                            >
-                                <i class="fa-solid fa-address-book text-sky-700"></i>
-                                {{ user.customer_code }}
                             </span>
                         </div>
                     </div>
@@ -237,49 +253,49 @@ const submit = () => {
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                <!-- Botellones Fijos -->
-                                <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <InputLabel for="fixed_bottles_count" class="font-bold text-slate-900 text-xs">
-                                            Botellones fijos (20 Litros)
-                                        </InputLabel>
-                                        <span class="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-semibold">
-                                            Rotulados
-                                        </span>
-                                    </div>
-                                    <TextInput
-                                        id="fixed_bottles_count"
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        class="block w-full text-sm rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-semibold"
-                                        v-model.number="form.fixed_bottles_count"
-                                        required
-                                    />
-                                    <InputError class="mt-1.5" :message="form.errors.fixed_bottles_count" />
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        @click="selectedBottleType = 'exchange'; syncBottleFields()"
+                                        class="p-3.5 rounded-xl border text-left transition cursor-pointer"
+                                        :class="selectedBottleType === 'exchange'
+                                            ? 'bg-sky-50 border-sky-400 ring-2 ring-sky-200 text-slate-900'
+                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                    >
+                                        <span class="block text-xs font-bold">Botellones de cambio</span>
+                                        <span class="block text-[11px] text-slate-500">Intercambiables</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="selectedBottleType = 'fixed'; syncBottleFields()"
+                                        class="p-3.5 rounded-xl border text-left transition cursor-pointer"
+                                        :class="selectedBottleType === 'fixed'
+                                            ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-200 text-slate-900'
+                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                    >
+                                        <span class="block text-xs font-bold">Botellones fijos</span>
+                                        <span class="block text-[11px] text-slate-500">Rotulados</span>
+                                    </button>
                                 </div>
+                                <InputError class="mt-1.5" :message="form.errors.bottle_type" />
 
-                                <!-- Botellones de Cambio -->
-                                <div class="bg-sky-50/70 p-4 rounded-xl border border-sky-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <InputLabel for="exchange_bottles_count" class="font-bold text-slate-900 text-xs">
-                                            Botellones de cambio (20 Litros)
-                                        </InputLabel>
-                                        <span class="text-[11px] px-2 py-0.5 rounded bg-sky-600 text-white font-semibold">
-                                            Intercambiables
-                                        </span>
-                                    </div>
+                                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                    <InputLabel for="bottles_count" class="font-bold text-slate-900 text-xs mb-1.5">
+                                        Cantidad máxima de botellones ({{ selectedBottleType === 'fixed' ? 'Fijos' : 'De cambio' }})
+                                    </InputLabel>
                                     <TextInput
-                                        id="exchange_bottles_count"
+                                        id="bottles_count"
                                         type="number"
                                         min="0"
+                                        max="500"
                                         step="1"
                                         class="block w-full text-sm rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900 font-semibold"
-                                        v-model.number="form.exchange_bottles_count"
+                                        v-model.number="selectedBottleQty"
+                                        @input="syncBottleFields"
                                         required
                                     />
-                                    <InputError class="mt-1.5" :message="form.errors.exchange_bottles_count" />
+                                    <InputError class="mt-1.5" :message="form.errors.bottles_count || form.errors.fixed_bottles_count || form.errors.exchange_bottles_count" />
                                 </div>
                             </div>
                         </div>

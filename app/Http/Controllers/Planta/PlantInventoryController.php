@@ -19,15 +19,98 @@ class PlantInventoryController extends Controller
     ) {}
 
     /**
-     * Muestra la pantalla principal de Existencias, Conteo Inicial e Incidencias en Planta.
+     * Pantalla 1: Existencias físicas de Planta y Camión.
      */
-    public function index(): Response
+    public function index(Request $request): Response
+    {
+        return Inertia::render('Planta/Inventory/Index', $this->sharedPlantaProps());
+    }
+
+    /**
+     * Pantalla 2: Incidencias y envases dañados / sin localizar.
+     */
+    public function incidents(Request $request): Response
+    {
+        return Inertia::render('Planta/Incidents/Index', $this->sharedPlantaProps());
+    }
+
+    /**
+     * Pantalla 3: Historial de movimientos de custodia en Planta (con filtros).
+     */
+    public function history(Request $request): Response
+    {
+        $typeFilter = trim((string) $request->query('type', 'all'));
+        $dateFrom = trim((string) $request->query('date_from', ''));
+        $dateTo = trim((string) $request->query('date_to', ''));
+
+        $query = \App\Models\BottleCustodyMovement::with(['customer:id,name,nickname', 'user:id,name', 'confirmedByUser:id,name'])
+            ->where(function ($q) {
+                $q->where('origin', 'plant')
+                    ->orWhere('destination', 'plant')
+                    ->orWhere('origin', 'physical_audit')
+                    ->orWhere('origin', 'external_purchase')
+                    ->orWhere('origin', 'incident_quarantine')
+                    ->orWhere('movement_type', \App\Models\BottleCustodyMovement::TYPE_PLANT_INITIAL_COUNT)
+                    ->orWhere('movement_type', \App\Models\BottleCustodyMovement::TYPE_PLANT_PHYSICAL_RECOUNT);
+            });
+
+        $typeMap = [
+            'ajustes' => [
+                \App\Models\BottleCustodyMovement::TYPE_PLANT_INITIAL_COUNT,
+                \App\Models\BottleCustodyMovement::TYPE_PLANT_PHYSICAL_RECOUNT,
+                \App\Models\BottleCustodyMovement::TYPE_EXCHANGE_NEW_ENTRY,
+            ],
+            'cargas' => [
+                \App\Models\BottleCustodyMovement::TYPE_TRUCK_LOAD_EXCHANGE,
+                \App\Models\BottleCustodyMovement::TYPE_TRUCK_LOAD_FIXED,
+            ],
+            'descargas' => [
+                \App\Models\BottleCustodyMovement::TYPE_TRUCK_UNLOAD_EXCHANGE,
+                \App\Models\BottleCustodyMovement::TYPE_PLANT_RECEPTION_FIXED,
+            ],
+            'llenado' => [
+                \App\Models\BottleCustodyMovement::TYPE_PLANT_WASHING_FINISHED,
+                \App\Models\BottleCustodyMovement::TYPE_PLANT_PREPARED_FIXED,
+            ],
+            'incidencias' => [
+                \App\Models\BottleCustodyMovement::TYPE_BOTTLE_INCIDENT,
+                \App\Models\BottleCustodyMovement::TYPE_EXCHANGE_INCONVENIENCE_REPORTED,
+                \App\Models\BottleCustodyMovement::TYPE_EXCHANGE_WRITE_OFF,
+                \App\Models\BottleCustodyMovement::TYPE_EXCHANGE_RECOVERY,
+            ],
+        ];
+
+        if ($typeFilter !== '' && $typeFilter !== 'all' && isset($typeMap[$typeFilter])) {
+            $query->whereIn('movement_type', $typeMap[$typeFilter]);
+        }
+
+        if ($dateFrom !== '') {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        $movements = $query
+            ->orderBy('id', 'desc')
+            ->limit(80)
+            ->get();
+
+        return Inertia::render('Planta/History/Index', [
+            'movements' => $movements,
+            'filters' => [
+                'type' => $typeFilter ?: 'all',
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
+        ]);
+    }
+
+    private function sharedPlantaProps(): array
     {
         $state = $this->plantInventoryService->getInventoryState();
 
-        // Lista de clientes con botellones fijos activos en planta para el formulario de incidencias
-        // Solo apodo, código CLI-XXXX y nombre opcional (sin datos sensibles)
-        $customersWithFixed = Customer::select('id', 'code', 'nickname', 'name')
+        $customersWithFixed = Customer::select('id', 'nickname', 'name')
             ->whereHas('orders.items', function ($q) {
                 $q->where('type', OrderItem::TYPE_FIXED)
                   ->where('received_at_plant_quantity', '>', 0);
@@ -35,12 +118,13 @@ class PlantInventoryController extends Controller
             ->orderBy('nickname')
             ->get();
 
-        return Inertia::render('Planta/Inventory/Index', [
+        return [
             'inventoryState' => $state,
             'customersWithFixed' => $customersWithFixed,
             'canRecordInitialCount' => auth()->user()->hasRole(['Operador Planta', 'Administrador', 'Super Admin']),
             'canReportIncident' => auth()->user()->hasRole(['Operador Planta', 'Administrador', 'Super Admin']),
-        ]);
+            'canEditTarget' => auth()->user()->hasRole(['Administrador', 'Super Admin']),
+        ];
     }
 
     /**
@@ -77,7 +161,55 @@ class PlantInventoryController extends Controller
     }
 
     /**
-     * Registra una incidencia de daño físico en botellones.
+     * Permite recontar y editar físicamente los botellones de cambio de 20L en Planta.
+     */
+    public function reconcileCount(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user->hasRole(['Operador Planta', 'Administrador', 'Super Admin'])) {
+            abort(403, 'No autorizado para recontar existencias de Planta.');
+        }
+
+        $validated = $request->validate([
+            'empty_count' => ['required', 'integer', 'min:0', 'max:10000'],
+            'washing_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'full_count' => ['required', 'integer', 'min:0', 'max:10000'],
+            'truck_full_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'truck_empty_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'reason' => ['required', 'string', 'max:150'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'sync_target' => ['nullable', 'boolean'],
+        ], [
+            'empty_count.required' => 'La cantidad de vacíos en Planta es obligatoria.',
+            'full_count.required' => 'La cantidad de llenos en Planta es obligatoria.',
+            'reason.required' => 'Indica el motivo del ajuste o reinicio físico.',
+        ]);
+
+        try {
+            $canSyncTarget = $user->hasRole(['Administrador', 'Super Admin']);
+            $result = $this->plantInventoryService->reconcilePhysicalCount(
+                $user,
+                (int) $validated['empty_count'],
+                (int) ($validated['washing_count'] ?? 0),
+                (int) $validated['full_count'],
+                $validated['reason'],
+                $validated['notes'] ?? null,
+                $canSyncTarget && $request->boolean('sync_target', false),
+                isset($validated['truck_full_count']) ? (int) $validated['truck_full_count'] : null,
+                isset($validated['truck_empty_count']) ? (int) $validated['truck_empty_count'] : null
+            );
+
+            return back()->with(
+                'success',
+                "Ajuste actualizado: Planta {$result['plant_after']} u. · Total circuito {$result['active_after']} u."
+            );
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Registra una incidencia unificada de botellones (daño físico o sin localizar).
      */
     public function storeIncident(Request $request): RedirectResponse
     {
@@ -86,9 +218,11 @@ class PlantInventoryController extends Controller
             'customer_id' => ['nullable', 'required_if:bottle_type,fijo', 'exists:customers,id'],
             'order_item_id' => ['nullable', 'exists:order_items,id'],
             'quantity' => ['required', 'integer', 'min:1'],
-            'stage' => ['required', 'string', 'in:recepcion,lavado,llenado,almacen,carga'],
+            'stage' => ['required', 'string', 'in:recepcion,almacen_vacio,lavado,llenado,almacen,almacen_planta,preparado,carga,carga_camion,en_camion,ruta'],
+            'bottle_condition' => ['nullable', 'string', 'in:empty,full'],
+            'location_status' => ['nullable', 'string', 'in:separado,sin_localizar'],
             'damage_type' => ['required', 'string', 'in:rotura,fisura,contaminacion,deformacion,otro'],
-            'notes' => ['required', 'string', 'min:5', 'max:1000'],
+            'notes' => ['required', 'string', 'min:3', 'max:1000'],
         ], [
             'bottle_type.required' => 'El tipo de botellón es obligatorio.',
             'bottle_type.in' => 'El tipo de botellón debe ser fijo o de cambio.',
@@ -96,16 +230,31 @@ class PlantInventoryController extends Controller
             'quantity.required' => 'La cantidad con daño es obligatoria.',
             'quantity.integer' => 'La cantidad debe ser un número entero.',
             'quantity.min' => 'La cantidad debe ser mayor a cero.',
-            'stage.required' => 'Debe indicar la etapa operativa donde ocurrió la incidencia.',
+            'stage.required' => 'Debe indicar dónde ocurrió la incidencia.',
             'damage_type.required' => 'Debe clasificar el tipo de daño detectado.',
-            'notes.required' => 'Debe describir la incidencia y causa del daño.',
-            'notes.min' => 'La descripción debe tener al menos 5 caracteres.',
+            'notes.required' => 'Debe describir brevemente qué ocurrió.',
+            'notes.min' => 'La descripción debe tener al menos 3 caracteres.',
         ]);
 
         try {
-            $this->plantInventoryService->recordBottleIncident($request->user(), $validated);
+            if (($validated['bottle_type'] ?? '') === 'cambio' && ($validated['location_status'] ?? 'separado') === 'sin_localizar') {
+                $cond = $validated['bottle_condition'] ?? 'empty';
+                $originStage = in_array($validated['stage'], ['en_camion', 'ruta'], true)
+                    ? ($cond === 'full' ? 'truck_full' : 'truck_empty')
+                    : ($cond === 'full' ? 'plant_full' : 'plant_empty');
 
-            return redirect()->route('planta.inventory.index')->with('success', 'Incidencia de daño registrada correctamente. Los envases fueron separados de los disponibles.');
+                $this->plantInventoryService->reportExchangeInconvenience($request->user(), [
+                    'quantity' => (int) $validated['quantity'],
+                    'origin_stage' => $originStage,
+                    'reason' => $validated['damage_type'],
+                    'location_status' => 'sin_localizar',
+                    'notes' => $validated['notes'],
+                ]);
+            } else {
+                $this->plantInventoryService->recordBottleIncident($request->user(), $validated);
+            }
+
+            return redirect()->route('planta.incidents.index')->with('success', 'Incidencia registrada correctamente.');
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
         }

@@ -151,6 +151,18 @@ const navGroups = computed(() => {
     if (isRepartidor.value && !isAdmin.value) {
         return [
             {
+                id: 'repartidor-home',
+                label: 'Principal',
+                items: [
+                    {
+                        label: 'Dashboard',
+                        href: getRouteUrl('repartidor.dashboard'),
+                        icon: 'fa-solid fa-house',
+                        active: isRouteActive('repartidor.dashboard'),
+                    },
+                ],
+            },
+            {
                 id: 'repartidor-main',
                 label: 'Operación en ruta',
                 items: [
@@ -160,7 +172,6 @@ const navGroups = computed(() => {
                         icon: 'fa-solid fa-truck',
                         active:
                             isRouteActive('repartidor.reparto') ||
-                            isRouteActive('repartidor.dashboard') ||
                             isRouteActive('repartidor.stops.*') ||
                             isRouteActive('repartidor.direct-service.*') ||
                             isRouteActive('repartidor.route.*') ||
@@ -195,6 +206,18 @@ const navGroups = computed(() => {
         const inInventory = isRouteActive('planta.inventory.*');
         return [
             {
+                id: 'planta-home',
+                label: 'Principal',
+                items: [
+                    {
+                        label: 'Dashboard',
+                        href: getRouteUrl('planta.dashboard'),
+                        icon: 'fa-solid fa-house',
+                        active: isRouteActive('planta.dashboard'),
+                    },
+                ],
+            },
+            {
                 id: 'planta-main',
                 label: 'Operación Planta',
                 items: [
@@ -202,7 +225,7 @@ const navGroups = computed(() => {
                         label: 'Llenado rápido',
                         href: getRouteUrl('planta.quick-refill.index'),
                         icon: 'fa-solid fa-bolt',
-                        active: isRouteActive('planta.quick-refill.*') || isRouteActive('planta.dashboard'),
+                        active: isRouteActive('planta.quick-refill.*'),
                     },
                     {
                         label: 'Fijos',
@@ -232,20 +255,20 @@ const navGroups = computed(() => {
                         label: 'Existencias',
                         href: getRouteUrl('planta.inventory.index'),
                         icon: 'fa-solid fa-warehouse',
-                        active: inInventory && !['incidencias', 'historial'].includes(currentUrlTab.value),
+                        active: isRouteActive('planta.inventory.*'),
                     },
                     {
                         label: 'Incidencias',
-                        href: getRouteUrl('planta.inventory.index', { tab: 'incidencias' }),
+                        href: getRouteUrl('planta.incidents.index'),
                         icon: 'fa-solid fa-triangle-exclamation',
                         iconTint: 'text-[#F8F0DF]',
-                        active: inInventory && currentUrlTab.value === 'incidencias',
+                        active: isRouteActive('planta.incidents.*'),
                     },
                     {
                         label: 'Historial',
-                        href: getRouteUrl('planta.inventory.index', { tab: 'historial' }),
+                        href: getRouteUrl('planta.history.index'),
                         icon: 'fa-solid fa-clock-rotate-left',
-                        active: inInventory && currentUrlTab.value === 'historial',
+                        active: isRouteActive('planta.history.*'),
                     },
                 ],
             },
@@ -305,7 +328,7 @@ const navGroups = computed(() => {
                 label: 'Supervisión',
                 items: [
                     {
-                        label: 'Inventario de cambios',
+                        label: 'Cambios',
                         href: getRouteUrl('admin.exchange-inventory.index'),
                         icon: 'fa-solid fa-bottle-water',
                         active: isRouteActive('admin.exchange-inventory.*'),

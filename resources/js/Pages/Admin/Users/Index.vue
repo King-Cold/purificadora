@@ -257,9 +257,6 @@ const handleToggleStatus = async (user) => {
                                         </div>
                                         <div class="flex items-center gap-2 mt-1 text-xs text-[#747181]">
                                             <span class="tabular-nums text-[11px] text-[#A6A3B2] font-medium">#{{ user.id }}</span>
-                                            <span v-if="user.has_customer" class="text-[#0071BA] bg-[#E9F3F8] border border-[#DCECF7] px-1.5 py-0.5 rounded-md tabular-nums text-[10px] font-semibold">
-                                                {{ user.customer_code }}
-                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -373,9 +370,6 @@ const handleToggleStatus = async (user) => {
                                                 </div>
                                                 <div class="text-xs text-[#A6A3B2] mt-0.5 flex items-center gap-1.5 tabular-nums">
                                                     <span>ID #{{ user.id }}</span>
-                                                    <span v-if="user.has_customer" class="text-[#0071BA] bg-[#E9F3F8] border border-[#DCECF7] px-1.5 py-0.5 rounded-md text-[10px] font-semibold">
-                                                        {{ user.customer_code }}
-                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

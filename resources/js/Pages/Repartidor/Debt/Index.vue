@@ -159,7 +159,7 @@ const submitSettle = () => {
                         <input
                             v-model="searchQuery"
                             type="text"
-                            placeholder="Apodo, nombre o código CLI-XXXX..."
+                            placeholder="Buscar por apodo o nombre..."
                             class="flex-1 text-sm py-2.5 px-3 rounded-xl border border-slate-200 bg-white"
                         />
                         <button
@@ -194,8 +194,8 @@ const submitSettle = () => {
                                 <span class="font-black text-slate-900 block text-sm truncate">
                                     {{ c.nickname ? `"${c.nickname}"` : (c.name || 'Cliente sin nombre') }}
                                 </span>
-                                <span class="font-mono text-[10px] text-slate-400">
-                                    {{ c.code }} <template v-if="c.name">• {{ c.name }}</template>
+                                <span v-if="c.name" class="text-[11px] text-slate-500 block truncate">
+                                    {{ c.name }}
                                 </span>
                             </div>
 
@@ -219,7 +219,6 @@ const submitSettle = () => {
                 <!-- Tarjeta del cliente -->
                 <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between gap-3">
                     <div class="min-w-0">
-                        <span class="font-mono text-[10px] text-emerald-700 font-bold block">{{ activeCustomer.code }}</span>
                         <span class="text-base font-black text-emerald-950 block truncate">{{ activeCustomer.nickname }}</span>
                         <span v-if="activeCustomer.name" class="text-slate-600 text-[11px] block truncate">{{ activeCustomer.name }}</span>
                         <span class="text-[11px] font-extrabold text-rose-700 block mt-0.5">

@@ -5,26 +5,51 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff, Home, Lock, Mail, User } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
+const selectedBottleType = ref('exchange'); // 'exchange' | 'fixed'
+const bottlesCount = ref(0);
+
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
+    bottle_type: 'exchange',
+    bottles_count: 0,
     fixed_bottles_count: 0,
     exchange_bottles_count: 0,
 });
+
+const syncRegisterBottles = () => {
+    const qty = Number.isFinite(Number(bottlesCount.value))
+        ? Math.min(500, Math.max(0, parseInt(bottlesCount.value, 10)))
+        : 0;
+    bottlesCount.value = qty;
+    form.bottle_type = selectedBottleType.value;
+    form.bottles_count = qty;
+    if (selectedBottleType.value === 'fixed') {
+        form.fixed_bottles_count = qty;
+        form.exchange_bottles_count = 0;
+    } else {
+        form.fixed_bottles_count = 0;
+        form.exchange_bottles_count = qty;
+    }
+};
+
+const selectBottleType = (type) => {
+    selectedBottleType.value = type;
+    syncRegisterBottles();
+};
 
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 const showBottlesModal = ref(false);
 
 const totalBottles = computed(() => {
-    const fixed = Number.isFinite(Number(form.fixed_bottles_count)) ? Math.max(0, parseInt(form.fixed_bottles_count, 10)) : 0;
-    const exchange = Number.isFinite(Number(form.exchange_bottles_count)) ? Math.max(0, parseInt(form.exchange_bottles_count, 10)) : 0;
-    return fixed + exchange;
+    return Number.isFinite(Number(bottlesCount.value)) ? Math.max(0, parseInt(bottlesCount.value, 10)) : 0;
 });
 
 const submit = () => {
+    syncRegisterBottles();
     form.post(route('register'), {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
@@ -199,13 +224,13 @@ const submit = () => {
                                 </div>
                             </div>
 
-                            <!-- Botellones de 20L Iniciales (Opcional) -->
-                            <div class="p-3.5 bg-[#F5F4F8] border border-[#E7E4ED] rounded-2xl space-y-2.5">
+                            <!-- Modalidad exclusiva y cantidad de botellones de 20L -->
+                            <div class="p-3.5 bg-[#F5F4F8] border border-[#E7E4ED] rounded-2xl space-y-3">
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-semibold text-[#211B35] inline-flex items-center gap-1.5">
                                             <i class="fa-solid fa-bottle-water text-[#0071BA]"></i>
-                                            Tus botellones de 20 L
+                                            Tipo de botellones (20 L)
                                         </span>
                                         <button
                                             type="button"
@@ -218,39 +243,54 @@ const submit = () => {
                                         </button>
                                     </div>
                                     <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#EAF4FB] border border-[#C8E3F6] text-[#0071BA] tabular-nums">
-                                        Total: {{ totalBottles }}
+                                        Límite: {{ totalBottles }}
                                     </span>
                                 </div>
 
-                                <div class="grid grid-cols-2 gap-2.5">
-                                    <div>
-                                        <label for="reg_fixed_bottles" class="block text-[11px] font-medium text-[#777386] mb-1">
-                                            Fijos (Puritronic)
-                                        </label>
-                                        <input
-                                            id="reg_fixed_bottles"
-                                            type="number"
-                                            min="0"
-                                            max="500"
-                                            v-model.number="form.fixed_bottles_count"
-                                            class="w-full min-h-[38px] px-3 text-sm font-semibold text-[#211B35] tabular-nums rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 outline-none transition"
-                                        />
-                                        <InputError class="mt-1" :message="form.errors.fixed_bottles_count" />
-                                    </div>
-                                    <div>
-                                        <label for="reg_exchange_bottles" class="block text-[11px] font-medium text-[#777386] mb-1">
-                                            De cambio
-                                        </label>
-                                        <input
-                                            id="reg_exchange_bottles"
-                                            type="number"
-                                            min="0"
-                                            max="500"
-                                            v-model.number="form.exchange_bottles_count"
-                                            class="w-full min-h-[38px] px-3 text-sm font-semibold text-[#211B35] tabular-nums rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 outline-none transition"
-                                        />
-                                        <InputError class="mt-1" :message="form.errors.exchange_bottles_count" />
-                                    </div>
+                                <!-- Selector de 1 sola modalidad -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        @click="selectBottleType('exchange')"
+                                        class="px-3 py-2 rounded-xl border text-left transition cursor-pointer"
+                                        :class="selectedBottleType === 'exchange'
+                                            ? 'bg-[#EAF4FB] border-[#0071BA] text-[#1E1545] ring-1 ring-[#0071BA]/30'
+                                            : 'bg-white border-[#E7E4ED] text-[#777386] hover:border-[#CFC8E0]'"
+                                    >
+                                        <span class="block text-xs font-bold">De cambio</span>
+                                        <span class="block text-[10px]">Intercambias vacío por lleno</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="selectBottleType('fixed')"
+                                        class="px-3 py-2 rounded-xl border text-left transition cursor-pointer"
+                                        :class="selectedBottleType === 'fixed'
+                                            ? 'bg-[#EEEAF7] border-[#1E1545] text-[#1E1545] ring-1 ring-[#1E1545]/25'
+                                            : 'bg-white border-[#E7E4ED] text-[#777386] hover:border-[#CFC8E0]'"
+                                    >
+                                        <span class="block text-xs font-bold">Fijos (tuyos)</span>
+                                        <span class="block text-[10px]">Rotulados con tu nombre</span>
+                                    </button>
+                                </div>
+
+                                <!-- Cantidad única -->
+                                <div>
+                                    <label for="reg_bottles_count" class="block text-[11px] font-medium text-[#777386] mb-1">
+                                        ¿Cuántos botellones {{ selectedBottleType === 'fixed' ? 'fijos' : 'de cambio' }} tienes?
+                                    </label>
+                                    <input
+                                        id="reg_bottles_count"
+                                        type="number"
+                                        min="0"
+                                        max="500"
+                                        v-model.number="bottlesCount"
+                                        @input="syncRegisterBottles"
+                                        class="w-full min-h-[38px] px-3 text-sm font-semibold text-[#211B35] tabular-nums rounded-xl border border-[#E7E4ED] bg-white focus:border-[#1E1545] focus:ring-2 focus:ring-[#1E1545]/10 outline-none transition"
+                                    />
+                                    <p class="mt-1 text-[11px] text-[#777386]">
+                                        Al pedir agua solo podrás solicitar de esta modalidad y hasta esta cantidad.
+                                    </p>
+                                    <InputError class="mt-1" :message="form.errors.bottle_type || form.errors.bottles_count || form.errors.fixed_bottles_count || form.errors.exchange_bottles_count" />
                                 </div>
                             </div>
 

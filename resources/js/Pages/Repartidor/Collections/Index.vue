@@ -346,15 +346,9 @@ const submitCancelOrder = () => {
                         <p class="text-[11px] text-blue-900 font-bold">Zona: {{ selectedOrder.delivery_zone }}</p>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase block">Folio</span>
-                            <span class="text-xs font-mono font-black text-slate-900">{{ selectedOrder.folio }}</span>
-                        </div>
-                        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase block">Código</span>
-                            <span class="text-xs font-mono font-black text-slate-900">{{ selectedOrder.customer.code }}</span>
-                        </div>
+                    <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block">Folio</span>
+                        <span class="text-xs font-mono font-black text-slate-900">{{ selectedOrder.folio }}</span>
                     </div>
 
                     <div v-if="selectedOrder.customer.phone" class="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between">

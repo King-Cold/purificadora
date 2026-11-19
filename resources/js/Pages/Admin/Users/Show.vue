@@ -261,9 +261,6 @@ const handleToggleStatus = async () => {
                                     Perfil de Cliente Asociado
                                 </h4>
                             </div>
-                            <span class="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-sky-100 text-sky-800 border border-sky-200">
-                                {{ user.customer.code }}
-                            </span>
                         </div>
 
                         <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">

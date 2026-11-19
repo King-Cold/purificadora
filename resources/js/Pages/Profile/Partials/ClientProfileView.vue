@@ -46,18 +46,53 @@ const submit = () => {
     });
 };
 
-// Edición de Botellones
+// Edición de Botellones (modalidad exclusiva: fijos o de cambio)
 const isEditingBottles = ref(false);
 const bottleRecentlySuccessful = ref(false);
+
+const getInitialBottleType = (cust) => {
+    if (Number(cust?.fixed_bottles_count || 0) > 0) return 'fixed';
+    return 'exchange';
+};
+
+const selectedBottleType = ref(getInitialBottleType(props.clientData.customer));
+const selectedBottleQty = ref(
+    Number(props.clientData.customer?.fixed_bottles_count || 0) > 0
+        ? Number(props.clientData.customer.fixed_bottles_count)
+        : Number(props.clientData.customer?.exchange_bottles_count || 0)
+);
+
 const bottleForm = useForm({
+    bottle_type: selectedBottleType.value,
+    bottles_count: selectedBottleQty.value,
     fixed_bottles_count: props.clientData.customer.fixed_bottles_count ?? 0,
     exchange_bottles_count: props.clientData.customer.exchange_bottles_count ?? 0,
 });
+
+const syncBottleForm = () => {
+    const qty = Number.isFinite(Number(selectedBottleQty.value))
+        ? Math.min(500, Math.max(0, parseInt(selectedBottleQty.value, 10)))
+        : 0;
+    selectedBottleQty.value = qty;
+    bottleForm.bottle_type = selectedBottleType.value;
+    bottleForm.bottles_count = qty;
+    if (selectedBottleType.value === 'fixed') {
+        bottleForm.fixed_bottles_count = qty;
+        bottleForm.exchange_bottles_count = 0;
+    } else {
+        bottleForm.fixed_bottles_count = 0;
+        bottleForm.exchange_bottles_count = qty;
+    }
+};
 
 watch(
     () => props.clientData.customer,
     (newCust) => {
         if (newCust && !isEditingBottles.value) {
+            selectedBottleType.value = getInitialBottleType(newCust);
+            selectedBottleQty.value = Number(newCust.fixed_bottles_count || 0) > 0
+                ? Number(newCust.fixed_bottles_count)
+                : Number(newCust.exchange_bottles_count || 0);
             bottleForm.fixed_bottles_count = newCust.fixed_bottles_count ?? 0;
             bottleForm.exchange_bottles_count = newCust.exchange_bottles_count ?? 0;
         }
@@ -66,18 +101,17 @@ watch(
 );
 
 const computedEditingTotal = computed(() => {
-    const fixed = Number.isFinite(Number(bottleForm.fixed_bottles_count))
-        ? Math.max(0, parseInt(bottleForm.fixed_bottles_count, 10))
+    return Number.isFinite(Number(selectedBottleQty.value))
+        ? Math.max(0, parseInt(selectedBottleQty.value, 10))
         : 0;
-    const exchange = Number.isFinite(Number(bottleForm.exchange_bottles_count))
-        ? Math.max(0, parseInt(bottleForm.exchange_bottles_count, 10))
-        : 0;
-    return fixed + exchange;
 });
 
 const openEditBottles = () => {
-    bottleForm.fixed_bottles_count = props.clientData.customer.fixed_bottles_count ?? 0;
-    bottleForm.exchange_bottles_count = props.clientData.customer.exchange_bottles_count ?? 0;
+    selectedBottleType.value = getInitialBottleType(props.clientData.customer);
+    selectedBottleQty.value = Number(props.clientData.customer?.fixed_bottles_count || 0) > 0
+        ? Number(props.clientData.customer.fixed_bottles_count)
+        : Number(props.clientData.customer?.exchange_bottles_count || 0);
+    syncBottleForm();
     bottleForm.clearErrors();
     isEditingBottles.value = true;
 };
@@ -88,6 +122,7 @@ const cancelEditBottles = () => {
 };
 
 const submitBottles = () => {
+    syncBottleForm();
     bottleForm.put(route('cliente.bottles.update'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -166,7 +201,7 @@ const addressDisplay = computed(() => {
     <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
         <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-5">
 
-            <!-- Navegación de regreso y código de cliente único -->
+            <!-- Navegación de regreso -->
             <div class="flex items-center justify-between">
                 <Link
                     :href="route('cliente.dashboard')"
@@ -175,14 +210,6 @@ const addressDisplay = computed(() => {
                     <i class="fa-solid fa-arrow-left text-xs"></i>
                     <span>Volver al inicio</span>
                 </Link>
-
-                <span
-                    v-if="clientData?.customer?.code"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200/80"
-                >
-                    <i class="fa-solid fa-barcode text-slate-500 text-[11px]"></i>
-                    <span>{{ clientData.customer.code }}</span>
-                </span>
             </div>
 
             <!-- Navegación de Pestañas: "Datos personales" y "Seguridad" -->
@@ -368,20 +395,49 @@ const addressDisplay = computed(() => {
                             <span class="font-medium">Botellones actualizados correctamente.</span>
                         </div>
 
-                        <!-- MODO EDICIÓN BOTELLONES -->
+                        <!-- MODO EDICIÓN BOTELLONES (1 MODALIDAD + CANTIDAD MÁXIMA) -->
                         <form v-if="isEditingBottles" @submit.prevent="submitBottles" class="space-y-3.5 pt-1">
-                            <!-- Fijos -->
+                            <!-- Selector de modalidad exclusiva -->
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <button
+                                    type="button"
+                                    @click="selectedBottleType = 'exchange'; syncBottleForm()"
+                                    class="p-3 rounded-xl border text-left transition cursor-pointer"
+                                    :class="selectedBottleType === 'exchange'
+                                        ? 'bg-sky-50 border-sky-500 text-slate-900 ring-1 ring-sky-400/50'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                >
+                                    <span class="block text-xs font-bold">De cambio</span>
+                                    <span class="block text-[11px] text-slate-500">Intercambias vacío por lleno</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="selectedBottleType = 'fixed'; syncBottleForm()"
+                                    class="p-3 rounded-xl border text-left transition cursor-pointer"
+                                    :class="selectedBottleType === 'fixed'
+                                        ? 'bg-blue-50 border-blue-700 text-slate-900 ring-1 ring-blue-700/30'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                >
+                                    <span class="block text-xs font-bold">Fijos</span>
+                                    <span class="block text-[11px] text-slate-500">Rotulados con tu nombre</span>
+                                </button>
+                            </div>
+                            <InputError :message="bottleForm.errors.bottle_type" />
+
+                            <!-- Cantidad única -->
                             <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
                                 <div>
-                                    <span class="text-xs font-semibold text-slate-800 block">Fijos</span>
-                                    <span class="text-[11px] text-slate-500">Con tu nombre</span>
+                                    <span class="text-xs font-semibold text-slate-800 block">
+                                        Cantidad ({{ selectedBottleType === 'fixed' ? 'Fijos' : 'De cambio' }})
+                                    </span>
+                                    <span class="text-[11px] text-slate-500">Límite máximo por pedido</span>
                                 </div>
                                 <div class="flex items-center gap-1.5 shrink-0">
                                     <button
                                         type="button"
-                                        @click="bottleForm.fixed_bottles_count = Math.max(0, (parseInt(bottleForm.fixed_bottles_count) || 0) - 1)"
+                                        @click="selectedBottleQty = Math.max(0, (parseInt(selectedBottleQty) || 0) - 1); syncBottleForm()"
                                         class="h-9 w-9 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-                                        aria-label="Restar fijo"
+                                        aria-label="Restar botellón"
                                     >
                                         <i class="fa-solid fa-minus text-xs"></i>
                                     </button>
@@ -389,59 +445,26 @@ const addressDisplay = computed(() => {
                                         type="number"
                                         min="0"
                                         max="500"
-                                        v-model.number="bottleForm.fixed_bottles_count"
-                                        class="w-14 text-center font-mono font-bold text-sm rounded-lg border border-slate-200 py-1 bg-white text-slate-900"
+                                        v-model.number="selectedBottleQty"
+                                        @input="syncBottleForm"
+                                        class="w-16 text-center font-mono font-bold text-sm rounded-lg border border-slate-200 py-1 bg-white text-slate-900"
                                     />
                                     <button
                                         type="button"
-                                        @click="bottleForm.fixed_bottles_count = Math.min(500, (parseInt(bottleForm.fixed_bottles_count) || 0) + 1)"
+                                        @click="selectedBottleQty = Math.min(500, (parseInt(selectedBottleQty) || 0) + 1); syncBottleForm()"
                                         class="h-9 w-9 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-                                        aria-label="Sumar fijo"
+                                        aria-label="Sumar botellón"
                                     >
                                         <i class="fa-solid fa-plus text-xs"></i>
                                     </button>
                                 </div>
                             </div>
-                            <InputError :message="bottleForm.errors.fixed_bottles_count" />
+                            <InputError :message="bottleForm.errors.bottles_count || bottleForm.errors.fixed_bottles_count || bottleForm.errors.exchange_bottles_count" />
 
-                            <!-- De cambio -->
-                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
-                                <div>
-                                    <span class="text-xs font-semibold text-slate-800 block">De cambio</span>
-                                    <span class="text-[11px] text-slate-500">Comerciales estándar</span>
-                                </div>
-                                <div class="flex items-center gap-1.5 shrink-0">
-                                    <button
-                                        type="button"
-                                        @click="bottleForm.exchange_bottles_count = Math.max(0, (parseInt(bottleForm.exchange_bottles_count) || 0) - 1)"
-                                        class="h-9 w-9 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-                                        aria-label="Restar de cambio"
-                                    >
-                                        <i class="fa-solid fa-minus text-xs"></i>
-                                    </button>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="500"
-                                        v-model.number="bottleForm.exchange_bottles_count"
-                                        class="w-14 text-center font-mono font-bold text-sm rounded-lg border border-slate-200 py-1 bg-white text-slate-900"
-                                    />
-                                    <button
-                                        type="button"
-                                        @click="bottleForm.exchange_bottles_count = Math.min(500, (parseInt(bottleForm.exchange_bottles_count) || 0) + 1)"
-                                        class="h-9 w-9 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-                                        aria-label="Sumar de cambio"
-                                    >
-                                        <i class="fa-solid fa-plus text-xs"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <InputError :message="bottleForm.errors.exchange_bottles_count" />
-
-                            <!-- Total calculado -->
+                            <!-- Resumen -->
                             <div class="p-3 rounded-xl bg-blue-50/80 border border-blue-100 text-blue-950 flex items-center justify-between text-xs font-semibold">
-                                <span>Total (20L)</span>
-                                <span class="text-base font-mono font-bold">{{ computedEditingTotal }}</span>
+                                <span>Modalidad activa: {{ selectedBottleType === 'fixed' ? 'Fijos' : 'De cambio' }}</span>
+                                <span class="text-base font-mono font-bold">{{ computedEditingTotal }} u.</span>
                             </div>
 
                             <!-- Botones Cancelar / Guardar -->

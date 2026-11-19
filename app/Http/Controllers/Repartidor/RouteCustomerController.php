@@ -112,35 +112,13 @@ class RouteCustomerController extends Controller
         $name = !empty($validated['name']) ? trim($validated['name']) : null;
         $deliveryZone = !empty($validated['delivery_zone']) ? $validated['delivery_zone'] : null;
 
-        if (isset($validated['bottle_type'])) {
-            if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
-                $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
-                $exchangeCount = 0;
-            } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
-                $fixedCount = 0;
-                $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
-            } else {
-                $fixedCount = 0;
-                $exchangeCount = 0;
-            }
-        } else {
-            $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
-            $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
-        }
-
-        if ($fixedCount > 0 && $exchangeCount > 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
-            ]);
-        }
-
-        // Creación del cliente sin cuenta User (Customer independiente)
+        // Clientes sin cuenta: no registran inventario fijo ni de cambio en su ficha
         $customer = Customer::create([
             'user_id' => null,
             'nickname' => $nickname,
             'name' => $name,
-            'fixed_bottles_count' => $fixedCount,
-            'exchange_bottles_count' => $exchangeCount,
+            'fixed_bottles_count' => 0,
+            'exchange_bottles_count' => 0,
         ]);
 
         $zoneLabel = null;

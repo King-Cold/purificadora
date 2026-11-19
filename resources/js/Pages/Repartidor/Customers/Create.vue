@@ -32,44 +32,11 @@ const availableZones = computed(() => {
     ];
 });
 
-const bottleType = ref('none'); // 'none', 'exchange', 'fixed'
-const bottlesCount = ref(1);
-
 const form = useForm({
     nickname: '',
     name: '',
     delivery_zone: '',
-    bottle_type: 'none',
-    bottles_count: 0,
-    fixed_bottles_count: 0,
-    exchange_bottles_count: 0,
 });
-
-const selectType = (type) => {
-    bottleType.value = type;
-    form.bottle_type = type;
-    if (type === 'none') {
-        bottlesCount.value = 0;
-    } else if (bottlesCount.value === 0) {
-        bottlesCount.value = 1;
-    }
-    syncCounts();
-};
-
-const syncCounts = () => {
-    const qty = Math.max(0, parseInt(bottlesCount.value, 10) || 0);
-    form.bottles_count = qty;
-    if (bottleType.value === 'fixed') {
-        form.fixed_bottles_count = qty;
-        form.exchange_bottles_count = 0;
-    } else if (bottleType.value === 'exchange') {
-        form.fixed_bottles_count = 0;
-        form.exchange_bottles_count = qty;
-    } else {
-        form.fixed_bottles_count = 0;
-        form.exchange_bottles_count = 0;
-    }
-};
 
 const submitCustomer = () => {
     if (!form.nickname.trim()) {
@@ -79,7 +46,6 @@ const submitCustomer = () => {
         alertWarning('Por favor selecciona la zona de reparto del cliente.');
         return;
     }
-    syncCounts();
     form.post(route('repartidor.customers.store-quick'), {
         preserveScroll: true,
         onSuccess: (pageRes) => {
@@ -149,11 +115,8 @@ const registerAnother = () => {
                 </div>
 
                 <div class="space-y-1">
-                    <div class="flex items-center justify-center gap-2">
-                        <span class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                            {{ newlyCreated.code }}
-                        </span>
-                        <span v-if="newlyCreated.zone" class="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                    <div v-if="newlyCreated.zone" class="flex items-center justify-center gap-2">
+                        <span class="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
                             <i class="fa-solid fa-location-dot text-blue-600 text-[10px]"></i>
                             {{ newlyCreated.zone }}
                         </span>
@@ -276,82 +239,12 @@ const registerAnother = () => {
                     </p>
                 </div>
 
-                <!-- Modalidad Exclusiva de Botellones (Fijos / Cambios / Sin botellones) -->
-                <div class="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                            Tipo de garrafones (20L)
-                        </label>
-                        <span class="text-[11px] text-slate-400 font-medium">Opcional</span>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-2">
-                        <button
-                            type="button"
-                            @click="selectType('exchange')"
-                            class="py-2 px-2 rounded-xl text-xs font-bold border transition flex flex-col items-center justify-center min-h-[44px] cursor-pointer"
-                            :class="bottleType === 'exchange'
-                                ? 'bg-sky-50 text-sky-900 border-sky-400 ring-2 ring-sky-300'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
-                        >
-                            <span>Cambios</span>
-                            <span class="text-[10px] font-normal text-slate-500">General</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            @click="selectType('fixed')"
-                            class="py-2 px-2 rounded-xl text-xs font-bold border transition flex flex-col items-center justify-center min-h-[44px] cursor-pointer"
-                            :class="bottleType === 'fixed'
-                                ? 'bg-blue-50 text-blue-900 border-blue-400 ring-2 ring-blue-300'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
-                        >
-                            <span>Fijos</span>
-                            <span class="text-[10px] font-normal text-slate-500">Rotulados</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            @click="selectType('none')"
-                            class="py-2 px-2 rounded-xl text-xs font-bold border transition flex flex-col items-center justify-center min-h-[44px] cursor-pointer"
-                            :class="bottleType === 'none'
-                                ? 'bg-slate-200 text-slate-800 border-slate-400'
-                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
-                        >
-                            <span>Ninguno</span>
-                            <span class="text-[10px] font-normal text-slate-400">Sin asignar</span>
-                        </button>
-                    </div>
-
-                    <!-- Cantidad si seleccionó Fijos o Cambios -->
-                    <div v-if="bottleType !== 'none'" class="pt-2 flex items-center justify-between border-t border-slate-200/80">
-                        <span class="text-xs font-semibold text-slate-700">
-                            Cantidad de garrafones:
-                        </span>
-                        <div class="flex items-center gap-1.5">
-                            <button
-                                type="button"
-                                @click="if (bottlesCount > 1) { bottlesCount--; syncCounts(); }"
-                                :disabled="bottlesCount <= 1"
-                                class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 disabled:opacity-40"
-                            >
-                                -
-                            </button>
-                            <input
-                                type="number"
-                                min="1"
-                                v-model.number="bottlesCount"
-                                @input="syncCounts"
-                                class="w-16 text-center font-mono font-bold text-sm rounded-xl border-slate-300"
-                            />
-                            <button
-                                type="button"
-                                @click="bottlesCount++; syncCounts();"
-                                class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100"
-                            >
-                                +
-                            </button>
-                        </div>
+                <!-- Modalidad libre para clientes sin cuenta -->
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
+                    <i class="fa-solid fa-arrows-rotate text-[#0071BA] mt-0.5 shrink-0"></i>
+                    <div>
+                        <span class="font-bold text-slate-800 block">Pedido libre en cada visita</span>
+                        <span>Los clientes sin cuenta no necesitan registrar botellones previos; cuando pidan agua podrás elegir libremente Fijos o Cambios en ese servicio.</span>
                     </div>
                 </div>
 

@@ -353,9 +353,6 @@ const getStatusBadge = (status) => {
                                             <span class="text-xs font-extrabold text-slate-800">
                                                 {{ item.customer_nickname || item.customer_name }}
                                             </span>
-                                            <span v-if="item.customer_code" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">
-                                                {{ item.customer_code }}
-                                            </span>
                                         </div>
                                         <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">
                                             {{ item.order_folio }}
@@ -444,7 +441,6 @@ const getStatusBadge = (status) => {
 
                                     <div v-if="prop.customer_name" class="text-xs text-slate-700">
                                         <strong>Cliente:</strong> {{ prop.customer_nickname || prop.customer_name }}
-                                        <span v-if="prop.customer_code" class="text-[10px] font-mono px-1 bg-slate-200 rounded">({{ prop.customer_code }})</span>
                                         <span v-if="prop.order_folio" class="ml-2 font-mono text-[11px] text-indigo-700">[{{ prop.order_folio }}]</span>
                                     </div>
 

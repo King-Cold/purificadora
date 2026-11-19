@@ -274,9 +274,6 @@ const formatDate = (dateString) => {
                                         <div class="font-bold text-slate-900">
                                             {{ item.customer_nickname || item.customer_name || 'Sin apodo' }}
                                         </div>
-                                        <div class="text-xs text-slate-400 font-mono">
-                                            {{ item.customer_code }}
-                                        </div>
                                     </td>
                                     <td class="px-4 py-3.5 font-mono text-xs font-bold text-blue-700">
                                         {{ item.order_folio }}
@@ -469,7 +466,7 @@ const formatDate = (dateString) => {
                                 Revisar Recepción de Fijos
                             </h4>
                             <p class="text-xs text-slate-500">
-                                {{ activeFixedItem.customer_nickname || activeFixedItem.customer_name }} ({{ activeFixedItem.customer_code }})
+                                {{ activeFixedItem.customer_nickname || activeFixedItem.customer_name }}
                             </p>
                         </div>
                     </div>

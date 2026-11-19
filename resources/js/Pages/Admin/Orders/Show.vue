@@ -326,9 +326,6 @@ const getStageIconClass = (stageKey) => {
                                 </div>
 
                                 <div class="flex flex-wrap gap-2 pt-1">
-                                    <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                        {{ order.customer.code }}
-                                    </span>
                                     <span
                                         :class="[
                                             'px-2.5 py-1 rounded-lg text-xs font-bold border',

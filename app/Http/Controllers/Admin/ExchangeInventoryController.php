@@ -31,6 +31,8 @@ class ExchangeInventoryController extends Controller
             'breakdown' => $state['breakdown'],
             'pendingIncidents' => $state['pending_incidents'],
             'resolvedIncidents' => $state['resolved_incidents'],
+            'pendingFixedIncidents' => $state['pending_fixed_incidents'] ?? [],
+            'resolvedFixedIncidents' => $state['resolved_fixed_incidents'] ?? [],
             'movements' => $state['movements'],
             'filters' => $state['filters'],
         ]);
@@ -73,6 +75,7 @@ class ExchangeInventoryController extends Controller
             'bottle_condition' => ['required', 'string', 'in:empty,full'],
             'reason' => ['required', 'string', 'max:150'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'sync_target' => ['nullable', 'boolean'],
         ], [
             'quantity.required' => 'La cantidad de botellones nuevos es obligatoria.',
             'quantity.integer' => 'La cantidad debe ser un número entero positivo.',
@@ -82,27 +85,94 @@ class ExchangeInventoryController extends Controller
         ]);
 
         try {
+            $syncTarget = $request->boolean('sync_target', false);
             $this->plantInventoryService->registerNewExchangeBottles(
                 $request->user(),
                 (int) $validated['quantity'],
                 $validated['bottle_condition'],
                 $validated['reason'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                $syncTarget
             );
 
             $condLabel = $validated['bottle_condition'] === 'empty' ? 'vacíos aptos' : 'llenos libres';
+            $targetSuffix = $syncTarget ? ' La meta total se actualizó en la misma proporción.' : '';
 
-            return back()->with('success', "Alta registrada: {$validated['quantity']} botellón(es) nuevos de 20L incorporados como {$condLabel} en Planta.");
+            return back()->with('success', "Alta registrada: {$validated['quantity']} botellón(es) nuevos de 20L incorporados como {$condLabel} en Planta.{$targetSuffix}");
         } catch (OrderBusinessRuleException $e) {
             return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
         }
     }
 
     /**
-     * Resolver una incidencia de botellón de cambio en revisión (Confirmar baja o Registrar recuperación).
+     * Ajustar / reiniciar existencias físicas de cambios en Planta y Camión.
+     */
+    public function reconcileCount(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'empty_count' => ['required', 'integer', 'min:0', 'max:10000'],
+            'washing_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'full_count' => ['required', 'integer', 'min:0', 'max:10000'],
+            'truck_full_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'truck_empty_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'reason' => ['required', 'string', 'max:150'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'sync_target' => ['nullable', 'boolean'],
+        ], [
+            'empty_count.required' => 'Indica cuántos botellones vacíos hay en Planta.',
+            'full_count.required' => 'Indica cuántos botellones llenos hay en Planta.',
+            'reason.required' => 'Indica el motivo del ajuste o reinicio físico.',
+        ]);
+
+        try {
+            $result = $this->plantInventoryService->reconcilePhysicalCount(
+                $request->user(),
+                (int) $validated['empty_count'],
+                (int) ($validated['washing_count'] ?? 0),
+                (int) $validated['full_count'],
+                $validated['reason'],
+                $validated['notes'] ?? null,
+                $request->boolean('sync_target', false),
+                isset($validated['truck_full_count']) ? (int) $validated['truck_full_count'] : null,
+                isset($validated['truck_empty_count']) ? (int) $validated['truck_empty_count'] : null
+            );
+
+            return back()->with(
+                'success',
+                "Ajuste aplicado: Planta {$result['plant_after']} u. · Total circuito {$result['active_after']} u."
+            );
+        } catch (OrderBusinessRuleException $e) {
+            return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Resolver una incidencia en revisión (Cambios o Fijos).
      */
     public function resolveIncident(Request $request, BottleIncident $incident): RedirectResponse
     {
+        if ($incident->bottle_type === \App\Models\OrderItem::TYPE_FIXED) {
+            $validated = $request->validate([
+                'resolution_type' => ['required', 'string', 'in:aclarado,cierre'],
+                'notes' => ['nullable', 'string', 'max:500'],
+            ], [
+                'resolution_type.required' => 'Selecciona si deseas aclarar/reponer con el cliente o confirmar el cierre.',
+            ]);
+
+            try {
+                $this->plantInventoryService->resolveFixedIncident(
+                    $request->user(),
+                    $incident,
+                    $validated['resolution_type'],
+                    $validated['notes'] ?? null
+                );
+
+                return back()->with('success', 'Incidencia de botellón fijo resuelta correctamente.');
+            } catch (OrderBusinessRuleException $e) {
+                return back()->withErrors([$e->getErrorKey() => $e->getMessage()]);
+            }
+        }
+
         $validated = $request->validate([
             'resolution_type' => ['required', 'string', 'in:baja,recuperacion'],
             'recovery_location' => ['nullable', 'string', 'in:plant_empty,plant_full,truck_full,truck_empty'],

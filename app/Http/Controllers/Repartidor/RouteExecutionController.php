@@ -11,6 +11,7 @@ use App\Models\DeliveryRoute;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\OrderItem;
+use App\Models\OrderPayment;
 use App\Models\OrderStatusHistory;
 use App\Models\RouteStop;
 use App\Services\DebtAndCreditService;
@@ -44,6 +45,14 @@ class RouteExecutionController extends Controller
     public function dashboard(Request $request): Response
     {
         $user = $request->user();
+        $driver = $user;
+        if (!$user->hasRole('Repartidor')) {
+            try {
+                $driver = $this->routeService->resolveSoleActiveDriver();
+            } catch (\Throwable) {
+                $driver = $user;
+            }
+        }
 
         // 1. Obtener todas las rutas del repartidor ordenadas
         $allDriverRoutes = DeliveryRoute::with([
@@ -52,7 +61,7 @@ class RouteExecutionController extends Controller
                 'order.items',
             ]),
         ])
-            ->where('driver_user_id', $user->id)
+            ->where('driver_user_id', $driver->id)
             ->orderBy('id', 'desc')
             ->get();
 
@@ -170,7 +179,7 @@ class RouteExecutionController extends Controller
         }
 
         // 2. Existencias del camión e inventario de fijos por cliente
-        $truckState = $this->truckInventoryService->getTruckInventoryState($user);
+        $truckState = $this->truckInventoryService->getTruckInventoryState($driver);
 
         // Fijos en posesión en camión (separados por cliente)
         $fixedCustody = [];
@@ -183,7 +192,6 @@ class RouteExecutionController extends Controller
                 $totalFixedInTruck += ($emptyQty + $fullQty);
                 $fixedCustody[] = [
                     'customer_id' => $custCustody['customer_id'],
-                    'customer_code' => $custCustody['customer_code'],
                     'customer_name' => $custCustody['customer_name'],
                     'customer_nickname' => $custCustody['customer_nickname'],
                     'empty_collected' => $emptyQty,
@@ -195,39 +203,74 @@ class RouteExecutionController extends Controller
 
         // Fecha actual formateada en español
         Carbon::setLocale('es');
-        $now = Carbon::now('America/Merida');
+        $tz = 'America/Merida';
+        $now = Carbon::now($tz);
         $formattedDate = ucfirst($now->translatedFormat('l, j \d\e F \d\e Y'));
 
-        // Contadores operativos en vivo
-        $collectionsCount = Order::whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+        $todayStartUtc = $now->copy()->startOfDay()->utc();
+        $todayEndUtc = $now->copy()->endOfDay()->utc();
+
+        $scheduleService = app(\App\Services\StoreScheduleService::class);
+        $receptionStatus = $scheduleService->checkOrderReception($now);
+        $scheduleSummary = $scheduleService->getScheduleSummary();
+
+        // Contadores operativos en vivo (alineados a las 3 pestañas de Reparto)
+        $activeStatuses = [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS];
+
+        $collectionsCount = Order::whereIn('status', $activeStatuses)
             ->whereHas('items', fn ($q) => $q->where('type', OrderItem::TYPE_FIXED)->whereRaw('(quantity - collected_quantity - cancelled_quantity) > 0'))
             ->count();
 
-        $deliveriesCount = Order::whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_IN_ROUTE, Order::STATUS_IN_PROCESS])
+        $readyInPlantCount = Order::whereIn('status', $activeStatuses)
+            ->whereHas('items', fn ($q) => $q->where('type', OrderItem::TYPE_FIXED)->whereRaw('(prepared_quantity - loaded_quantity - damaged_quantity) > 0'))
+            ->count();
+
+        $deliveriesCount = Order::whereIn('status', $activeStatuses)
             ->where(function ($q) {
                 $q->whereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_EXCHANGE)->whereRaw('(quantity - delivered_quantity - cancelled_quantity) > 0'))
-                  ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->where('prepared_quantity', '>', 0));
-            })->count();
+                    ->orWhereHas('items', fn ($sub) => $sub->where('type', OrderItem::TYPE_FIXED)->whereRaw('(loaded_quantity - delivered_quantity) > 0'));
+            })
+            ->count();
 
         $pendingDebtCount = OrderCharge::whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID])
             ->distinct('customer_id')
             ->count('customer_id');
 
+        $pendingReceivableAmount = round((float) (OrderCharge::whereIn('status', [OrderCharge::STATUS_PENDING, OrderCharge::STATUS_PARTIALLY_PAID])
+            ->selectRaw('COALESCE(SUM(total_amount - paid_amount), 0) as balance')
+            ->value('balance') ?? 0), 2);
+
+        $deliveredTodayCount = Order::where('status', Order::STATUS_DELIVERED)
+            ->whereBetween('updated_at', [$todayStartUtc, $todayEndUtc])
+            ->count();
+
+        $collectedTodayAmount = round((float) OrderPayment::whereBetween('created_at', [$todayStartUtc, $todayEndUtc])->sum('amount'), 2);
+
         $pendingTransfersCount = count($truckState['pending_transfers'] ?? []);
 
         return Inertia::render('Repartidor/Dashboard', [
             'driver' => [
-                'id' => $user->id,
-                'name' => $user->name,
+                'id' => $driver->id,
+                'name' => $driver->name,
             ],
             'formattedDate' => $formattedDate,
+            'meta' => [
+                'is_store_open' => (bool) ($receptionStatus['open'] ?? false),
+                'schedule_hours' => $scheduleSummary['formatted_hours'] ?? '07:00 – 19:00',
+            ],
             'activeRoute' => $formattedActiveRoute,
             'availableRoutes' => $availableRoutes,
             'counters' => [
                 'por_recoger' => $collectionsCount,
+                'por_subir' => $readyInPlantCount,
                 'por_entregar' => $deliveriesCount,
                 'cobrar_pendientes' => $pendingDebtCount,
                 'transferencias_pendientes' => $pendingTransfersCount,
+            ],
+            'todaySummary' => [
+                'delivered_orders' => $deliveredTodayCount,
+                'collected_amount' => $collectedTodayAmount,
+                'pending_receivable_amount' => $pendingReceivableAmount,
             ],
             'truckInventory' => [
                 'exchange_full_available' => (int) $truckState['truck_inventory']['exchange_full_available'],
@@ -700,6 +743,7 @@ class RouteExecutionController extends Controller
                     'name' => $c->name,
                     'nickname' => $c->nickname,
                     'phone' => $c->phone,
+                    'has_account' => $c->user_id !== null,
                     'fixed_bottles_count' => (int) $c->fixed_bottles_count,
                     'exchange_bottles_count' => (int) $c->exchange_bottles_count,
                     'bottle_type' => $c->bottle_type,
@@ -749,27 +793,23 @@ class RouteExecutionController extends Controller
                     return back()->withErrors(['direct' => 'No se permiten servicios combinados de botellones fijos y de cambio.']);
                 }
 
-                // Si el cliente no tenía botellones registrados (unassigned), definir tipo con el pedido
-                if ($customer->bottle_type === Customer::BOTTLE_TYPE_UNASSIGNED) {
-                    if ($fixedQty > 0) {
-                        $customer->update(['fixed_bottles_count' => $fixedQty, 'exchange_bottles_count' => 0]);
-                    } elseif ($exchangeQty > 0) {
-                        $customer->update(['exchange_bottles_count' => $exchangeQty, 'fixed_bottles_count' => 0]);
+                // Clientes CON cuenta respetan estrictamente la modalidad y el límite registrados en su perfil;
+                // Clientes SIN cuenta (user_id === null) operan libremente sin modificar ni amarrar su ficha.
+                if ($customer->user_id !== null) {
+                    if ($customer->bottle_type === Customer::BOTTLE_TYPE_UNASSIGNED) {
+                        return back()->withErrors(['direct' => 'Este cliente con cuenta aún no ha configurado su modalidad ni cantidad de botellones en su perfil.']);
                     }
-                } else {
-                    // Validar que no solicite el tipo contrario al registrado
                     if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQty > 0) {
                         return back()->withErrors(['direct' => 'El cliente está registrado exclusivamente para botellones fijos.']);
                     }
                     if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQty > 0) {
                         return back()->withErrors(['direct' => 'El cliente está registrado exclusivamente para botellones de cambio.']);
                     }
-
                     if ($fixedQty > (int) $customer->fixed_bottles_count) {
-                        $customer->update(['fixed_bottles_count' => $fixedQty]);
+                        return back()->withErrors(['direct' => "La cantidad solicitada ({$fixedQty}) supera los fijos registrados del cliente ({$customer->fixed_bottles_count})."]);
                     }
                     if ($exchangeQty > (int) $customer->exchange_bottles_count) {
-                        $customer->update(['exchange_bottles_count' => $exchangeQty]);
+                        return back()->withErrors(['direct' => "La cantidad solicitada ({$exchangeQty}) supera los cambios registrados del cliente ({$customer->exchange_bottles_count})."]);
                     }
                 }
             } else {
@@ -777,8 +817,6 @@ class RouteExecutionController extends Controller
                     'nickname' => ['required', 'string', 'max:100'],
                     'name' => ['nullable', 'string', 'max:150'],
                     'phone' => ['nullable', 'string', 'max:25'],
-                    'fixed_bottles_count' => ['nullable', 'integer', 'min:0'],
-                    'exchange_bottles_count' => ['nullable', 'integer', 'min:0'],
                     'street' => ['nullable', 'string', 'max:150'],
                     'exterior_number' => ['nullable', 'string', 'max:20'],
                     'neighborhood' => ['nullable', 'string', 'max:100'],
@@ -786,15 +824,9 @@ class RouteExecutionController extends Controller
                     'reference' => ['nullable', 'string', 'max:500'],
                 ]);
 
-                $exchangeQty = max(0, (int) $request->input('exchange_quantity', 0));
-                $fixedQty = max(0, (int) $request->input('fixed_quantity', 0));
-
-                if ($fixedQty > 0 && $exchangeQty > 0) {
-                    return back()->withErrors(['direct' => 'El cliente debe registrarse exclusivamente con botellones fijos o de cambio.']);
-                }
-
-                $custValidated['exchange_bottles_count'] = $exchangeQty;
-                $custValidated['fixed_bottles_count'] = $fixedQty;
+                // Cliente nuevo sin cuenta: no se guarda inventario fijo ni de cambio en su ficha
+                $custValidated['exchange_bottles_count'] = 0;
+                $custValidated['fixed_bottles_count'] = 0;
 
                 $customer = $this->routeService->registerDirectRouteCustomer($user, $custValidated);
             }
@@ -2065,19 +2097,18 @@ class RouteExecutionController extends Controller
             return $card;
         })->values();
 
-        // 3. Por entregar (listos en Planta para subir al camión + ya cargados en camión)
+        // 3. Por entregar (solo pedidos de cambio o fijos ya cargados en el camión)
         $porEntregarList = $allOrders->filter(function ($order) use ($loadedFixedByCustomer, $deliveredFixedByCustomer) {
             $exchangeItem = $order->items->firstWhere('type', OrderItem::TYPE_EXCHANGE);
             $fixedItem = $order->items->firstWhere('type', OrderItem::TYPE_FIXED);
             $hasExchange = $exchangeItem && ($exchangeItem->quantity > $exchangeItem->delivered_quantity);
             $fixedInTruck = $fixedItem ? max(0, (int) $fixedItem->loaded_quantity - (int) $fixedItem->delivered_quantity) : 0;
-            $readyToLoad = $fixedItem ? max(0, (int) $fixedItem->prepared_quantity - (int) $fixedItem->loaded_quantity - (int) $fixedItem->damaged_quantity) : 0;
             $custAvail = max(0, (int) ($loadedFixedByCustomer[$order->customer_id] ?? 0) - (int) ($deliveredFixedByCustomer[$order->customer_id] ?? 0));
-            return $hasExchange || ($fixedInTruck > 0) || ($readyToLoad > 0) || ($custAvail > 0);
+            return $hasExchange || ($fixedInTruck > 0) || ($custAvail > 0);
         })->map(function ($order) use ($formatOrderCard, $pendingStopMap) {
             $stop = $pendingStopMap->get($order->id);
             return $formatOrderCard($order, $stop);
-        })->sortBy(fn ($card) => ($card['ready_state'] === 'in_plant' && ($card['fixed_in_truck'] ?? 0) === 0) ? 0 : 1)->values();
+        })->values();
 
         $pendientesList = $porRecogerList;
         $enProcesoList = collect();

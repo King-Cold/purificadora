@@ -31,7 +31,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Domicilio ${customer.code}`" />
+    <Head :title="`Domicilio ${customer.name || customer.nickname || 'Cliente'}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
@@ -43,16 +43,10 @@ const submit = () => {
                 :breadcrumbs="[
                     { label: 'Administración', href: route('dashboard') },
                     { label: 'Clientes', href: route('admin.customers.index') },
-                    { label: customer.code, href: route('admin.customers.show', customer.id) },
+                    { label: customer.name || customer.nickname || 'Detalle', href: route('admin.customers.show', customer.id) },
                     { label: 'Registrar Domicilio' },
                 ]"
             >
-                <template #badges>
-                    <span class="px-2.5 py-0.5 rounded-lg bg-[#F5F4F8] text-[#211B35] font-mono font-bold text-xs border border-[#E7E4ED]">
-                        {{ customer.code }}
-                    </span>
-                </template>
-
                 <template #actions>
                     <Link
                         :href="route('admin.customers.show', customer.id)"

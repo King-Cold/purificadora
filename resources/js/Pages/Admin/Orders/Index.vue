@@ -242,9 +242,6 @@ const getStatusIconClass = (statusKey) => {
                                                 </span>
                                             </div>
                                             <div class="flex items-center gap-2 text-xs">
-                                                <span class="font-mono text-slate-500">
-                                                    {{ order.customer?.code }}
-                                                </span>
                                                 <span
                                                     :class="[
                                                         'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
@@ -339,8 +336,6 @@ const getStatusIconClass = (statusKey) => {
                                     </span>
                                 </p>
                                 <div class="flex items-center gap-2 text-xs text-slate-500">
-                                    <span class="font-mono">{{ order.customer?.code }}</span>
-                                    <span>&bull;</span>
                                     <span>{{ order.customer?.has_account ? 'Con cuenta' : 'Sin cuenta' }}</span>
                                     <span>&bull;</span>
                                     <span>{{ order.created_at }}</span>

@@ -215,11 +215,24 @@ class PlantInventoryService
             ->limit(30)
             ->get();
 
-        // Incidencias recientes (últimas 30)
-        $incidents = BottleIncident::with(['customer', 'order', 'reportedByUser', 'resolvedByUser'])
+        // Incidencias recientes (últimas 50, incluyendo fijos y cambios)
+        $incidents = BottleIncident::with([
+            'customer:id,name,nickname',
+            'order:id,folio',
+            'reportedByUser:id,name',
+            'resolvedByUser:id,name',
+        ])
             ->orderBy('id', 'desc')
-            ->limit(30)
+            ->limit(50)
             ->get();
+
+        $pendingIncidentsCount = (int) BottleIncident::where('status', BottleIncident::STATUS_PENDING)->count();
+
+        $truckFullTotal = (int) TruckInventory::sum('exchange_full_available');
+        $truckEmptyTotal = (int) TruckInventory::sum('exchange_empty_collected');
+        $truckExchangeTotal = $truckFullTotal + $truckEmptyTotal;
+        $plantActiveExchange = (int) $inv->exchange_empty_available + (int) $inv->exchange_washing_filling + (int) $inv->exchange_full_available + (int) $inv->exchange_full_reserved;
+        $targetQuantity = app(SettingService::class)->getExchangeBottlesTarget();
 
         return [
             'initial_count_pending' => $isPending,
@@ -238,7 +251,14 @@ class PlantInventoryService
                 'exchange_unlocated' => (int) ($inv->exchange_unlocated ?? 0),
                 'exchange_damaged_total' => $exchangeDamagedTotal,
                 'fixed_damaged_total' => $fixedDamagedTotal,
-                'exchange_total_physical' => (int) ($inv->exchange_empty_available + $inv->exchange_washing_filling + $inv->exchange_full_available + $inv->exchange_full_reserved + ($inv->exchange_unlocated ?? 0) + $exchangeDamagedTotal),
+                'exchange_total_physical' => (int) ($plantActiveExchange + ($inv->exchange_unlocated ?? 0) + $exchangeDamagedTotal),
+                'truck_full_available' => $truckFullTotal,
+                'truck_empty_collected' => $truckEmptyTotal,
+                'truck_exchange_total' => $truckExchangeTotal,
+                'plant_active_exchange' => $plantActiveExchange,
+                'circuit_active_total' => $plantActiveExchange + $truckExchangeTotal,
+                'target_quantity' => $targetQuantity,
+                'pending_incidents_count' => $pendingIncidentsCount,
             ],
             'fixed_in_plant_by_customer' => $fixedByCustomer,
             'incidents' => $incidents,
@@ -300,8 +320,8 @@ class PlantInventoryService
         }
 
         $notes = trim((string) ($data['notes'] ?? ''));
-        if (strlen($notes) < 5) {
-            throw new OrderBusinessRuleException('Debe proporcionar una descripción del daño de al menos 5 caracteres.', 'notes', 422);
+        if (strlen($notes) < 3) {
+            throw new OrderBusinessRuleException('Debe proporcionar una descripción breve del problema.', 'notes', 422);
         }
 
         return DB::transaction(function () use ($reporter, $bottleType, $quantity, $stage, $damageType, $notes, $data) {
@@ -1746,6 +1766,7 @@ class PlantInventoryService
                 'domicilio' => [BottleCustodyMovement::TYPE_DELIVERY_REFILL_TO_CUSTOMER, BottleCustodyMovement::TYPE_COLLECTION_EXCHANGE_EMPTY],
                 'meta' => [BottleCustodyMovement::TYPE_EXCHANGE_TARGET_UPDATED],
                 'conteo_inicial' => [BottleCustodyMovement::TYPE_PLANT_INITIAL_COUNT],
+                'reconteo' => [BottleCustodyMovement::TYPE_PLANT_PHYSICAL_RECOUNT],
             ];
             if (isset($typeMap[$typeFilter])) {
                 $movementsQuery->whereIn('movement_type', $typeMap[$typeFilter]);
@@ -1830,6 +1851,47 @@ class PlantInventoryService
             ],
             'pending_incidents' => $pendingIncidents,
             'resolved_incidents' => $resolvedIncidents,
+            'pending_fixed_incidents' => BottleIncident::with(['customer:id,name,nickname', 'order:id,folio', 'reportedByUser:id,name'])
+                ->where('bottle_type', OrderItem::TYPE_FIXED)
+                ->where('status', BottleIncident::STATUS_PENDING)
+                ->orderBy('id', 'desc')
+                ->get()
+                ->map(fn (BottleIncident $inc) => [
+                    'id' => $inc->id,
+                    'bottle_type' => 'fijo',
+                    'quantity' => (int) $inc->quantity,
+                    'stage' => $inc->stage,
+                    'damage_type' => $inc->damage_type,
+                    'status' => $inc->status,
+                    'notes' => $inc->notes,
+                    'customer_name' => $inc->customer?->nickname ?: ($inc->customer?->name ?? 'Cliente'),
+                    'order_folio' => $inc->order?->folio,
+                    'reported_by_name' => $inc->reportedByUser?->name ?? 'Operador',
+                    'created_at' => $inc->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+                ]),
+            'resolved_fixed_incidents' => BottleIncident::with(['customer:id,name,nickname', 'order:id,folio', 'reportedByUser:id,name', 'resolvedByUser:id,name'])
+                ->where('bottle_type', OrderItem::TYPE_FIXED)
+                ->whereIn('status', [BottleIncident::STATUS_RESOLVED, BottleIncident::STATUS_DISMISSED])
+                ->orderBy('resolved_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->limit(20)
+                ->get()
+                ->map(fn (BottleIncident $inc) => [
+                    'id' => $inc->id,
+                    'bottle_type' => 'fijo',
+                    'quantity' => (int) $inc->quantity,
+                    'stage' => $inc->stage,
+                    'damage_type' => $inc->damage_type,
+                    'status' => $inc->status,
+                    'notes' => $inc->notes,
+                    'resolution_notes' => $inc->resolution_notes,
+                    'customer_name' => $inc->customer?->nickname ?: ($inc->customer?->name ?? 'Cliente'),
+                    'order_folio' => $inc->order?->folio,
+                    'reported_by_name' => $inc->reportedByUser?->name ?? 'Operador',
+                    'resolved_by_name' => $inc->resolvedByUser?->name ?? 'Administrador',
+                    'created_at' => $inc->created_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+                    'resolved_at' => $inc->resolved_at?->setTimezone('America/Merida')->format('d/m/Y H:i'),
+                ]),
             'movements' => $movements,
             'filters' => [
                 'movement_type' => $typeFilter ?: 'all',
@@ -1885,13 +1947,15 @@ class PlantInventoryService
     /**
      * Acción del Administrador: Registrar botellones nuevos (Alta física en inventario de cambios).
      * Un botellón nuevo vacío entra como vacío apto en Planta; si entra lleno y sellado, entra como lleno libre en Planta.
+     * Opcionalmente suma la misma cantidad a la Meta total del circuito.
      */
     public function registerNewExchangeBottles(
         User $admin,
         int $quantity,
         string $condition,
         string $reason,
-        ?string $notes = null
+        ?string $notes = null,
+        bool $syncTarget = false
     ): BottleCustodyMovement {
         if ($quantity <= 0) {
             throw new OrderBusinessRuleException('La cantidad de botellones nuevos a dar de alta debe ser un entero positivo.', 'quantity', 422);
@@ -1906,7 +1970,7 @@ class PlantInventoryService
             throw new OrderBusinessRuleException('Debe indicar el motivo del alta (compra, reposición o incorporación).', 'reason', 422);
         }
 
-        return DB::transaction(function () use ($admin, $quantity, $condition, $trimmedReason, $notes) {
+        return DB::transaction(function () use ($admin, $quantity, $condition, $trimmedReason, $notes, $syncTarget) {
             $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
             $activeBefore = $this->getActiveExchangeCount($inv);
 
@@ -1921,7 +1985,17 @@ class PlantInventoryService
             }
 
             $activeAfter = $activeBefore + $quantity;
-            $auditNote = "Alta de {$quantity} botellón(es) nuevos de 20L ({$condLabel}) por {$trimmedReason}. Activos: {$activeBefore} → {$activeAfter}.";
+
+            $targetNote = '';
+            if ($syncTarget) {
+                $settingService = app(SettingService::class);
+                $previousTarget = $settingService->getExchangeBottlesTarget();
+                $newTarget = $previousTarget > 0 ? ($previousTarget + $quantity) : $activeAfter;
+                $settingService->setExchangeBottlesTarget($newTarget, $admin->name);
+                $targetNote = " Meta: {$previousTarget} → {$newTarget} u.";
+            }
+
+            $auditNote = "Alta de {$quantity} botellón(es) nuevos de 20L ({$condLabel}) por {$trimmedReason}. Activos: {$activeBefore} → {$activeAfter}.{$targetNote}";
             if ($notes && trim($notes) !== '') {
                 $auditNote .= ' | ' . trim($notes);
             }
@@ -1942,6 +2016,158 @@ class PlantInventoryService
                 'notes' => $auditNote,
                 'created_at' => now(),
             ]);
+        });
+    }
+
+    /**
+     * Reconteo / ajuste o reinicio físico editable de botellones de cambio de 20L.
+     * Permite subir, bajar o reiniciar (incluso a 0) las existencias de Planta y opcionalmente Camión,
+     * dejando traza auditable del antes y después. Solo Administrador puede sincronizar la Meta.
+     */
+    public function reconcilePhysicalCount(
+        User $actor,
+        int $emptyCount,
+        int $washingCount,
+        int $fullCount,
+        string $reason,
+        ?string $notes = null,
+        bool $syncTarget = false,
+        ?int $truckFullCount = null,
+        ?int $truckEmptyCount = null
+    ): array {
+        if ($emptyCount < 0) {
+            throw new OrderBusinessRuleException('La cantidad de botellones vacíos en Planta no puede ser negativa.', 'empty_count', 422);
+        }
+        if ($washingCount < 0) {
+            throw new OrderBusinessRuleException('La cantidad de botellones en lavado no puede ser negativa.', 'washing_count', 422);
+        }
+        if ($fullCount < 0) {
+            throw new OrderBusinessRuleException('La cantidad de botellones llenos en Planta no puede ser negativa.', 'full_count', 422);
+        }
+        if ($truckFullCount !== null && $truckFullCount < 0) {
+            throw new OrderBusinessRuleException('La cantidad de botellones llenos en Camión no puede ser negativa.', 'truck_full_count', 422);
+        }
+        if ($truckEmptyCount !== null && $truckEmptyCount < 0) {
+            throw new OrderBusinessRuleException('La cantidad de botellones vacíos en Camión no puede ser negativa.', 'truck_empty_count', 422);
+        }
+
+        $trimmedReason = trim($reason);
+        if ($trimmedReason === '') {
+            throw new OrderBusinessRuleException('Indica el motivo del ajuste o reinicio físico.', 'reason', 422);
+        }
+
+        return DB::transaction(function () use (
+            $actor,
+            $emptyCount,
+            $washingCount,
+            $fullCount,
+            $trimmedReason,
+            $notes,
+            $syncTarget,
+            $truckFullCount,
+            $truckEmptyCount
+        ) {
+            $inv = PlantInventory::lockForUpdate()->firstOrCreate(['id' => 1]);
+
+            $prevEmpty = (int) $inv->exchange_empty_available;
+            $prevWashing = (int) $inv->exchange_washing_filling;
+            $prevFull = (int) $inv->exchange_full_available;
+            $prevReserved = (int) $inv->exchange_full_reserved;
+
+            $prevPlantTotal = $prevEmpty + $prevWashing + $prevFull + $prevReserved;
+            $activeBefore = $this->getActiveExchangeCount($inv);
+
+            $updateData = [
+                'exchange_empty_available' => $emptyCount,
+                'exchange_washing_filling' => $washingCount,
+                'exchange_full_available' => $fullCount,
+            ];
+
+            if (is_null($inv->initial_count_completed_at)) {
+                $updateData['initial_empty_count'] = $emptyCount;
+                $updateData['initial_full_count'] = $fullCount;
+                $updateData['initial_count_completed_at'] = now();
+                $updateData['initial_count_user_id'] = $actor->id;
+                $updateData['initial_count_notes'] = $notes ? trim($notes) : $trimmedReason;
+            }
+
+            $inv->update($updateData);
+            $inv->refresh();
+
+            $truckLog = '';
+            if ($truckFullCount !== null || $truckEmptyCount !== null) {
+                $soleDriver = User::role('Repartidor')
+                    ->where('status', 'active')
+                    ->orderBy('id')
+                    ->first()
+                    ?? User::role('Repartidor')->orderBy('id')->first();
+
+                if ($soleDriver) {
+                    $truckInv = app(TruckInventoryService::class)->getOrCreateTruckInventory($soleDriver);
+                    $prevTruckFull = (int) $truckInv->exchange_full_available;
+                    $prevTruckEmpty = (int) $truckInv->exchange_empty_collected;
+
+                    $newTruckFull = $truckFullCount ?? $prevTruckFull;
+                    $newTruckEmpty = $truckEmptyCount ?? $prevTruckEmpty;
+
+                    $truckInv->update([
+                        'exchange_full_available' => $newTruckFull,
+                        'exchange_empty_collected' => $newTruckEmpty,
+                    ]);
+
+                    // Limpiar saldos residuales en registros inactivos si existen
+                    TruckInventory::where('id', '!=', $truckInv->id)->update([
+                        'exchange_full_available' => 0,
+                        'exchange_empty_collected' => 0,
+                    ]);
+
+                    $truckLog = " · Camión: Llenos {$prevTruckFull}→{$newTruckFull}, Vacíos {$prevTruckEmpty}→{$newTruckEmpty}";
+                }
+            }
+
+            $newPlantTotal = $emptyCount + $washingCount + $fullCount + $prevReserved;
+            $activeAfter = $this->getActiveExchangeCount($inv);
+            $delta = $activeAfter - $activeBefore;
+
+            $targetNote = '';
+            $canModifyTarget = $actor->hasRole(['Administrador', 'Super Admin']);
+            if ($canModifyTarget && $syncTarget && $activeAfter > 0) {
+                $settingService = app(SettingService::class);
+                $previousTarget = $settingService->getExchangeBottlesTarget();
+                $settingService->setExchangeBottlesTarget($activeAfter, $actor->name);
+                $targetNote = " Meta: {$previousTarget} → {$activeAfter} u.";
+            }
+
+            $deltaLabel = $delta > 0 ? "+{$delta}" : (string) $delta;
+            $auditNote = "Ajuste ({$trimmedReason}): Planta Vacíos {$prevEmpty}→{$emptyCount}, Llenos {$prevFull}→{$fullCount}{$truckLog}. Total circuito: {$activeBefore}→{$activeAfter} u. ({$deltaLabel}).{$targetNote}";
+            if ($notes && trim($notes) !== '') {
+                $auditNote .= ' | ' . trim($notes);
+            }
+
+            BottleCustodyMovement::create([
+                'user_id' => $actor->id,
+                'movement_type' => BottleCustodyMovement::TYPE_PLANT_PHYSICAL_RECOUNT,
+                'bottle_type' => OrderItem::TYPE_EXCHANGE,
+                'bottle_condition' => BottleCustodyMovement::CONDITION_EMPTY,
+                'quantity' => abs($delta) > 0 ? abs($delta) : $activeAfter,
+                'proposed_quantity' => $activeBefore,
+                'origin' => 'physical_audit',
+                'destination' => 'plant',
+                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                'confirmed_by_user_id' => $actor->id,
+                'confirmed_at' => now(),
+                'difference_reason' => "Ajuste ({$trimmedReason}): {$activeBefore} → {$activeAfter} u.",
+                'notes' => $auditNote,
+                'created_at' => now(),
+            ]);
+
+            return [
+                'plant_before' => $prevPlantTotal,
+                'plant_after' => $newPlantTotal,
+                'delta' => $delta,
+                'active_before' => $activeBefore,
+                'active_after' => $activeAfter,
+            ];
         });
     }
 
@@ -2050,6 +2276,72 @@ class PlantInventoryService
             }
 
             return $lockedIncident->fresh(['reportedByUser', 'resolvedByUser']);
+        });
+    }
+
+    /**
+     * Acción del Administrador: Resolver una incidencia de botellón fijo de cliente.
+     * - 'aclarado': Repuesto / aclarado con el cliente sin afectar sus botellones ni cargos.
+     * - 'cierre': Cierre definitivo dejando registro de la pérdida física.
+     */
+    public function resolveFixedIncident(
+        User $admin,
+        BottleIncident $incident,
+        string $resolutionType,
+        ?string $notes = null
+    ): BottleIncident {
+        if (!in_array($resolutionType, ['aclarado', 'cierre'], true)) {
+            throw new OrderBusinessRuleException('Tipo de resolución inválido para botellón fijo. Use aclarado o cierre.', 'resolution_type', 422);
+        }
+
+        return DB::transaction(function () use ($admin, $incident, $resolutionType, $notes) {
+            $lockedIncident = BottleIncident::lockForUpdate()->findOrFail($incident->id);
+
+            if ($lockedIncident->bottle_type !== OrderItem::TYPE_FIXED) {
+                throw new OrderBusinessRuleException('Esta acción aplica únicamente a incidencias de botellones fijos.', 'bottle_type', 422);
+            }
+
+            if ($lockedIncident->status !== BottleIncident::STATUS_PENDING) {
+                throw new OrderBusinessRuleException('Esta incidencia ya fue resuelta previamente.', 'incident', 422);
+            }
+
+            $trimmedNotes = trim((string) $notes);
+            $prefix = $resolutionType === 'aclarado'
+                ? 'Aclarado / repuesto con cliente'
+                : 'Cierre de daño confirmado';
+
+            $resolutionText = $trimmedNotes !== ''
+                ? "{$prefix}: {$trimmedNotes}"
+                : $prefix;
+
+            $lockedIncident->update([
+                'status' => BottleIncident::STATUS_RESOLVED,
+                'resolved_by_user_id' => $admin->id,
+                'resolved_at' => now(),
+                'resolution_notes' => $resolutionText,
+            ]);
+
+            BottleCustodyMovement::create([
+                'order_id' => $lockedIncident->order_id,
+                'order_item_id' => $lockedIncident->order_item_id,
+                'customer_id' => $lockedIncident->customer_id,
+                'user_id' => $admin->id,
+                'movement_type' => BottleCustodyMovement::TYPE_BOTTLE_INCIDENT,
+                'bottle_type' => OrderItem::TYPE_FIXED,
+                'bottle_condition' => $lockedIncident->bottle_condition ?? BottleCustodyMovement::CONDITION_EMPTY,
+                'quantity' => (int) $lockedIncident->quantity,
+                'proposed_quantity' => (int) $lockedIncident->quantity,
+                'origin' => 'incident_quarantine',
+                'destination' => 'resolved',
+                'status' => BottleCustodyMovement::STATUS_ACCEPTED,
+                'confirmed_by_user_id' => $admin->id,
+                'confirmed_at' => now(),
+                'difference_reason' => "Resolución de fijo (#{$lockedIncident->id}): {$prefix}",
+                'notes' => "Incidencia fija #{$lockedIncident->id} resuelta ({$resolutionText}).",
+                'created_at' => now(),
+            ]);
+
+            return $lockedIncident->fresh(['customer', 'order', 'reportedByUser', 'resolvedByUser']);
         });
     }
 

@@ -93,7 +93,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Editar ${customer.code}`" />
+    <Head :title="`Editar ${customer.name || customer.nickname || 'Cliente'}`" />
 
     <AuthenticatedLayout :wide="true">
         <template #header>
@@ -105,14 +105,11 @@ const submit = () => {
                 :breadcrumbs="[
                     { label: 'Administración', href: route('dashboard') },
                     { label: 'Clientes', href: route('admin.customers.index') },
-                    { label: customer.code, href: route('admin.customers.show', customer.id) },
+                    { label: customer.name || customer.nickname || 'Detalle', href: route('admin.customers.show', customer.id) },
                     { label: 'Editar' },
                 ]"
             >
                 <template #badges>
-                    <span class="px-2.5 py-0.5 rounded-lg bg-[#F5F4F8] text-[#211B35] font-mono font-bold text-xs border border-[#E7E4ED]">
-                        {{ customer.code }}
-                    </span>
                     <span
                         v-if="customer.has_account"
                         class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EAF4FB] text-[#0071BA] border border-[#C8E3F6]"
@@ -250,8 +247,8 @@ const submit = () => {
                             </div>
                         </div>
 
-                        <!-- SECCIÓN 3: MODALIDAD Y BOTELLONES (REGLA DE EXCLUSIVIDAD) -->
-                        <div class="space-y-4">
+                        <!-- SECCIÓN 3: MODALIDAD Y BOTELLONES (Solo si tiene cuenta) -->
+                        <div v-if="customer.has_account" class="space-y-4">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-slate-200 gap-2">
                                 <div class="flex items-center gap-2.5">
                                     <div class="w-7 h-7 rounded-lg bg-blue-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
@@ -403,6 +400,18 @@ const submit = () => {
                                     </div>
                                 </div>
                                 <InputError class="mt-1.5" :message="form.errors.bottles_count || form.errors.fixed_bottles_count || form.errors.exchange_bottles_count" />
+                            </div>
+                        </div>
+
+                        <div v-else class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3 text-xs text-slate-600">
+                            <div class="w-8 h-8 rounded-lg bg-[#EAF4FB] text-[#0071BA] flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </div>
+                            <div>
+                                <span class="font-bold text-slate-900 block">Cliente sin cuenta · Modalidad libre</span>
+                                <p class="mt-0.5 leading-relaxed">
+                                    No requiere registrar botellones fijos ni de cambio aquí; en cada servicio al paso el repartidor elige libremente la modalidad.
+                                </p>
                             </div>
                         </div>
 

@@ -389,9 +389,6 @@ const totalExchangeInBatches = computed(() => {
                                             <span class="text-xs font-extrabold text-slate-800">
                                                 {{ item.customer_nickname || item.customer_name }}
                                             </span>
-                                            <span v-if="item.customer_code" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
-                                                {{ item.customer_code }}
-                                            </span>
                                         </div>
                                         <div class="text-[11px] text-slate-500">
                                             <span>Pedido: <strong class="text-slate-700">{{ item.order_folio }}</strong></span>

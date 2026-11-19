@@ -169,13 +169,23 @@ class PlantaOperatorModuleRedesignTest extends TestCase
     }
 
     /**
-     * 3. Navegación unificada: Dashboard de Planta abre o redirige a Llenado Rápido,
-     * y las vistas unificadas Fijos y Cambios responden 200 OK.
+     * 3. Navegación unificada: Dashboard de Planta abre su vista dedicada,
+     * Llenado Rápido abre en su ruta, y Fijos/Cambios responden 200 OK.
      */
     public function test_planta_unified_navigation_endpoints(): void
     {
-        // Operador accede a dashboard (responde con Llenado Rápido)
+        // Operador accede a dashboard de Planta
         $this->actingAs($this->plantaUser)->get(route('planta.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Planta/Dashboard')
+                ->has('quickRefill')
+                ->has('fixedPipeline')
+                ->has('exchange')
+            );
+
+        // Operador accede a Llenado Rápido
+        $this->actingAs($this->plantaUser)->get(route('planta.quick-refill.index'))
             ->assertOk()
             ->assertInertia(fn ($page) => $page->component('Planta/QuickRefill/Index'));
 

@@ -13,6 +13,7 @@ import {
     Factory,
     Loader2,
     Minus,
+    Pencil,
     Plus,
     RefreshCw,
     Scale,
@@ -171,6 +172,102 @@ const submitInitialCount = () => {
 };
 
 // =========================================================================
+// AJUSTAR / REINICIAR CONTEO COMPLETO (PLANTA + CAMIÓN)
+// =========================================================================
+const showRecountModal = ref(false);
+const recountForm = useForm({
+    empty_count: props.balances.exchange_empty_available ?? 0,
+    washing_count: 0,
+    full_count: props.balances.exchange_full_ready ?? 0,
+    truck_full_count: props.truckSummary.exchange_full_available ?? 0,
+    truck_empty_count: props.truckSummary.exchange_empty_collected ?? 0,
+    reason: 'Ajuste de inventario físico',
+    notes: '',
+    sync_target: false,
+});
+
+const openRecountModal = () => {
+    recountForm.empty_count = Number(props.balances.exchange_empty_available ?? 0);
+    recountForm.washing_count = 0;
+    recountForm.full_count = Number(props.balances.exchange_full_ready ?? 0);
+    recountForm.truck_full_count = Number(props.truckSummary.exchange_full_available ?? 0);
+    recountForm.truck_empty_count = Number(props.truckSummary.exchange_empty_collected ?? 0);
+    recountForm.reason = 'Ajuste de inventario físico';
+    recountForm.notes = '';
+    recountForm.sync_target = false;
+    recountForm.clearErrors();
+    showRecountModal.value = true;
+};
+
+const resetRecountToZero = () => {
+    recountForm.empty_count = 0;
+    recountForm.washing_count = 0;
+    recountForm.full_count = 0;
+    recountForm.truck_full_count = 0;
+    recountForm.truck_empty_count = 0;
+    recountForm.reason = 'Reinicio total de conteo';
+};
+
+const recountPlantTotal = computed(() => {
+    return (
+        Math.max(0, Number(recountForm.empty_count || 0)) +
+        Math.max(0, Number(recountForm.full_count || 0)) +
+        Number(props.balances.exchange_full_reserved || 0)
+    );
+});
+
+const recountTruckTotal = computed(() => {
+    return (
+        Math.max(0, Number(recountForm.truck_full_count || 0)) +
+        Math.max(0, Number(recountForm.truck_empty_count || 0))
+    );
+});
+
+const recountActiveTotal = computed(() => recountPlantTotal.value + recountTruckTotal.value);
+
+const submitRecount = () => {
+    if (recountForm.processing) return;
+    recountForm.post(route('planta.inventory.reconcile'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showRecountModal.value = false;
+        },
+    });
+};
+
+// =========================================================================
+// SUMAR NUEVOS (SOLO ADMINISTRADOR)
+// =========================================================================
+const showNewBottlesModal = ref(false);
+const newBottlesForm = useForm({
+    quantity: 2,
+    bottle_condition: 'empty',
+    reason: 'Compra de lote nuevo',
+    notes: '',
+    sync_target: true,
+});
+
+const openNewBottlesModal = () => {
+    newBottlesForm.quantity = 2;
+    newBottlesForm.bottle_condition = 'empty';
+    newBottlesForm.reason = 'Compra de lote nuevo';
+    newBottlesForm.notes = '';
+    newBottlesForm.sync_target = true;
+    newBottlesForm.clearErrors();
+    showNewBottlesModal.value = true;
+};
+
+const submitNewBottles = () => {
+    if (newBottlesForm.processing) return;
+    newBottlesForm.post(route('admin.exchange-inventory.new-bottles.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showNewBottlesModal.value = false;
+        },
+    });
+};
+
+// =========================================================================
 // REPORTAR DAÑADO O SIN LOCALIZAR
 // =========================================================================
 const showInconvenienceModal = ref(false);
@@ -212,6 +309,10 @@ const getMovementMeta = (type) => {
             return { label: 'Subida a camión', badge: 'bg-[#EEEAF7] text-[#1E1545] border-[#1E1545]/15', kind: 'load' };
         case 'plant_washing_started':
             return { label: 'Inicio de lavado', badge: 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0]', kind: 'wash' };
+        case 'plant_physical_recount':
+            return { label: 'Ajuste / reinicio', badge: 'bg-[#E9F3F8] text-[#0071BA] border-[#0071BA]/15', kind: 'other' };
+        case 'exchange_new_entry':
+            return { label: 'Alta de nuevos', badge: 'bg-[#E8F2EC] text-[#26845B] border-[#26845B]/15', kind: 'fill' };
         default:
             return { label: 'Movimiento', badge: 'bg-[#F4F3F8] text-[#747181] border-[#E9E7F0]', kind: 'other' };
     }
@@ -258,14 +359,35 @@ const getMovementMeta = (type) => {
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    @click="openInconvenienceModal"
-                    class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#FEF5E6] hover:bg-[#FDEBC8] text-[#9A670E] border border-[#F5DFB5] text-xs font-semibold transition-colors cursor-pointer self-start sm:self-auto min-h-[40px] shrink-0"
-                >
-                    <AlertTriangle class="w-3.5 h-3.5" />
-                    <span>Reportar dañado / perdido</span>
-                </button>
+                <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+                    <button
+                        type="button"
+                        @click="openInconvenienceModal"
+                        class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#FEF5E6] hover:bg-[#FDEBC8] text-[#9A670E] border border-[#F5DFB5] text-xs font-semibold transition-colors cursor-pointer min-h-[40px]"
+                    >
+                        <AlertTriangle class="w-3.5 h-3.5" />
+                        <span>Reportar dañado / perdido</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="openRecountModal"
+                        class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-[#F4F3F8] text-[#1E1545] border border-[#E9E7F0] text-xs font-semibold transition-colors cursor-pointer min-h-[40px]"
+                    >
+                        <Pencil class="w-3.5 h-3.5 text-[#0071BA]" />
+                        <span>Ajustar / Reiniciar</span>
+                    </button>
+
+                    <button
+                        v-if="isAdmin"
+                        type="button"
+                        @click="openNewBottlesModal"
+                        class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#1E1545] hover:bg-[#292059] text-white text-xs font-semibold transition-colors cursor-pointer min-h-[40px]"
+                    >
+                        <Plus class="w-3.5 h-3.5" />
+                        <span>Sumar nuevos</span>
+                    </button>
+                </div>
             </div>
 
             <!-- ===================================================================== -->
@@ -383,14 +505,14 @@ const getMovementMeta = (type) => {
                     </div>
                 </div>
 
-                <!-- Total Circuito vs Meta -->
+                <!-- Total Circuito (Meta visible solo para Administrador) -->
                 <div class="bg-white rounded-2xl border border-[#E9E7F0] p-5 shadow-[0_2px_12px_-6px_rgba(30,21,69,0.06)] flex flex-col justify-between gap-3">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <span class="text-xs font-semibold text-[#747181] flex items-center gap-1.5">
                                 <span
                                     class="h-2 w-2 rounded-full"
-                                    :class="isTargetExact ? 'bg-[#26845B]' : 'bg-[#A97827]'"
+                                    :class="(!isAdmin || isTargetExact) ? 'bg-[#26845B]' : 'bg-[#A97827]'"
                                 ></span>
                                 Total en circuito
                             </span>
@@ -398,20 +520,23 @@ const getMovementMeta = (type) => {
                                 <span class="text-3xl font-extrabold text-[#292638] tracking-tight tabular-nums">
                                     {{ activeTotal }}
                                 </span>
-                                <span class="text-xs font-semibold text-[#747181] tabular-nums">
+                                <span v-if="isAdmin" class="text-xs font-semibold text-[#747181] tabular-nums">
                                     / {{ targetQuantity }} meta
+                                </span>
+                                <span v-else class="text-xs font-semibold text-[#747181]">
+                                    botellones
                                 </span>
                             </div>
                         </div>
                         <div
                             class="h-11 w-11 rounded-2xl flex items-center justify-center shrink-0"
-                            :class="isTargetExact ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#FEF5E6] text-[#A97827]'"
+                            :class="(!isAdmin || isTargetExact) ? 'bg-[#E8F2EC] text-[#26845B]' : 'bg-[#FEF5E6] text-[#A97827]'"
                         >
                             <Scale class="w-5 h-5" />
                         </div>
                     </div>
 
-                    <div class="space-y-1.5 pt-2 border-t border-[#F4F3F8]">
+                    <div v-if="isAdmin" class="space-y-1.5 pt-2 border-t border-[#F4F3F8]">
                         <div class="flex items-center justify-between text-[11px] font-semibold">
                             <span :class="isTargetExact ? 'text-[#26845B]' : 'text-[#9A670E]'">
                                 <template v-if="isTargetExact">Cuadra al 100% con la meta</template>
@@ -427,6 +552,12 @@ const getMovementMeta = (type) => {
                                 :style="{ width: `${targetProgressPct}%` }"
                             ></div>
                         </div>
+                    </div>
+                    <div v-else class="flex items-center justify-between pt-2 border-t border-[#F4F3F8] text-xs text-[#747181]">
+                        <span>Planta {{ plantTotal }} + Camión {{ truckTotal }}</span>
+                        <button type="button" @click="openRecountModal" class="font-bold text-[#0071BA] hover:text-[#1E1545] cursor-pointer">
+                            Ajustar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -967,6 +1098,184 @@ const getMovementMeta = (type) => {
                         >
                             {{ inconvenienceForm.processing ? 'Guardando...' : 'Reportar incidente' }}
                         </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Ajustar / Reiniciar conteo (Planta y Camión) -->
+        <div
+            v-if="showRecountModal"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1545]/45 backdrop-blur-xs"
+            @click.self="showRecountModal = false"
+        >
+            <div class="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl border border-[#E9E7F0] space-y-4">
+                <div class="flex items-center justify-between border-b border-[#F4F3F8] pb-3">
+                    <div>
+                        <h3 class="text-base font-bold text-[#1E1545]">Ajustar o reiniciar conteo</h3>
+                        <p class="text-xs text-[#747181]">Sube, baja o reinicia cuántos botellones hay en Planta y Camión</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            @click="resetRecountToZero"
+                            class="px-2.5 py-1 rounded-lg bg-[#FCECEF] hover:bg-[#F9D6DE] text-[#E82147] text-[11px] font-bold cursor-pointer"
+                        >
+                            Poner en 0
+                        </button>
+                        <button @click="showRecountModal = false" type="button" class="text-[#747181] hover:text-[#1E1545] cursor-pointer">
+                            <X class="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+
+                <form @submit.prevent="submitRecount" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="p-3 rounded-xl bg-[#F8F7FC] border border-[#E9E7F0] space-y-2.5">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-[#0071BA]">En Planta</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-[#747181] mb-1">Vacíos *</label>
+                                    <input v-model.number="recountForm.empty_count" type="number" min="0" max="10000" required class="w-full h-10 text-base font-bold text-[#1E1545] rounded-xl border-[#E9E7F0]" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-[#747181] mb-1">Llenos *</label>
+                                    <input v-model.number="recountForm.full_count" type="number" min="0" max="10000" required class="w-full h-10 text-base font-bold text-[#1E1545] rounded-xl border-[#E9E7F0]" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-[#F8F7FC] border border-[#E9E7F0] space-y-2.5">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-[#1E1545]">En Camión</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-[#747181] mb-1">Llenos *</label>
+                                    <input v-model.number="recountForm.truck_full_count" type="number" min="0" max="10000" required class="w-full h-10 text-base font-bold text-[#1E1545] rounded-xl border-[#E9E7F0]" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-[#747181] mb-1">Vacíos *</label>
+                                    <input v-model.number="recountForm.truck_empty_count" type="number" min="0" max="10000" required class="w-full h-10 text-base font-bold text-[#1E1545] rounded-xl border-[#E9E7F0]" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-[#F4F3F8] border border-[#E9E7F0] p-3 text-xs space-y-1 tabular-nums">
+                        <div class="flex justify-between text-[#747181]">
+                            <span>Planta:</span>
+                            <strong class="text-[#1E1545]">{{ plantTotal }} → {{ recountPlantTotal }} u.</strong>
+                        </div>
+                        <div class="flex justify-between text-[#747181]">
+                            <span>Camión:</span>
+                            <strong class="text-[#1E1545]">{{ truckTotal }} → {{ recountTruckTotal }} u.</strong>
+                        </div>
+                        <div class="pt-1 border-t border-[#E9E7F0] flex justify-between font-bold text-[#1E1545] text-sm">
+                            <span>Total circuito:</span>
+                            <span>{{ activeTotal }} → {{ recountActiveTotal }} u.</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-[#747181] mb-1">Motivo *</label>
+                            <select v-model="recountForm.reason" class="w-full h-10 text-xs font-semibold rounded-xl border-[#E9E7F0] text-[#1E1545]">
+                                <option value="Ajuste de inventario físico">Ajuste de inventario físico</option>
+                                <option value="Reinicio total de conteo">Reinicio total de conteo</option>
+                                <option value="Corrección de inventario">Corrección de inventario</option>
+                                <option value="Otro ajuste">Otro ajuste</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-[#747181] mb-1">Notas (opcional)</label>
+                            <input v-model="recountForm.notes" type="text" placeholder="Ej: Conteo físico" class="w-full h-10 text-xs rounded-xl border-[#E9E7F0]" />
+                        </div>
+                    </div>
+
+                    <label v-if="isAdmin && recountActiveTotal > 0" class="flex items-start gap-2.5 p-3 rounded-xl bg-[#F4F3F8] border border-[#E9E7F0] cursor-pointer">
+                        <input v-model="recountForm.sync_target" type="checkbox" class="mt-0.5 rounded border-[#E9E7F0] text-[#0071BA]" />
+                        <span class="text-xs text-[#292638]">
+                            <strong class="block text-[#1E1545]">Actualizar la Meta al nuevo total</strong>
+                            Cambiar meta a {{ recountActiveTotal }} u.
+                        </span>
+                    </label>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="showRecountModal = false" class="h-10 px-4 rounded-xl text-xs font-bold text-[#747181] hover:bg-[#F4F3F8] cursor-pointer">Cancelar</button>
+                        <button type="submit" :disabled="recountForm.processing" class="h-10 px-5 rounded-xl bg-[#1E1545] hover:bg-[#292059] text-white text-xs font-bold cursor-pointer">Guardar ajuste</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Sumar botellones nuevos (Solo Administrador) -->
+        <div
+            v-if="showNewBottlesModal && isAdmin"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1545]/45 backdrop-blur-xs"
+            @click.self="showNewBottlesModal = false"
+        >
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-[#E9E7F0] space-y-4">
+                <div class="flex items-center justify-between border-b border-[#F4F3F8] pb-3">
+                    <div>
+                        <h3 class="text-base font-bold text-[#1E1545]">Sumar botellones nuevos</h3>
+                        <p class="text-xs text-[#747181]">Ingreso físico de cambios de 20 L en Planta</p>
+                    </div>
+                    <button @click="showNewBottlesModal = false" type="button" class="text-[#747181] hover:text-[#1E1545] cursor-pointer">
+                        <X class="w-4 h-4" />
+                    </button>
+                </div>
+
+                <form @submit.prevent="submitNewBottles" class="space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold uppercase text-[#747181]">Cantidad *</label>
+                            <div class="flex items-center gap-1">
+                                <button
+                                    v-for="q in [1, 2, 5, 10]"
+                                    :key="q"
+                                    type="button"
+                                    @click="newBottlesForm.quantity = q"
+                                    class="px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer"
+                                    :class="Number(newBottlesForm.quantity) === q
+                                        ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                                        : 'bg-[#F4F3F8] text-[#1E1545] border-[#E9E7F0] hover:bg-[#EEEAF7]'"
+                                >
+                                    +{{ q }}
+                                </button>
+                            </div>
+                        </div>
+                        <input v-model.number="newBottlesForm.quantity" type="number" min="1" max="5000" required class="w-full h-11 text-lg font-bold text-[#1E1545] rounded-xl border-[#E9E7F0]" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button
+                            type="button"
+                            @click="newBottlesForm.bottle_condition = 'empty'"
+                            class="p-3 rounded-xl border text-left text-xs transition cursor-pointer"
+                            :class="newBottlesForm.bottle_condition === 'empty' ? 'bg-[#E5F4FD] border-[#0071BA] text-[#1E1545] font-bold' : 'border-[#E9E7F0] text-[#747181]'"
+                        >
+                            Vacío apto
+                        </button>
+                        <button
+                            type="button"
+                            @click="newBottlesForm.bottle_condition = 'full'"
+                            class="p-3 rounded-xl border text-left text-xs transition cursor-pointer"
+                            :class="newBottlesForm.bottle_condition === 'full' ? 'bg-[#E6F7EE] border-[#26845B] text-[#26845B] font-bold' : 'border-[#E9E7F0] text-[#747181]'"
+                        >
+                            Lleno listo
+                        </button>
+                    </div>
+
+                    <label class="flex items-start gap-2.5 p-3 rounded-xl bg-[#F4F3F8] border border-[#E9E7F0] cursor-pointer">
+                        <input v-model="newBottlesForm.sync_target" type="checkbox" class="mt-0.5 rounded border-[#E9E7F0] text-[#1E1545]" />
+                        <span class="text-xs text-[#292638]">
+                            <strong class="block text-[#1E1545]">Sumar también a la Meta</strong>
+                            Subirá de {{ targetQuantity }} a {{ targetQuantity + (Number(newBottlesForm.quantity) || 0) }} u.
+                        </span>
+                    </label>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="showNewBottlesModal = false" class="h-10 px-4 rounded-xl text-xs font-bold text-[#747181] hover:bg-[#F4F3F8] cursor-pointer">Cancelar</button>
+                        <button type="submit" :disabled="newBottlesForm.processing" class="h-10 px-5 rounded-xl bg-[#1E1545] hover:bg-[#292059] text-white text-xs font-bold cursor-pointer">Confirmar alta</button>
                     </div>
                 </form>
             </div>

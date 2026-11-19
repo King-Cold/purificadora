@@ -405,41 +405,53 @@ class OrderService
             );
         }
 
-        // Regla de Exclusividad: rechazar pedidos con modalidad distinta a la registrada del cliente
-        if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQuantity > 0) {
-            throw new OrderBusinessRuleException(
-                'El cliente está registrado exclusivamente para botellones fijos.',
-                'exchange_quantity',
-                422
-            );
-        }
+        // Reglas por cuenta:
+        // - Clientes CON cuenta (user_id !== null): respetan su modalidad elegida y su cantidad registrada como límite máximo.
+        // - Clientes SIN cuenta (user_id === null): quedan libres para pedir Fijos o Cambios sin inventario previo.
+        if ($customer->user_id !== null) {
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_UNASSIGNED) {
+                throw new OrderBusinessRuleException(
+                    'Debes elegir tu tipo de botellón (fijos o de cambio) y registrar cuántos tienes en tu perfil antes de realizar un pedido.',
+                    'bottle_type',
+                    422
+                );
+            }
 
-        if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQuantity > 0) {
-            throw new OrderBusinessRuleException(
-                'El cliente está registrado exclusivamente para botellones de cambio.',
-                'fixed_quantity',
-                422
-            );
-        }
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_FIXED && $exchangeQuantity > 0) {
+                throw new OrderBusinessRuleException(
+                    'El cliente está registrado exclusivamente para botellones fijos.',
+                    'exchange_quantity',
+                    422
+                );
+            }
 
-        // Límite de botellones fijos registrados del cliente
-        $clientFixedLimit = (int) ($customer->fixed_bottles_count ?? 0);
-        if ($fixedQuantity > $clientFixedLimit) {
-            throw new OrderBusinessRuleException(
-                "La cantidad de botellones fijos solicitada ({$fixedQuantity}) supera los botellones fijos registrados del cliente ({$clientFixedLimit}).",
-                'fixed_quantity',
-                422
-            );
-        }
+            if ($customer->bottle_type === Customer::BOTTLE_TYPE_EXCHANGE && $fixedQuantity > 0) {
+                throw new OrderBusinessRuleException(
+                    'El cliente está registrado exclusivamente para botellones de cambio.',
+                    'fixed_quantity',
+                    422
+                );
+            }
 
-        // Límite de botellones de cambio registrados del cliente
-        $clientExchangeLimit = (int) ($customer->exchange_bottles_count ?? 0);
-        if ($exchangeQuantity > $clientExchangeLimit) {
-            throw new OrderBusinessRuleException(
-                "La cantidad de botellones de cambio solicitada ({$exchangeQuantity}) supera los botellones de cambio registrados del cliente ({$clientExchangeLimit}).",
-                'exchange_quantity',
-                422
-            );
+            // Límite de botellones fijos registrados del cliente
+            $clientFixedLimit = (int) ($customer->fixed_bottles_count ?? 0);
+            if ($fixedQuantity > $clientFixedLimit) {
+                throw new OrderBusinessRuleException(
+                    "La cantidad de botellones fijos solicitada ({$fixedQuantity}) supera los botellones fijos registrados del cliente ({$clientFixedLimit}).",
+                    'fixed_quantity',
+                    422
+                );
+            }
+
+            // Límite de botellones de cambio registrados del cliente
+            $clientExchangeLimit = (int) ($customer->exchange_bottles_count ?? 0);
+            if ($exchangeQuantity > $clientExchangeLimit) {
+                throw new OrderBusinessRuleException(
+                    "La cantidad de botellones de cambio solicitada ({$exchangeQuantity}) supera los botellones de cambio registrados del cliente ({$clientExchangeLimit}).",
+                    'exchange_quantity',
+                    422
+                );
+            }
         }
 
         return [$fixedQuantity, $exchangeQuantity];

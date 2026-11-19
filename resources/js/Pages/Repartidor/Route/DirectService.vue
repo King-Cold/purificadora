@@ -41,11 +41,11 @@ const searchResults = ref([]);
 const isSearching = ref(false);
 const selectedCustomer = ref(props.initialCustomer || null);
 
-// Elección de servicio: 'fijos' O 'cambios'
+// Elección de servicio: solo bloqueado si el cliente TIENE cuenta y modalidad asignada
 const selectedService = ref(
-    props.initialCustomer?.bottle_type === 'fixed'
+    props.initialCustomer?.has_account && props.initialCustomer?.bottle_type === 'fixed'
         ? 'fijos'
-        : props.initialCustomer?.bottle_type === 'exchange'
+        : props.initialCustomer?.has_account && props.initialCustomer?.bottle_type === 'exchange'
         ? 'cambios'
         : null
 );
@@ -54,13 +54,14 @@ const selectedService = ref(
 const quantity = ref(1);
 
 const isCustomerLocked = computed(() => {
-    return clientMode.value === 'search' && 
-        selectedCustomer.value && 
+    return clientMode.value === 'search' &&
+        selectedCustomer.value &&
+        selectedCustomer.value.has_account &&
         (selectedCustomer.value.bottle_type === 'fixed' || selectedCustomer.value.bottle_type === 'exchange');
 });
 
 const isCustomerUnassigned = computed(() => {
-    return (clientMode.value === 'search' && selectedCustomer.value && selectedCustomer.value.bottle_type === 'unassigned') || clientMode.value === 'new';
+    return (clientMode.value === 'search' && selectedCustomer.value && !isCustomerLocked.value) || clientMode.value === 'new';
 });
 
 const selectService = (service) => {
@@ -68,11 +69,18 @@ const selectService = (service) => {
     quantity.value = 1;
 };
 
+const maxCustomerLimit = computed(() => {
+    if (!isCustomerLocked.value) return Infinity;
+    return Math.max(1, Number(selectedCustomer.value?.assigned_bottles_count || 1));
+});
+
 const incrementQty = () => {
     if (selectedService.value === 'fijos') {
-        quantity.value++;
+        if (quantity.value < maxCustomerLimit.value) {
+            quantity.value++;
+        }
     } else if (selectedService.value === 'cambios') {
-        const maxAvailable = Number(props.truck?.exchange_full_available || 0);
+        const maxAvailable = Math.min(Number(props.truck?.exchange_full_available || 0), maxCustomerLimit.value);
         if (quantity.value < maxAvailable) {
             quantity.value++;
         }
@@ -92,10 +100,10 @@ const setQuantityValue = (val) => {
         return;
     }
     if (selectedService.value === 'cambios') {
-        const maxAvailable = Number(props.truck?.exchange_full_available || 0);
+        const maxAvailable = Math.min(Number(props.truck?.exchange_full_available || 0), maxCustomerLimit.value);
         quantity.value = Math.min(num, Math.max(1, maxAvailable));
     } else {
-        quantity.value = num;
+        quantity.value = Math.min(num, maxCustomerLimit.value);
     }
 };
 
@@ -126,9 +134,9 @@ const selectCustomer = (cust) => {
     selectedCustomer.value = cust;
     searchQuery.value = cust.nickname;
     searchResults.value = [];
-    if (cust.bottle_type === 'fixed') {
+    if (cust.has_account && cust.bottle_type === 'fixed') {
         selectedService.value = 'fijos';
-    } else if (cust.bottle_type === 'exchange') {
+    } else if (cust.has_account && cust.bottle_type === 'exchange') {
         selectedService.value = 'cambios';
     } else {
         selectedService.value = null;
@@ -150,7 +158,7 @@ const setClientMode = (mode) => {
         selectedService.value = null;
         quantity.value = 1;
     } else {
-        if (selectedCustomer.value) {
+        if (selectedCustomer.value && selectedCustomer.value.has_account) {
             if (selectedCustomer.value.bottle_type === 'fixed') {
                 selectedService.value = 'fijos';
             } else if (selectedCustomer.value.bottle_type === 'exchange') {
@@ -359,14 +367,14 @@ const submitDirectOrder = () => {
                 <div v-if="clientMode === 'search'" class="space-y-3">
                     <div v-if="!selectedCustomer" class="space-y-2">
                         <label class="block text-xs font-bold text-slate-700">
-                            Buscar por apodo, nombre, código o teléfono:
+                            Buscar por apodo, nombre o teléfono:
                         </label>
                         <div class="relative">
                             <input
                                 v-model="searchQuery"
                                 @input="onSearchInput"
                                 type="text"
-                                placeholder="Ej. Don Pancho, Doña Mari, CLI-001..."
+                                placeholder="Ej. Don Pancho, Doña Mari..."
                                 class="w-full text-sm py-2.5 pl-9 pr-3 rounded-xl border border-slate-200 bg-white focus:border-blue-900 focus:ring-1 focus:ring-blue-900 transition"
                             />
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-3.5 text-slate-400 text-xs"></i>
@@ -389,7 +397,6 @@ const submitDirectOrder = () => {
                                         {{ c.bottle_type_label }} ({{ c.assigned_bottles_count }})
                                     </span>
                                 </div>
-                                <span class="text-[11px] font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{{ c.code }}</span>
                             </button>
                         </div>
                     </div>
@@ -398,7 +405,6 @@ const submitDirectOrder = () => {
                     <div v-else class="space-y-3">
                         <div class="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs flex items-center justify-between gap-3">
                             <div class="space-y-0.5">
-                                <span class="font-mono text-[10px] text-blue-700 font-bold block">{{ selectedCustomer.code }}</span>
                                 <span class="text-base font-black text-blue-950 block">{{ selectedCustomer.nickname }}</span>
                                 <span v-if="selectedCustomer.name" class="text-slate-600 text-[11px] block">{{ selectedCustomer.name }}</span>
                                 <span v-if="selectedCustomer.phone" class="text-slate-500 text-[11px] block"><i class="fa-solid fa-phone text-[10px]"></i> {{ selectedCustomer.phone }}</span>

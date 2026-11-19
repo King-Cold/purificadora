@@ -215,29 +215,9 @@ class CustomerController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Determinar cantidades según selector exclusivo
-        if (isset($validated['bottle_type'])) {
-            if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
-                $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
-                $exchangeCount = 0;
-            } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
-                $fixedCount = 0;
-                $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
-            } else {
-                $fixedCount = 0;
-                $exchangeCount = 0;
-            }
-        } else {
-            $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
-            $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
-        }
-
-        // Regla única en el servidor: impedir cantidades positivas simultáneas
-        if ($fixedCount > 0 && $exchangeCount > 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
-            ]);
-        }
+        // Clientes sin cuenta (user_id = null): no requieren inventario de botellones en ficha
+        $fixedCount = 0;
+        $exchangeCount = 0;
 
         // Regla: Debe proporcionarse al menos el nombre o el apodo para identificar al cliente particular
         if (empty(trim((string)($validated['name'] ?? ''))) && empty(trim((string)($validated['nickname'] ?? '')))) {
@@ -449,28 +429,35 @@ class CustomerController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Determinar cantidades según selector exclusivo
-        if (isset($validated['bottle_type'])) {
-            if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
-                $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
-                $exchangeCount = 0;
-            } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
-                $fixedCount = 0;
-                $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
-            } else {
-                $fixedCount = 0;
-                $exchangeCount = 0;
-            }
+        // Solo clientes con cuenta manejan modalidad y tope registrado en ficha;
+        // clientes sin cuenta mantienen libre su operación sin inventario fijo asignado.
+        if (is_null($customer->user_id)) {
+            $fixedCount = 0;
+            $exchangeCount = 0;
         } else {
-            $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
-            $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
-        }
+            // Determinar cantidades según selector exclusivo
+            if (isset($validated['bottle_type'])) {
+                if ($validated['bottle_type'] === Customer::BOTTLE_TYPE_FIXED) {
+                    $fixedCount = max(0, (int) ($validated['bottles_count'] ?? $validated['fixed_bottles_count'] ?? 0));
+                    $exchangeCount = 0;
+                } elseif ($validated['bottle_type'] === Customer::BOTTLE_TYPE_EXCHANGE) {
+                    $fixedCount = 0;
+                    $exchangeCount = max(0, (int) ($validated['bottles_count'] ?? $validated['exchange_bottles_count'] ?? 0));
+                } else {
+                    $fixedCount = 0;
+                    $exchangeCount = 0;
+                }
+            } else {
+                $fixedCount = max(0, (int) ($validated['fixed_bottles_count'] ?? 0));
+                $exchangeCount = max(0, (int) ($validated['exchange_bottles_count'] ?? 0));
+            }
 
-        // Regla única en el servidor: impedir cantidades positivas simultáneas
-        if ($fixedCount > 0 && $exchangeCount > 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
-            ]);
+            // Regla única en el servidor: impedir cantidades positivas simultáneas
+            if ($fixedCount > 0 && $exchangeCount > 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'bottle_type' => 'Un cliente maneja exclusivamente botellones fijos o botellones de cambio, no ambos simultáneamente.',
+                ]);
+            }
         }
 
         // Regla: Debe proporcionarse al menos el nombre o el apodo para identificar al cliente

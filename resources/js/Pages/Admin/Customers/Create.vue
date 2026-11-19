@@ -7,64 +7,13 @@ import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
-const bottleType = ref('exchange'); // 'exchange', 'fixed', 'none'
-const bottlesCount = ref(1);
-
 const form = useForm({
     name: '',
     nickname: '',
-    bottle_type: 'exchange',
-    bottles_count: 1,
-    fixed_bottles_count: 0,
-    exchange_bottles_count: 1,
     notes: '',
 });
 
-const selectType = (type) => {
-    bottleType.value = type;
-    form.bottle_type = type;
-    if (type === 'none') {
-        bottlesCount.value = 0;
-    } else if (bottlesCount.value === 0) {
-        bottlesCount.value = 1;
-    }
-    syncCounts();
-};
-
-const syncCounts = () => {
-    const qty = Math.max(0, parseInt(bottlesCount.value, 10) || 0);
-    if (bottleType.value === 'fixed') {
-        form.fixed_bottles_count = qty;
-        form.exchange_bottles_count = 0;
-    } else if (bottleType.value === 'exchange') {
-        form.fixed_bottles_count = 0;
-        form.exchange_bottles_count = qty;
-    } else {
-        form.fixed_bottles_count = 0;
-        form.exchange_bottles_count = 0;
-    }
-    form.bottles_count = qty;
-};
-
-const incrementCount = () => {
-    bottlesCount.value = (parseInt(bottlesCount.value, 10) || 0) + 1;
-    syncCounts();
-};
-
-const decrementCount = () => {
-    if (bottlesCount.value > 1) {
-        bottlesCount.value = parseInt(bottlesCount.value, 10) - 1;
-        syncCounts();
-    }
-};
-
-const totalBottles = computed(() => {
-    if (bottleType.value === 'none') return 0;
-    return Math.max(0, parseInt(bottlesCount.value, 10) || 0);
-});
-
 const submit = () => {
-    syncCounts();
     form.post(route('admin.customers.store'));
 };
 </script>
@@ -166,159 +115,16 @@ const submit = () => {
                             </div>
                         </div>
 
-                        <!-- SECCIÓN 2: MODALIDAD Y BOTELLONES (REGLA DE EXCLUSIVIDAD) -->
-                        <div class="space-y-4">
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-slate-200 gap-2">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="w-7 h-7 rounded-lg bg-blue-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                                        <i class="fa-solid fa-bottle-water"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">
-                                            Modalidad de Botellones (20 Litros)
-                                        </h4>
-                                        <p class="text-[11px] text-slate-500 font-normal">
-                                            Cada cliente maneja exclusivamente botellones fijos o de cambio.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-900 text-white text-xs font-bold self-start sm:self-auto">
-                                    <span>Total asignado:</span>
-                                    <span class="text-sm font-mono font-bold">{{ totalBottles }}</span>
-                                    <span>garrafones</span>
-                                </div>
+                        <!-- SECCIÓN 2: MODALIDAD LIBRE PARA CLIENTES SIN CUENTA -->
+                        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3 text-xs text-slate-600">
+                            <div class="w-8 h-8 rounded-lg bg-[#EAF4FB] text-[#0071BA] flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-arrows-rotate"></i>
                             </div>
-
-                            <!-- Selector de Modalidad Exclusiva (Fijos / Cambios / Sin botellones) -->
                             <div>
-                                <InputLabel class="font-bold text-slate-900 text-xs sm:text-sm mb-2">
-                                    Tipo de Botellón del Cliente
-                                </InputLabel>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <!-- Botellones de Cambio -->
-                                    <button
-                                        type="button"
-                                        @click="selectType('exchange')"
-                                        :class="[
-                                            'p-4 rounded-xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer',
-                                            bottleType === 'exchange'
-                                                ? 'bg-sky-50 border-sky-400 ring-2 ring-sky-300/60 shadow-xs'
-                                                : 'bg-white border-slate-200 hover:bg-slate-50'
-                                        ]"
-                                    >
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-bold text-sm text-slate-900 flex items-center gap-2">
-                                                <i class="fa-solid fa-arrows-rotate text-sky-600"></i>
-                                                Cambios
-                                            </span>
-                                            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-sky-100 text-sky-800">
-                                                Común
-                                            </span>
-                                        </div>
-                                        <p class="text-xs text-slate-500">
-                                            Intercambia garrafones vacíos aptos por llenos en cada visita.
-                                        </p>
-                                    </button>
-
-                                    <!-- Botellones Fijos -->
-                                    <button
-                                        type="button"
-                                        @click="selectType('fixed')"
-                                        :class="[
-                                            'p-4 rounded-xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer',
-                                            bottleType === 'fixed'
-                                                ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300/60 shadow-xs'
-                                                : 'bg-white border-slate-200 hover:bg-slate-50'
-                                        ]"
-                                    >
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-bold text-sm text-slate-900 flex items-center gap-2">
-                                                <i class="fa-solid fa-tag text-blue-900"></i>
-                                                Fijos
-                                            </span>
-                                            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-900">
-                                                Rotulados
-                                            </span>
-                                        </div>
-                                        <p class="text-xs text-slate-500">
-                                            El cliente conserva siempre sus propios envases rotulados.
-                                        </p>
-                                    </button>
-
-                                    <!-- Sin Botellones -->
-                                    <button
-                                        type="button"
-                                        @click="selectType('none')"
-                                        :class="[
-                                            'p-4 rounded-xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer',
-                                            bottleType === 'none'
-                                                ? 'bg-slate-100 border-slate-400 ring-2 ring-slate-300 shadow-xs'
-                                                : 'bg-white border-slate-200 hover:bg-slate-50'
-                                        ]"
-                                    >
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-bold text-sm text-slate-700 flex items-center gap-2">
-                                                <i class="fa-solid fa-circle-minus text-slate-400"></i>
-                                                Sin botellones
-                                            </span>
-                                        </div>
-                                        <p class="text-xs text-slate-400">
-                                            Alta rápida sin asignar envases por el momento.
-                                        </p>
-                                    </button>
-                                </div>
-                                <InputError class="mt-1.5" :message="form.errors.bottle_type" />
-                            </div>
-
-                            <!-- Campo Único: Cantidad de Botellones -->
-                            <div v-if="bottleType !== 'none'" class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
-                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                    <div>
-                                        <InputLabel for="bottles_count" class="font-bold text-slate-900 text-xs sm:text-sm">
-                                            Cantidad de botellones (20 Litros)
-                                        </InputLabel>
-                                        <p class="text-[11px] text-slate-500">
-                                            Indica cuántos botellones {{ bottleType === 'fixed' ? 'fijos rotulados' : 'de cambio' }} tiene el cliente.
-                                        </p>
-                                    </div>
-
-                                    <div class="flex items-center gap-2 self-start sm:self-auto">
-                                        <button
-                                            type="button"
-                                            @click="decrementCount"
-                                            :disabled="bottlesCount <= 1"
-                                            class="w-11 h-11 rounded-xl bg-white border border-slate-300 text-slate-700 flex items-center justify-center font-bold text-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition shadow-2xs"
-                                            title="Disminuir"
-                                            aria-label="Disminuir cantidad"
-                                        >
-                                            <i class="fa-solid fa-minus text-xs"></i>
-                                        </button>
-
-                                        <TextInput
-                                            id="bottles_count"
-                                            type="number"
-                                            min="1"
-                                            step="1"
-                                            class="w-20 text-center font-mono font-bold text-base rounded-xl border-slate-300 focus:border-blue-900 focus:ring-blue-900"
-                                            v-model.number="bottlesCount"
-                                            @input="syncCounts"
-                                            required
-                                            aria-label="Cantidad de botellones"
-                                        />
-
-                                        <button
-                                            type="button"
-                                            @click="incrementCount"
-                                            class="w-11 h-11 rounded-xl bg-white border border-slate-300 text-slate-700 flex items-center justify-center font-bold text-lg hover:bg-slate-100 cursor-pointer transition shadow-2xs"
-                                            title="Aumentar"
-                                            aria-label="Aumentar cantidad"
-                                        >
-                                            <i class="fa-solid fa-plus text-xs"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <InputError class="mt-1.5" :message="form.errors.bottles_count || form.errors.fixed_bottles_count || form.errors.exchange_bottles_count" />
+                                <span class="font-bold text-slate-900 block">Sin límite ni modalidad fija en ficha</span>
+                                <p class="mt-0.5 leading-relaxed">
+                                    Al registrarse sin cuenta de usuario, este cliente no necesita capturar botellones fijos ni de cambio aquí. En cada servicio al paso el repartidor podrá elegir libremente Fijos o Cambios según lo que pida.
+                                </p>
                             </div>
                         </div>
 

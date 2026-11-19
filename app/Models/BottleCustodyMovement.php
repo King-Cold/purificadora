@@ -34,6 +34,7 @@ class BottleCustodyMovement extends Model
     public const TYPE_DELIVERY_REFILL_TO_CUSTOMER = 'delivery_refill_to_customer';
     public const TYPE_RETURN_EMPTY_FIXED_TO_CUSTOMER = 'return_empty_fixed_to_customer';
     public const TYPE_PLANT_INITIAL_COUNT = 'plant_initial_count';
+    public const TYPE_PLANT_PHYSICAL_RECOUNT = 'plant_physical_recount';
     public const TYPE_PLANT_WASHING_STARTED = 'plant_washing_started';
     public const TYPE_PLANT_WASHING_FINISHED = 'plant_washing_finished';
     public const TYPE_EXCHANGE_NEW_ENTRY = 'exchange_new_entry';

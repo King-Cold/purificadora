@@ -54,6 +54,7 @@ class DeliveryOperationController extends Controller
                     'name' => $customer->name,
                     'nickname' => $customer->nickname,
                     'phone' => $customer->phone,
+                    'has_account' => $customer->user_id !== null,
                     'bottle_type' => $customer->bottle_type,
                     'bottle_type_label' => $customer->bottle_type_label,
                     'assigned_bottles_count' => $customer->assigned_bottles_count,

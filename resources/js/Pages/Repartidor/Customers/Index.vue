@@ -71,7 +71,7 @@ const clearSearch = () => {
                         <input
                             v-model="searchTerm"
                             type="text"
-                            placeholder="Buscar por apodo, nombre, código (CLI-XXXX) o teléfono..."
+                            placeholder="Buscar por apodo, nombre o teléfono..."
                             class="w-full pl-10 pr-10 py-2.5 rounded-xl border-slate-200 text-xs sm:text-sm focus:border-blue-900 focus:ring-blue-900 transition"
                         />
                         <button
@@ -122,10 +122,7 @@ const clearSearch = () => {
                     <div class="space-y-1.5">
                         <div class="flex items-start justify-between gap-2">
                             <div>
-                                <span class="text-[10px] font-black font-mono tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-                                    {{ customer.code }}
-                                </span>
-                                <h3 class="text-base font-extrabold text-slate-900 mt-1">
+                                <h3 class="text-base font-extrabold text-slate-900">
                                     {{ customer.nickname }}
                                 </h3>
                                 <p v-if="customer.name" class="text-xs text-slate-500">

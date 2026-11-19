@@ -280,7 +280,6 @@ const getTrafficLightColor = (tl) => {
             <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3">
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <span class="text-xs font-mono text-slate-400 font-bold tracking-wider">{{ customer.code }}</span>
                         <h2 class="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
                             {{ customer.nickname }}
                         </h2>
