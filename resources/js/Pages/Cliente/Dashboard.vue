@@ -19,6 +19,7 @@ import {
     Package,
     UserCog,
     Sparkles,
+    Star,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -49,6 +50,10 @@ const props = defineProps({
     free_deliveries: {
         type: Array,
         default: () => [],
+    },
+    pendingReviewOrder: {
+        type: Object,
+        default: null,
     },
     last_updated_at: {
         type: String,
@@ -299,6 +304,35 @@ const activeOrderBadge = computed(() => {
                             :class="step <= activeOrderStepIndex ? 'bg-[#6D28D9]' : 'bg-[#ECEAEF]'"
                         ></div>
                     </div>
+                </section>
+
+                <!-- Banner discreto para calificar el último pedido si aún no tiene reseña -->
+                <section
+                    v-if="!activeOrder && pendingReviewOrder"
+                    aria-label="Calificar pedido reciente"
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                    <div class="flex items-start gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+                            <Star class="w-5 h-5 fill-amber-400 text-amber-500" aria-hidden="true" />
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-extrabold text-[#1E1545]">
+                                ¿Cómo estuvo tu pedido {{ pendingReviewOrder.folio }}?
+                            </h2>
+                            <p class="text-xs text-slate-600 mt-0.5">
+                                Puntúalo con 5 estrellas y cuéntanos tu experiencia.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Link
+                        :href="`${route('cliente.orders.show', pendingReviewOrder.id)}#calificar`"
+                        class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-[42px] rounded-xl text-xs font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] transition shrink-0"
+                    >
+                        <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                        <span>Calificar pedido</span>
+                    </Link>
                 </section>
 
                 <!-- ========================================== -->

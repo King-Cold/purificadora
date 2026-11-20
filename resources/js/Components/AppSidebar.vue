@@ -304,6 +304,12 @@ const navGroups = computed(() => {
                         active: isRouteActive('admin.orders.*'),
                     },
                     {
+                        label: 'Comentarios',
+                        href: getRouteUrl('admin.reviews.index'),
+                        icon: 'fa-solid fa-star',
+                        active: isRouteActive('admin.reviews.*'),
+                    },
+                    {
                         label: 'Clientes',
                         href: getRouteUrl('admin.customers.index'),
                         icon: 'fa-regular fa-user',

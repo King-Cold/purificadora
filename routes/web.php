@@ -6,11 +6,13 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ExchangeInventoryController;
 use App\Http\Controllers\Admin\GeneralSettingController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Cliente\AddressController as ClientAddressController;
 use App\Http\Controllers\Cliente\BottleController as ClientBottleController;
 use App\Http\Controllers\Cliente\DashboardController as ClientDashboardController;
 use App\Http\Controllers\Cliente\OrderController as ClientOrderController;
+use App\Http\Controllers\Cliente\OrderReviewController as ClientOrderReviewController;
 use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\Planta\PlantCambiosController;
 use App\Http\Controllers\Planta\PlantDashboardController;
@@ -120,6 +122,16 @@ Route::middleware(['auth', 'role:Super Admin|Administrador'])
                 Route::post('/{order}/cancel', 'cancel')->name('cancel')->middleware('permission:orders.cancel');
             });
 
+        // Comentarios y calificaciones de clientes
+        Route::controller(AdminReviewController::class)
+            ->prefix('comentarios')
+            ->name('reviews.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::patch('/{review}/toggle-landing', 'toggleLanding')->name('toggle-landing');
+                Route::delete('/{review}', 'destroy')->name('destroy');
+            });
+
         // Supervisión: inventario de cambios (botellones 20L)
         Route::controller(ExchangeInventoryController::class)
             ->prefix('supervision/inventario-cambios')
@@ -159,6 +171,9 @@ Route::middleware(['auth', 'role:Cliente'])
                 });
                 Route::patch('/{order}/cancelar', 'cancel');
             });
+
+        Route::post('/pedidos/{order}/calificar', [ClientOrderReviewController::class, 'store'])
+            ->name('cliente.orders.review.store');
 
         // Perfil y botellones
         Route::get('/perfil', [ProfileController::class, 'edit'])->name('cliente.profile.index');

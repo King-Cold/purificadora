@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Cliente;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\OrderPayment;
 use App\Services\DebtAndCreditService;
@@ -67,6 +68,14 @@ class DashboardController extends Controller
                 ])
             : [];
 
+        $pendingReviewOrder = $customer
+            ? Order::where('customer_id', $customer->id)
+                ->where('status', '!=', Order::STATUS_CANCELLED)
+                ->whereDoesntHave('review')
+                ->latest('id')
+                ->first()
+            : null;
+
         return Inertia::render('Cliente/Dashboard', [
             'customer' => $customer ? [
                 'code' => $customer->code,
@@ -103,6 +112,12 @@ class DashboardController extends Controller
             'weekly_promo' => $weeklyPromo,
             'payment_history' => $paymentHistory,
             'free_deliveries' => $freeDeliveries,
+            'pendingReviewOrder' => $pendingReviewOrder ? [
+                'id' => $pendingReviewOrder->id,
+                'folio' => $pendingReviewOrder->folio,
+                'total_bottles' => (int) $pendingReviewOrder->total_bottles,
+                'created_at' => $pendingReviewOrder->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
+            ] : null,
             'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
     }

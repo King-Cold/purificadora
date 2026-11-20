@@ -10,6 +10,7 @@ import {
     MapPin,
     ChevronRight,
     Clock,
+    Star,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -248,12 +249,21 @@ const totalOrdersCount = computed(() => props.orders?.total ?? ordersList.value.
                                     </td>
 
                                     <td class="py-4 px-5">
-                                        <span
-                                            class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold"
-                                            :class="getStageBadge(order).classes"
-                                        >
-                                            {{ getStageBadge(order).label }}
-                                        </span>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span
+                                                class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold"
+                                                :class="getStageBadge(order).classes"
+                                            >
+                                                {{ getStageBadge(order).label }}
+                                            </span>
+                                            <span
+                                                v-if="order.has_review"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800"
+                                            >
+                                                <Star class="w-3 h-3 fill-amber-400 text-amber-500" aria-hidden="true" />
+                                                {{ order.review_rating }}
+                                            </span>
+                                        </div>
                                     </td>
 
                                     <td class="py-4 px-5 text-xs font-bold text-[#1E1545]">
@@ -308,12 +318,21 @@ const totalOrdersCount = computed(() => props.orders?.total ?? ordersList.value.
                                     </span>
                                 </div>
 
-                                <span
-                                    class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold shrink-0"
-                                    :class="getStageBadge(order).classes"
-                                >
-                                    {{ getStageBadge(order).label }}
-                                </span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span
+                                        v-if="order.has_review"
+                                        class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800"
+                                    >
+                                        <Star class="w-3 h-3 fill-amber-400 text-amber-500" aria-hidden="true" />
+                                        {{ order.review_rating }}
+                                    </span>
+                                    <span
+                                        class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold"
+                                        :class="getStageBadge(order).classes"
+                                    >
+                                        {{ getStageBadge(order).label }}
+                                    </span>
+                                </div>
                             </div>
 
                             <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-[#E9E7F0]">

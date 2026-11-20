@@ -17,6 +17,9 @@ import {
     Truck,
     Check,
     ChevronDown,
+    Star,
+    MessageSquareQuote,
+    Send,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -41,6 +44,22 @@ const showHistory = ref(false);
 const cancelForm = useForm({
     reason: '',
 });
+
+const hoverRating = ref(0);
+const reviewForm = useForm({
+    rating: 5,
+    comment: '',
+});
+
+const ratingLabels = ['', 'Malo', 'Regular', 'Bueno', 'Muy bueno', 'Excelente'];
+const displayedRating = computed(() => hoverRating.value || reviewForm.rating);
+
+const submitReview = () => {
+    if (reviewForm.processing) return;
+    reviewForm.post(route('cliente.orders.review.store', props.order.id), {
+        preserveScroll: true,
+    });
+};
 
 const refreshOrder = () => {
     isRefreshing.value = true;
@@ -520,7 +539,136 @@ const hasBilling = computed(() => {
                 </section>
 
                 <!-- ========================================== -->
-                <!-- 4. ACCIÓN DISCRETA DE CANCELACIÓN          -->
+                <!-- 4. CALIFICACIÓN Y COMENTARIO (5 ESTRELLAS) -->
+                <!-- ========================================== -->
+                <section
+                    v-if="order.can_review || order.review"
+                    id="calificar"
+                    aria-labelledby="review-heading"
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 space-y-4 scroll-mt-20"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex items-start gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+                                <Star class="w-5 h-5 fill-amber-400 text-amber-500" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h2 id="review-heading" class="text-base font-extrabold text-[#1E1545]">
+                                    {{ order.review ? 'Tu calificación del pedido' : 'Califica tu experiencia' }}
+                                </h2>
+                                <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                    {{ order.review
+                                        ? 'Gracias por compartir tu opinión con Puritronic.'
+                                        : '¿Qué te pareció nuestro servicio? Puntúa con estrellas y deja un comentario.' }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario cuando aún no se califica -->
+                    <form v-if="order.can_review && !order.review" @submit.prevent="submitReview" class="space-y-4">
+                        <div class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div class="flex items-center gap-1.5" role="radiogroup" aria-label="Calificación de 1 a 5 estrellas">
+                                <button
+                                    v-for="star in 5"
+                                    :key="star"
+                                    type="button"
+                                    @click="reviewForm.rating = star"
+                                    @mouseenter="hoverRating = star"
+                                    @mouseleave="hoverRating = 0"
+                                    :aria-label="`${star} ${star === 1 ? 'estrella' : 'estrellas'}`"
+                                    :aria-pressed="reviewForm.rating === star"
+                                    class="p-1.5 rounded-xl transition active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                                >
+                                    <Star
+                                        class="w-7 h-7 transition-colors"
+                                        :class="star <= displayedRating
+                                            ? 'fill-amber-400 text-amber-400'
+                                            : 'text-slate-300 fill-transparent'"
+                                    />
+                                </button>
+                            </div>
+
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-white border border-[#E9E7F0] text-[#1E1545] self-start sm:self-auto">
+                                <span class="tabular-nums">{{ displayedRating }}/5</span>
+                                <span>· {{ ratingLabels[displayedRating] }}</span>
+                            </span>
+                        </div>
+
+                        <p v-if="reviewForm.errors.rating" class="text-xs text-rose-600 font-semibold">
+                            {{ reviewForm.errors.rating }}
+                        </p>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label for="order-review-comment" class="text-xs font-bold text-[#1E1545]">
+                                    Tu comentario *
+                                </label>
+                                <span class="text-[11px] font-semibold text-slate-400 tabular-nums">
+                                    {{ reviewForm.comment.length }}/500
+                                </span>
+                            </div>
+                            <textarea
+                                id="order-review-comment"
+                                v-model="reviewForm.comment"
+                                rows="3"
+                                maxlength="500"
+                                required
+                                placeholder="Cuéntanos sobre la calidad del agua, puntualidad o atención del repartidor..."
+                                class="w-full rounded-xl border border-[#E9E7F0] bg-[#F5F4F8]/50 focus:bg-white text-base sm:text-sm text-[#1E1545] placeholder:text-slate-400 focus:border-[#1E1545] focus:ring-[#1E1545]"
+                            ></textarea>
+                            <p v-if="reviewForm.errors.comment" class="text-xs text-rose-600 mt-1 font-semibold">
+                                {{ reviewForm.errors.comment }}
+                            </p>
+                        </div>
+
+                        <button
+                            type="submit"
+                            :disabled="reviewForm.processing || reviewForm.comment.trim().length < 3"
+                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[46px] rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] disabled:opacity-50 transition cursor-pointer"
+                        >
+                            <Send class="w-4 h-4" aria-hidden="true" />
+                            <span>{{ reviewForm.processing ? 'Enviando calificación...' : 'Enviar calificación' }}</span>
+                        </button>
+                    </form>
+
+                    <!-- Reseña ya enviada -->
+                    <div v-else-if="order.review" class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-4 space-y-2.5">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-1">
+                                <Star
+                                    v-for="s in 5"
+                                    :key="s"
+                                    class="w-4 h-4"
+                                    :class="s <= order.review.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'"
+                                />
+                                <span class="ml-1.5 text-xs font-extrabold text-[#1E1545] tabular-nums">
+                                    {{ order.review.rating }}/5
+                                </span>
+                            </div>
+
+                            <span
+                                class="px-2.5 py-0.5 rounded-full text-[11px] font-bold"
+                                :class="order.review.show_on_landing
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-white border border-[#E9E7F0] text-slate-600'"
+                            >
+                                {{ order.review.show_on_landing ? 'Destacado en portada' : 'Comentario registrado' }}
+                            </span>
+                        </div>
+
+                        <p class="text-xs sm:text-sm text-[#1E1545] leading-relaxed break-words">
+                            “{{ order.review.comment }}”
+                        </p>
+
+                        <p class="text-[11px] text-slate-500 tabular-nums">
+                            Enviado el {{ order.review.created_at }}
+                        </p>
+                    </div>
+                </section>
+
+                <!-- ========================================== -->
+                <!-- 5. ACCIÓN DISCRETA DE CANCELACIÓN          -->
                 <!-- ========================================== -->
                 <div v-if="order.can_cancel" class="pt-1">
                     <button

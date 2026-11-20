@@ -70,6 +70,7 @@ const currentSectionTitle = computed(() => {
         if (route().current('admin.users.*')) return 'Usuarios';
         if (route().current('admin.customers.*')) return 'Clientes';
         if (route().current('admin.orders.*')) return 'Pedidos';
+        if (route().current('admin.reviews.*')) return 'Comentarios';
         if (route().current('admin.exchange-inventory.*')) return 'Cambios';
         if (route().current('admin.settings.*')) return 'Configuración';
 

@@ -56,6 +56,17 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    reviews: {
+        type: Array,
+        default: () => [],
+    },
+    reviewsMeta: {
+        type: Object,
+        default: () => ({
+            average: 0,
+            count: 0,
+        }),
+    },
 });
 
 const format12h = (timeStr) => {
@@ -260,58 +271,7 @@ const faqs = computed(() => [
     },
 ]);
 
-const comments = [
-    {
-        name: 'María Elena Pech',
-        role: 'Clienta en Hocabá',
-        avatarText: 'MP',
-        avatarBg: 'bg-[#0071BA]',
-        rating: 5,
-        time: 'Hace 2 días',
-        comment: 'Excelente servicio y puntualidad. Antes tenía que esperar a que pasara el camión o salir a buscar garrafón. Ahora pido por el celular y llega directo a mi casa en minutos.',
-        verified: true,
-    },
-    {
-        name: 'Carlos Dzib',
-        role: 'Negocio de comidas',
-        avatarText: 'CD',
-        avatarBg: 'bg-[#26845B]',
-        rating: 5,
-        time: 'Hace 1 semana',
-        comment: 'El agua tiene un sabor fresco y ligero, de muy alta pureza. En mi negocio consumimos varios garrafones a la semana y siempre cumplen con los tiempos acordados.',
-        verified: true,
-    },
-    {
-        name: 'Rosaura May',
-        role: 'Madre de familia',
-        avatarText: 'RM',
-        avatarBg: 'bg-[#1E1545]',
-        rating: 5,
-        time: 'Hace 2 semanas',
-        comment: 'La atención de los repartidores es muy amable y los garrafones siempre vienen impecablemente sellados y limpios. Recomiendo totalmente a Puritronic.',
-        verified: true,
-    },
-    {
-        name: 'José Armando Ku',
-        role: 'Tienda de abarrotes',
-        avatarText: 'JK',
-        avatarBg: 'bg-[#D9266F]',
-        rating: 5,
-        time: 'Hace 3 semanas',
-        comment: 'Excelente control con los garrafones de cambio. Siempre nos surten a tiempo para no quedarnos sin agua en el negocio.',
-        verified: true,
-    },
-    {
-        name: 'Lucía Chan',
-        role: 'Clienta frecuente',
-        avatarText: 'LC',
-        avatarBg: 'bg-[#0071BA]',
-        rating: 5,
-        time: 'Hace 1 mes',
-        comment: 'Muy práctico pedir desde el teléfono. Me avisan en cada paso y mis garrafones fijos regresan siempre impecables.',
-        verified: true,
-    },
-];
+const comments = computed(() => Array.isArray(props.reviews) ? props.reviews : []);
 
 const commentsTrackRef = ref(null);
 const activeCommentIdx = ref(0);
@@ -353,7 +313,7 @@ const onCommentsScroll = () => {
     if (!el) return;
     const step = getCarouselStepWidth();
     if (step <= 0) return;
-    const maxIdx = Math.max(0, comments.length - 1);
+    const maxIdx = Math.max(0, comments.value.length - 1);
     activeCommentIdx.value = Math.min(maxIdx, Math.max(0, Math.round(el.scrollLeft / step)));
 };
 
@@ -848,11 +808,23 @@ const steps = [
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 max-w-6xl mx-auto mb-6 sm:mb-8">
                     <div class="text-center sm:text-left">
-                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E7E4ED] mb-3 shadow-2xs">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#E7E4ED] mb-3 shadow-sm">
                             <div class="flex text-amber-400 gap-0.5">
-                                <Star v-for="n in 5" :key="n" class="w-3.5 h-3.5 fill-amber-400" />
+                                <Star
+                                    v-for="n in 5"
+                                    :key="n"
+                                    class="w-3.5 h-3.5"
+                                    :class="comments.length === 0 || n <= Math.round(reviewsMeta?.average || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'"
+                                />
                             </div>
-                            <span class="text-xs font-semibold text-[#211B35]">5.0 calificación promedio</span>
+                            <span class="text-xs font-semibold text-[#211B35]">
+                                <template v-if="(reviewsMeta?.count || comments.length) > 0">
+                                    {{ Number(reviewsMeta?.average || 5).toFixed(1) }} calificación promedio ({{ reviewsMeta?.count || comments.length }} {{ (reviewsMeta?.count || comments.length) === 1 ? 'opinión' : 'opiniones' }})
+                                </template>
+                                <template v-else>
+                                    Opiniones reales de nuestros clientes
+                                </template>
+                            </span>
                         </div>
                         <h2 class="text-2xl sm:text-3xl font-bold text-[#211B35] tracking-tight">
                             Lo que dicen nuestros clientes
@@ -860,11 +832,11 @@ const steps = [
                     </div>
 
                     <!-- Flechas de navegación del carrusel -->
-                    <div class="hidden sm:flex items-center gap-2 shrink-0">
+                    <div v-if="comments.length > 1" class="hidden sm:flex items-center gap-2 shrink-0">
                         <button
                             type="button"
                             @click="scrollCommentsBy(-1)"
-                            class="w-10 h-10 rounded-xl bg-white border border-[#E7E4ED] text-[#211B35] hover:border-[#1E1545] hover:bg-[#EEEAF7]/40 flex items-center justify-center transition cursor-pointer shadow-2xs"
+                            class="w-10 h-10 rounded-xl bg-white border border-[#E7E4ED] text-[#211B35] hover:border-[#1E1545] hover:bg-[#EEEAF7]/40 flex items-center justify-center transition cursor-pointer shadow-sm"
                             aria-label="Comentario anterior"
                             title="Anterior"
                         >
@@ -873,7 +845,7 @@ const steps = [
                         <button
                             type="button"
                             @click="scrollCommentsBy(1)"
-                            class="w-10 h-10 rounded-xl bg-white border border-[#E7E4ED] text-[#211B35] hover:border-[#1E1545] hover:bg-[#EEEAF7]/40 flex items-center justify-center transition cursor-pointer shadow-2xs"
+                            class="w-10 h-10 rounded-xl bg-white border border-[#E7E4ED] text-[#211B35] hover:border-[#1E1545] hover:bg-[#EEEAF7]/40 flex items-center justify-center transition cursor-pointer shadow-sm"
                             aria-label="Siguiente comentario"
                             title="Siguiente"
                         >
@@ -882,8 +854,24 @@ const steps = [
                     </div>
                 </div>
 
+                <!-- Estado vacío cuando aún no hay opiniones destacadas en portada -->
+                <div
+                    v-if="comments.length === 0"
+                    class="max-w-3xl mx-auto rounded-3xl bg-white border border-[#E7E4ED] p-8 text-center space-y-3 shadow-sm"
+                >
+                    <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 mx-auto flex items-center justify-center">
+                        <MessageCircle class="w-6 h-6" />
+                    </div>
+                    <h3 class="text-base sm:text-lg font-bold text-[#211B35]">
+                        Próximamente verás aquí las opiniones de nuestros clientes
+                    </h3>
+                    <p class="text-xs sm:text-sm text-[#777386] max-w-md mx-auto leading-relaxed">
+                        Solo mostramos comentarios reales de pedidos realizados en nuestra plataforma y autorizados para portada.
+                    </p>
+                </div>
+
                 <!-- Carrusel horizontal (móvil, tablet y escritorio) -->
-                <div class="max-w-6xl mx-auto space-y-5">
+                <div v-else class="max-w-6xl mx-auto space-y-5">
                     <div
                         ref="commentsTrackRef"
                         @scroll.passive="onCommentsScroll"
@@ -891,7 +879,7 @@ const steps = [
                     >
                         <div
                             v-for="(item, index) in comments"
-                            :key="index"
+                            :key="item.id || index"
                             class="w-[85%] sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.85rem)] shrink-0 snap-center sm:snap-start bg-white rounded-3xl p-5 sm:p-6 border border-[#E7E4ED] shadow-[0_2px_10px_rgba(33,27,53,0.03)] flex flex-col justify-between"
                         >
                             <div>
@@ -935,7 +923,7 @@ const steps = [
                     </div>
 
                     <!-- Indicadores + flechas móviles -->
-                    <div class="flex items-center justify-center gap-3">
+                    <div v-if="comments.length > 1" class="flex items-center justify-center gap-3">
                         <button
                             type="button"
                             @click="scrollCommentsBy(-1)"

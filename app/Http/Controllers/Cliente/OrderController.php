@@ -39,7 +39,7 @@ class OrderController extends Controller
         $status = $request->query('status', 'all');
 
         $query = Order::where('customer_id', $customer->id)
-            ->with(['items'])
+            ->with(['items', 'review'])
             ->latest('id');
 
         if (in_array($status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED], true)) {
@@ -68,6 +68,8 @@ class OrderController extends Controller
                 'delivery_zone_label' => $addressSnapshot['delivery_zone_label'] ?? $order->delivery_zone,
                 'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'can_cancel' => Gate::forUser(auth()->user())->allows('cancel', $order),
+                'has_review' => !is_null($order->review),
+                'review_rating' => $order->review ? (int) $order->review->rating : null,
             ];
         });
 
@@ -221,7 +223,7 @@ class OrderController extends Controller
         // Autorización estricta por política (únicamente pedidos propios del cliente)
         Gate::authorize('view', $order);
 
-        $order->load(['items', 'statusHistories', 'charges', 'payments', 'deliveryRoute']);
+        $order->load(['items', 'statusHistories', 'charges', 'payments', 'deliveryRoute', 'review']);
 
         $addressSnapshot = $order->address_snapshot ?: [];
         $historicalAddress = [
@@ -315,6 +317,14 @@ class OrderController extends Controller
                 'operational_progress' => $order->getOperationalProgress(),
                 'charges' => $charges,
                 'payments' => $payments,
+                'can_review' => !$order->isCancelled() && is_null($order->review),
+                'review' => $order->review ? [
+                    'id' => $order->review->id,
+                    'rating' => (int) $order->review->rating,
+                    'comment' => $order->review->comment,
+                    'show_on_landing' => (bool) $order->review->show_on_landing,
+                    'created_at' => $order->review->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
+                ] : null,
             ],
             'last_updated_at' => now('America/Merida')->format('d/m/Y H:i:s'),
         ]);
