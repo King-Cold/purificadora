@@ -77,7 +77,7 @@ class PlantFixedBottlesController extends Controller
                 'damaged_quantity' => (int) $item->damaged_quantity,
                 'status' => $item->status,
                 'driver_name' => $order->deliveryRoute?->driver?->name ?? 'Repartidor',
-                'created_at' => $order->created_at?->format('d/m/Y H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
             ];
         }
 

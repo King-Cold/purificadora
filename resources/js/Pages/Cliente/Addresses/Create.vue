@@ -1,189 +1,61 @@
 <script setup>
+import { Head, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Breadcrumbs from '@/Components/Breadcrumbs.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import TextInput from '@/Components/TextInput.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import AddressForm from './Partials/AddressForm.vue';
+import { MapPin } from 'lucide-vue-next';
 
 const props = defineProps({
     zones: {
         type: Object,
-        required: true,
+        default: () => ({}),
     },
 });
 
 const form = useForm({
     municipality_type: 'hocaba',
     other_municipality: '',
-    delivery_zone: '',
+    delivery_zone: Object.keys(props.zones || {})[0] || '',
     street_and_number: '',
     reference: '',
 });
 
 const submit = () => {
-    form.post(route('cliente.addresses.store'));
+    form.post(route('cliente.addresses.store'), {
+        preserveScroll: true,
+    });
 };
 </script>
 
 <template>
-    <Head title="Nuevo domicilio" />
+    <Head title="Registrar domicilio" />
 
     <AuthenticatedLayout>
-        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-4">
-                <div>
-                    <Link
-                        :href="route('cliente.addresses.index')"
-                        class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
-                    >
-                        <i class="fa-solid fa-arrow-left text-xs"></i>
-                        <span>Volver a mi domicilio</span>
-                    </Link>
-                </div>
-                <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
-                    <form @submit.prevent="submit" class="p-6 sm:p-8 space-y-6">
+        <div class="bg-[#F5F4F8] py-4 sm:py-7">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+                <header class="rounded-3xl bg-gradient-to-br from-[#1E1545] via-[#2A1E5E] to-[#3B297D] text-white shadow-md p-5 sm:p-6 flex items-center gap-3.5">
+                    <div class="h-11 w-11 rounded-2xl bg-white/15 border border-white/20 text-emerald-300 flex items-center justify-center shrink-0">
+                        <MapPin class="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">
+                            Registrar domicilio
+                        </h1>
+                        <p class="text-xs sm:text-sm text-violet-200 mt-0.5">
+                            Indica la dirección exacta donde entregaremos tus botellones
+                        </p>
+                    </div>
+                </header>
 
-                        <!-- Encabezado informativo -->
-                        <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-100 text-sky-950 text-xs flex items-start gap-3">
-                            <i class="fa-solid fa-house-chimney text-sky-600 text-base mt-0.5 shrink-0"></i>
-                            <div class="leading-relaxed">
-                                <strong class="font-bold block text-sm mb-0.5 text-slate-900">Domicilio de Entrega</strong>
-                                Tu cuenta cuenta con un único domicilio registrado correspondiente a tu casa.
-                            </div>
-                        </div>
-
-                        <!-- 1. Municipio -->
-                        <div class="space-y-3">
-                            <InputLabel value="Municipio de tu casa *" />
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <label
-                                    class="flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition"
-                                    :class="form.municipality_type === 'hocaba' ? 'bg-blue-50/50 border-blue-600 ring-2 ring-blue-600/20' : 'border-gray-200 hover:bg-gray-50'"
-                                >
-                                    <input
-                                        type="radio"
-                                        value="hocaba"
-                                        v-model="form.municipality_type"
-                                        class="h-4 w-4 text-blue-900 border-gray-300 focus:ring-blue-900"
-                                    />
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-900 block">Hocabá, Yucatán</span>
-                                        <span class="text-xs text-gray-500">Predeterminado</span>
-                                    </div>
-                                </label>
-
-                                <label
-                                    class="flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition"
-                                    :class="form.municipality_type === 'other' ? 'bg-blue-50/50 border-blue-600 ring-2 ring-blue-600/20' : 'border-gray-200 hover:bg-gray-50'"
-                                >
-                                    <input
-                                        type="radio"
-                                        value="other"
-                                        v-model="form.municipality_type"
-                                        class="h-4 w-4 text-blue-900 border-gray-300 focus:ring-blue-900"
-                                    />
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-900 block">Otro municipio</span>
-                                        <span class="text-xs text-gray-500">Ubicación fuera de Hocabá</span>
-                                    </div>
-                                </label>
-                            </div>
-                            <InputError class="mt-1" :message="form.errors.municipality_type" />
-
-                            <!-- Campo si seleccionó Otro Municipio -->
-                            <div v-if="form.municipality_type === 'other'" class="pt-2">
-                                <InputLabel for="other_municipality" value="Nombre del municipio *" />
-                                <TextInput
-                                    id="other_municipality"
-                                    type="text"
-                                    class="mt-1 block w-full text-sm"
-                                    v-model="form.other_municipality"
-                                    placeholder="Ej. Seyé, Tahmek, Sanahcat, Mérida"
-                                    required
-                                />
-                                <InputError class="mt-1.5" :message="form.errors.other_municipality" />
-                            </div>
-                        </div>
-
-                        <!-- 2. Zona de Reparto (Solo para Hocabá) -->
-                        <div v-if="form.municipality_type === 'hocaba'" class="space-y-2 pt-2 border-t border-gray-100">
-                            <InputLabel value="Zona de reparto en Hocabá *" />
-                            <p class="text-xs text-gray-500 mb-2">
-                                Selecciona la zona de Hocabá donde se ubica tu casa.
-                            </p>
-
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                                <button
-                                    type="button"
-                                    v-for="(label, key) in zones"
-                                    :key="key"
-                                    @click="form.delivery_zone = key"
-                                    class="p-3 text-center rounded-xl border text-sm font-semibold transition"
-                                    :class="form.delivery_zone === key ? 'bg-blue-900 text-white border-blue-900 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
-                                >
-                                    {{ label }}
-                                </button>
-                            </div>
-                            <InputError class="mt-1.5" :message="form.errors.delivery_zone" />
-                        </div>
-
-                        <!-- 3. Calle y número -->
-                        <div class="pt-2 border-t border-gray-100">
-                            <InputLabel for="street_and_number" value="Calle y número *" />
-                            <TextInput
-                                id="street_and_number"
-                                type="text"
-                                class="mt-1 block w-full text-sm"
-                                v-model="form.street_and_number"
-                                placeholder="Ej. Calle 20 #105 o Calle 22 entre 15 y 17 S/N"
-                                required
-                            />
-                            <InputError class="mt-1.5" :message="form.errors.street_and_number" />
-                            <span class="text-xs text-gray-400 mt-1 block">
-                                Ingrese el número o nombre de calle y el número exterior (o S/N).
-                            </span>
-                        </div>
-
-                        <!-- 4. Referencias para el repartidor (opcional) -->
-                        <div class="pt-2 border-t border-gray-100">
-                            <InputLabel for="reference" value="Referencias para el repartidor (opcional)" />
-                            <textarea
-                                id="reference"
-                                rows="3"
-                                v-model="form.reference"
-                                class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-900 focus:ring-blue-900 text-sm"
-                                placeholder="Ej. Casa verde frente al parque central, reja blanca de herrería"
-                            ></textarea>
-                            <InputError class="mt-1.5" :message="form.errors.reference" />
-                            <span class="text-xs text-gray-400 mt-1 block">
-                                Color de fachada, portón o punto de referencia conocido.
-                            </span>
-                        </div>
-
-                        <!-- Botones de Acción -->
-                        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-                            <Link
-                                :href="route('cliente.addresses.index')"
-                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
-                            >
-                                Cancelar
-                            </Link>
-
-                            <button
-                                type="submit"
-                                :disabled="form.processing"
-                                class="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-900 rounded-xl hover:bg-blue-800 transition shadow-xs disabled:opacity-50"
-                            >
-                                <i v-if="form.processing" class="fa-solid fa-spinner fa-spin mr-1"></i>
-                                <i v-else class="fa-solid fa-floppy-disk mr-1"></i>
-                                <span>{{ form.processing ? 'Guardando...' : 'Guardar mi domicilio' }}</span>
-                            </button>
-                        </div>
-
-                    </form>
-                </div>
+                <section class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 sm:p-8">
+                    <AddressForm
+                        :form="form"
+                        :zones="zones"
+                        submit-label="Guardar domicilio"
+                        submitting-label="Registrando..."
+                        :cancel-href="route('cliente.addresses.index')"
+                        @submit="submit"
+                    />
+                </section>
             </div>
         </div>
     </AuthenticatedLayout>

@@ -1,10 +1,18 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Modal from '@/Components/Modal.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import DangerButton from '@/Components/DangerButton.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import {
+    MapPin,
+    Navigation,
+    PenSquare,
+    Trash2,
+    Plus,
+    AlertTriangle,
+    CheckCircle2,
+    Home,
+    Info,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     address: {
@@ -13,7 +21,7 @@ const props = defineProps({
     },
     customer: {
         type: Object,
-        default: () => ({}),
+        default: null,
     },
     zones: {
         type: Object,
@@ -21,262 +29,266 @@ const props = defineProps({
     },
 });
 
-const confirmingAddressDeletion = ref(false);
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
+const flashError = computed(() => page.props.flash?.error);
+
+const showDeleteModal = ref(false);
 const isDeleting = ref(false);
 
-// 1. Calle y número (destacado como información principal)
 const streetAndNumber = computed(() => {
     if (!props.address) return '';
-    const street = props.address.street?.trim() || '';
-    const ext = props.address.exterior_number?.trim();
-    const interior = props.address.interior_number?.trim();
-
-    let result = street;
-    if (ext && ext !== 'S/N' && !street.toLowerCase().includes(ext.toLowerCase())) {
-        result += ` #${ext}`;
-    } else if (ext === 'S/N' && !street.toLowerCase().includes('s/n') && !street.toLowerCase().includes('sin número')) {
-        result += ' S/N';
-    }
-
-    if (interior && !street.toLowerCase().includes(interior.toLowerCase())) {
-        result += `, Int. ${interior}`;
-    }
-
-    return result || 'Dirección sin especificar';
+    return [props.address.street_and_number || props.address.street, props.address.exterior_number ? `#${props.address.exterior_number}` : null]
+        .filter(Boolean)
+        .join(' ');
 });
 
-// 2. Cruzamientos (si existe)
-const betweenStreets = computed(() => {
-    if (!props.address?.between_streets?.trim()) return null;
-    return props.address.between_streets.trim();
-});
+const betweenStreets = computed(() => props.address?.between_streets || '');
 
-// 3. Colonia, localidad y estado
 const locationLine = computed(() => {
     if (!props.address) return '';
-    const parts = [];
-
-    if (props.address.neighborhood?.trim()) {
-        const neigh = props.address.neighborhood.trim();
-        parts.push(
-            neigh.toLowerCase().startsWith('col.') || neigh.toLowerCase().startsWith('colonia')
-                ? neigh
-                : `Col. ${neigh}`
-        );
-    }
-
-    const city = props.address.city?.trim() || props.address.municipality?.trim();
-    if (city) {
-        parts.push(city);
-    }
-
-    const state = props.address.state?.trim() || 'Yucatán';
-    if (state && (!city || !city.toLowerCase().includes(state.toLowerCase()))) {
-        parts.push(state);
-    }
-
-    return parts.join(', ');
+    return [props.address.neighborhood, props.address.municipality, props.address.state]
+        .filter(Boolean)
+        .join(', ');
 });
 
-// 4. Código postal (si existe)
-const postalCode = computed(() => {
-    if (!props.address?.postal_code?.trim()) return null;
-    return props.address.postal_code.trim();
-});
+const postalCode = computed(() => props.address?.postal_code || '');
 
-// 5. Aviso si faltan datos indispensables (calle o zona en Hocabá)
 const missingDataNotice = computed(() => {
     if (!props.address) return null;
-    const missing = [];
-
-    if (!props.address.street?.trim()) {
-        missing.push('calle');
-    }
-    if (props.address.is_hocaba && !props.address.delivery_zone) {
-        missing.push('zona de reparto');
-    }
-
-    if (missing.length > 0) {
-        return `Falta registrar: ${missing.join(' y ')}. Edita tu domicilio para asegurar la correcta entrega de tus pedidos.`;
+    if (!props.address.delivery_zone) {
+        return 'Tu domicilio aún no tiene una zona de reparto asignada. Edítalo para acelerar tus entregas.';
     }
     return null;
 });
 
-const deleteAddress = () => {
+const confirmDelete = () => {
     isDeleting.value = true;
     router.delete(route('cliente.addresses.destroy'), {
         preserveScroll: true,
         onFinish: () => {
             isDeleting.value = false;
-            confirmingAddressDeletion.value = false;
+            showDeleteModal.value = false;
         },
     });
 };
 </script>
 
 <template>
-    <Head title="Mi domicilio" />
+    <Head title="Mi domicilio de entrega" />
 
     <AuthenticatedLayout>
-        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-            <!-- Columna central con ancho máximo aproximado de 800 px -->
-            <div class="mx-auto max-w-[800px] px-4 sm:px-6 space-y-5">
+        <div class="bg-[#F5F4F8] py-4 sm:py-7">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+                <!-- ========================================== -->
+                <!-- 1. ENCABEZADO PURITRONIC                   -->
+                <!-- ========================================== -->
+                <header class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex items-center gap-3.5 min-w-0">
+                        <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <MapPin class="w-6 h-6" aria-hidden="true" />
+                        </div>
+                        <div class="min-w-0">
+                            <h1 class="text-xl sm:text-2xl font-extrabold text-[#1E1545] tracking-tight">
+                                Mi domicilio de entrega
+                            </h1>
+                            <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                Dirección predeterminada donde recibirás tus botellones Puritronic
+                            </p>
+                        </div>
+                    </div>
 
-                <!-- Navegación de regreso y subtítulo breve -->
-                <div class="flex items-center justify-between">
                     <Link
-                        :href="route('cliente.dashboard')"
-                        class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
+                        v-if="address"
+                        :href="route('cliente.addresses.edit')"
+                        class="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] shadow-sm transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
                     >
-                        <i class="fa-solid fa-arrow-left text-xs"></i>
-                        <span>Volver al inicio</span>
+                        <PenSquare class="w-4 h-4" aria-hidden="true" />
+                        <span>Editar domicilio</span>
                     </Link>
-                    <span class="text-xs text-slate-400">Aquí entregaremos tus pedidos</span>
-                </div>
 
-                <!-- Tarjeta única del Domicilio -->
-                <div
-                    v-if="address"
-                    class="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-6"
-                >
-                    <!-- Encabezado de la tarjeta con zona de reparto como etiqueta secundaria -->
-                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div class="space-y-1">
-                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                                Dirección de entrega
-                            </span>
-                            <!-- Calle y número destacado como información principal -->
-                            <h2 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug break-words">
-                                {{ streetAndNumber }}
-                            </h2>
-                        </div>
-
-                        <!-- Zona de reparto mostrada una sola vez como etiqueta secundaria -->
-                        <div v-if="address.zone_label" class="self-start">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
-                                {{ address.zone_label }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Líneas organizadas: Cruzamientos, Colonia/Localidad/Estado, Código postal -->
-                    <div class="space-y-1.5 text-sm text-slate-600">
-                        <!-- Cruzamientos -->
-                        <p v-if="betweenStreets" class="break-words">
-                            <span class="text-slate-400 font-medium">Cruzamientos:</span> {{ betweenStreets }}
-                        </p>
-
-                        <!-- Colonia, localidad y estado -->
-                        <p v-if="locationLine" class="break-words">
-                            {{ locationLine }}
-                        </p>
-
-                        <!-- Código postal -->
-                        <p v-if="postalCode" class="text-slate-500">
-                            <span class="text-slate-400 font-medium">C.P.</span> {{ postalCode }}
-                        </p>
-                    </div>
-
-                    <!-- Referencias debajo, con texto normal, sin comillas ni cursivas -->
-                    <div v-if="address.reference?.trim()" class="pt-5 border-t border-slate-100 space-y-1.5">
-                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                            Referencias
-                        </span>
-                        <p class="text-sm text-slate-700 leading-relaxed break-words">
-                            {{ address.reference.trim() }}
-                        </p>
-                    </div>
-
-                    <!-- Aviso breve si faltan datos indispensables -->
-                    <div
-                        v-if="missingDataNotice"
-                        class="p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs sm:text-sm flex items-start gap-2.5"
+                    <Link
+                        v-else
+                        :href="route('cliente.addresses.create')"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] shadow-sm transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
                     >
-                        <i class="fa-solid fa-circle-exclamation text-amber-600 mt-0.5 shrink-0"></i>
-                        <span>{{ missingDataNotice }}</span>
-                    </div>
+                        <Plus class="w-4 h-4" aria-hidden="true" />
+                        <span>Registrar domicilio</span>
+                    </Link>
+                </header>
 
-                    <!-- Acciones: "Editar domicilio" como principal en azul y "Eliminar domicilio" como secundaria discreta al final -->
-                    <div class="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <Link
-                            :href="route('cliente.addresses.edit')"
-                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-900/30"
-                        >
-                            <i class="fa-solid fa-pen-to-square text-xs"></i>
-                            <span>Editar domicilio</span>
-                        </Link>
-
-                        <button
-                            type="button"
-                            @click="confirmingAddressDeletion = true"
-                            class="text-xs text-slate-400 hover:text-rose-600 font-medium transition cursor-pointer py-2 px-3 rounded focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                        >
-                            Eliminar domicilio
-                        </button>
-                    </div>
+                <!-- Alertas Flash -->
+                <div
+                    v-if="flashSuccess"
+                    role="status"
+                    class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3 text-sm font-semibold text-emerald-950"
+                >
+                    <CheckCircle2 class="w-5 h-5 text-emerald-600 shrink-0" aria-hidden="true" />
+                    <span>{{ flashSuccess }}</span>
                 </div>
 
-                <!-- Estado Vacío Sin Domicilio -->
                 <div
-                    v-else
-                    class="bg-white rounded-2xl p-8 sm:p-12 text-center shadow-xs border border-slate-200/80 space-y-4"
+                    v-if="flashError"
+                    role="alert"
+                    class="rounded-2xl bg-rose-50 border border-rose-200 p-4 flex items-center gap-3 text-sm font-semibold text-rose-950"
                 >
-                    <div class="h-12 w-12 mx-auto rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center">
-                        <i class="fa-solid fa-location-dot text-xl"></i>
+                    <AlertTriangle class="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />
+                    <span>{{ flashError }}</span>
+                </div>
+
+                <!-- Aviso de datos incompletos -->
+                <div
+                    v-if="missingDataNotice"
+                    class="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3 text-xs sm:text-sm font-medium text-amber-950"
+                >
+                    <Info class="w-5 h-5 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+                    <span>{{ missingDataNotice }}</span>
+                </div>
+
+                <!-- ========================================== -->
+                <!-- 2. TARJETA DEL DOMICILIO REGISTRADO        -->
+                <!-- ========================================== -->
+                <section
+                    v-if="address"
+                    aria-label="Detalles de tu domicilio"
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm overflow-hidden"
+                >
+                    <div class="p-6 sm:p-8 space-y-6">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div class="flex items-start gap-3.5">
+                                <div class="h-11 w-11 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200/70 flex items-center justify-center shrink-0">
+                                    <Home class="w-5 h-5" aria-hidden="true" />
+                                </div>
+                                <div>
+                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                                        Calle y número
+                                    </span>
+                                    <h2 class="text-lg sm:text-xl font-extrabold text-[#1E1545] break-words mt-0.5">
+                                        {{ streetAndNumber }}
+                                    </h2>
+                                    <p v-if="betweenStreets" class="text-sm text-slate-600 mt-1 break-words">
+                                        {{ betweenStreets }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800">
+                                <Navigation class="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
+                                <span>{{ address.zone_label }}</span>
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#E9E7F0]">
+                            <div class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-4">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                                    Localidad / Municipio
+                                </span>
+                                <p class="text-sm font-bold text-[#1E1545] mt-1">
+                                    {{ locationLine || 'Hocabá, Yucatán' }}
+                                </p>
+                                <p v-if="postalCode" class="text-xs text-slate-500 mt-0.5 tabular-nums">
+                                    C.P. {{ postalCode }}
+                                </p>
+                            </div>
+
+                            <div class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-4">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                                    Referencias para entrega
+                                </span>
+                                <p class="text-sm text-slate-700 mt-1 break-words">
+                                    {{ address.reference || 'Sin referencias adicionales registradas.' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-[#E9E7F0] flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-xs text-slate-500">
+                                Los pedidos ya registrados conservan la dirección con la que fueron creados.
+                            </p>
+
+                            <button
+                                type="button"
+                                @click="showDeleteModal = true"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+                            >
+                                <Trash2 class="w-4 h-4" aria-hidden="true" />
+                                <span>Eliminar domicilio</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="space-y-1">
-                        <h2 class="text-base sm:text-lg font-bold text-slate-900">
+                </section>
+
+                <!-- Estado vacío -->
+                <section
+                    v-else
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-8 sm:p-10 text-center space-y-4"
+                >
+                    <div class="mx-auto h-14 w-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <MapPin class="w-7 h-7" aria-hidden="true" />
+                    </div>
+                    <div class="space-y-1 max-w-md mx-auto">
+                        <h2 class="text-base sm:text-lg font-extrabold text-[#1E1545]">
                             Aún no has registrado tu domicilio
                         </h2>
-                        <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-                            Para poder llevarte los garrafones de agua Puritronic, necesitamos registrar la dirección de tu casa en Hocabá.
+                        <p class="text-xs sm:text-sm text-slate-600">
+                            Agrega tu dirección y zona de entrega para poder solicitar botellones a domicilio con un solo clic.
                         </p>
                     </div>
-                    <div class="pt-2">
+                    <div class="pt-1">
                         <Link
                             :href="route('cliente.addresses.create')"
-                            class="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-xs cursor-pointer min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-900/30"
+                            class="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] shadow-sm transition"
                         >
-                            <i class="fa-solid fa-plus text-xs"></i>
+                            <Plus class="w-4 h-4" aria-hidden="true" />
                             <span>Registrar mi domicilio</span>
                         </Link>
                     </div>
-                </div>
-
+                </section>
             </div>
         </div>
 
-        <!-- Modal de Confirmación para Eliminar Domicilio -->
-        <Modal :show="confirmingAddressDeletion" @close="confirmingAddressDeletion = false" max-width="md">
-            <div class="p-6 space-y-4">
-                <div class="flex items-center gap-3 text-slate-900">
-                    <div class="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+        <!-- Modal de confirmación para eliminar -->
+        <div
+            v-if="showDeleteModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-address-title"
+            class="fixed inset-0 z-50 overflow-y-auto bg-[#1E1545]/50 backdrop-blur-sm flex items-center justify-center p-4"
+            @keydown.escape="showDeleteModal = false"
+        >
+            <div class="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#E9E7F0] shadow-xl p-6 space-y-4">
+                <div class="flex items-start gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                        <AlertTriangle class="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
-                        <h3 class="text-base font-bold text-slate-900">
-                            ¿Eliminar domicilio de entrega?
+                        <h3 id="delete-address-title" class="text-base font-extrabold text-[#1E1545]">
+                            ¿Eliminar tu domicilio registrado?
                         </h3>
-                        <p class="text-xs text-slate-500">
-                            Esta acción no se puede deshacer.
+                        <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                            Necesitarás registrar un nuevo domicilio antes de volver a pedir agua a domicilio.
                         </p>
                     </div>
                 </div>
 
-                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    Necesitarás registrar un nuevo domicilio para poder solicitar pedidos de garrafones a domicilio.
-                </p>
-
-                <div class="pt-3 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
-                    <SecondaryButton @click="confirmingAddressDeletion = false" class="justify-center min-h-[44px]">
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                        type="button"
+                        @click="showDeleteModal = false"
+                        class="px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-slate-700 bg-[#F5F4F8] hover:bg-[#ECEAEF] transition cursor-pointer"
+                    >
                         Cancelar
-                    </SecondaryButton>
-                    <DangerButton @click="deleteAddress" :disabled="isDeleting" class="justify-center min-h-[44px]">
-                        <span v-if="isDeleting">Eliminando...</span>
-                        <span v-else>Eliminar domicilio</span>
-                    </DangerButton>
+                    </button>
+                    <button
+                        type="button"
+                        @click="confirmDelete"
+                        :disabled="isDeleting"
+                        class="px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 transition cursor-pointer"
+                    >
+                        {{ isDeleting ? 'Eliminando...' : 'Sí, eliminar' }}
+                    </button>
                 </div>
             </div>
-        </Modal>
+        </div>
     </AuthenticatedLayout>
 </template>

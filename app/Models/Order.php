@@ -455,7 +455,9 @@ class Order extends Model
         // Determinar estado y explicación global
         $overallKey = 'pendiente';
         $overallLabel = 'Pendiente';
-        $explanation = 'Tu pedido ha sido recibido y está pendiente de confirmación por la purificadora.';
+        $explanation = (!$hasFixed && $hasExchange)
+            ? 'Tu pedido quedó registrado y está listo para que el repartidor pase a hacer el cambio en tu domicilio.'
+            : 'Tu pedido quedó registrado y está pendiente de recolección en tu domicilio.';
 
         if ($this->isCancelled()) {
             $overallKey = 'cancelado';
@@ -476,17 +478,23 @@ class Order extends Model
                 $explanation = "Tus botellones fijos ({$fixedProgress['collected_quantity']} u.) fueron recolectados y se encuentran en traslado o proceso de planta para su devolución.";
             }
         } elseif ($this->status === self::STATUS_IN_ROUTE || ($this->deliveryRoute && $this->deliveryRoute->status === DeliveryRoute::STATUS_IN_PROGRESS)) {
-            $overallKey = 'en_reparticion';
-            $overallLabel = 'En repartición';
-            $explanation = 'La unidad de reparto se encuentra en recorrido activo atendiendo las paradas asignadas.';
+            if (!$hasFixed && $hasExchange) {
+                $overallKey = 'en_reparticion';
+                $overallLabel = 'En entrega';
+                $explanation = 'El repartidor se encuentra atendiendo tu entrega de botellones de cambio.';
+            } else {
+                $overallKey = 'en_reparticion';
+                $overallLabel = 'En repartición';
+                $explanation = 'La unidad de reparto se encuentra en recorrido activo atendiendo tu pedido.';
+            }
         } elseif ($this->delivery_route_id && $this->deliveryRoute && $this->deliveryRoute->status === DeliveryRoute::STATUS_ASSIGNED) {
             $overallKey = 'asignado_a_ruta';
             $overallLabel = 'Asignado a ruta';
-            $explanation = 'El pedido ha sido programado en una hoja de ruta de reparto.';
+            $explanation = 'El pedido ha sido programado para atención en reparto.';
         } elseif ($this->isConfirmed()) {
             $overallKey = 'confirmado';
             $overallLabel = 'Confirmado';
-            $explanation = 'Tu pedido ha sido confirmado por administración y está listo para asignarse a ruta.';
+            $explanation = 'Tu pedido ha sido confirmado y está listo para reparto.';
         }
 
         return [

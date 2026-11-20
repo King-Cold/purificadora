@@ -165,7 +165,7 @@ class RouteExecutionController extends Controller
                     default => ucfirst($activeRouteModel->status),
                 },
                 'notes' => $activeRouteModel->notes,
-                'started_at' => $activeRouteModel->started_at?->format('H:i'),
+                'started_at' => $activeRouteModel->started_at?->copy()->setTimezone('America/Merida')->format('H:i'),
                 'total_stops' => $stops->count(),
                 'pending_stops_count' => $stops->where('status', RouteStop::STATUS_PENDING)->count(),
                 'completed_stops_count' => $stops->where('status', RouteStop::STATUS_COMPLETED)->count(),
@@ -385,7 +385,7 @@ class RouteExecutionController extends Controller
                     },
                     'failure_reason' => $stop->failure_reason,
                     'notes' => $stop->notes,
-                    'completed_at' => $stop->completed_at?->format('H:i'),
+                    'completed_at' => $stop->completed_at?->copy()->setTimezone('America/Merida')->format('H:i'),
                     'order_id' => $order?->id,
                     'order_folio' => $order?->folio,
                     'order_status' => $order?->status,
@@ -422,7 +422,7 @@ class RouteExecutionController extends Controller
                     default => ucfirst($activeRoute->status),
                 },
                 'notes' => $activeRoute->notes,
-                'started_at' => $activeRoute->started_at?->format('H:i'),
+                'started_at' => $activeRoute->started_at?->copy()->setTimezone('America/Merida')->format('H:i'),
                 'total_stops' => $stops->count(),
                 'pending_stops_count' => $stops->where('status', RouteStop::STATUS_PENDING)->count(),
                 'completed_stops_count' => $stops->where('status', RouteStop::STATUS_COMPLETED)->count(),
@@ -602,6 +602,10 @@ class RouteExecutionController extends Controller
 
         $phone = $order->recipient_phone ?: $customer->phone;
 
+        $zonesMap = $this->settingService->getDeliveryZonesMap();
+        $zoneKey = $this->settingService->normalizeDeliveryZoneKey($order->delivery_zone ?: '');
+        $zoneLabel = $zonesMap[$zoneKey] ?? ($order->delivery_zone ?: 'Sin zona');
+
         return Inertia::render('Repartidor/Route/ServeStop', [
             'stop' => [
                 'id' => $stop->id,
@@ -622,7 +626,7 @@ class RouteExecutionController extends Controller
                 'fixed_requested' => $fixedRequested,
                 'fixed_prepared' => $fixedPrepared,
                 'notes' => $order->notes,
-                'delivery_zone' => $order->delivery_zone ?: 'Sin zona',
+                'delivery_zone' => $zoneLabel,
                 'address_summary' => $address,
                 'has_address' => $hasAddress,
                 'reference' => $order->address_snapshot['delivery_reference'] ?? null,
@@ -1661,7 +1665,7 @@ class RouteExecutionController extends Controller
                     'quantity_delivered' => (int) $charge->quantity_delivered,
                     'unpaid_units' => $unpaidUnits,
                     'remaining_amount' => (float) $charge->remainingAmount(),
-                    'date' => $charge->created_at?->format('d/m/Y'),
+                    'date' => $charge->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y'),
                 ];
             })->values();
 
@@ -1712,7 +1716,7 @@ class RouteExecutionController extends Controller
                             'quantity_delivered' => (int) $c->quantity_delivered,
                             'unpaid_units' => max(0, (int) $c->quantity_delivered - (int) floor((float) $c->paid_amount / max(0.01, (float) $c->unit_price))),
                             'remaining_amount' => (float) $c->remainingAmount(),
-                            'date' => $c->created_at?->format('d/m/Y'),
+                            'date' => $c->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y'),
                         ])->values(),
                     ];
                 }
@@ -2061,12 +2065,12 @@ class RouteExecutionController extends Controller
                 'is_partial' => $isPartial,
                 'breakdown' => $breakdown,
                 'fixed_available_on_truck' => $fixedAvailableOnTruck,
-                'created_at' => $order->created_at?->format('d/m H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'stop_id' => $stop?->id,
                 'stop_number' => $stop?->stop_number,
                 'stop_status' => $stop?->status,
                 'failure_reason' => $stop?->failure_reason,
-                'completed_at' => $stop?->completed_at?->format('H:i'),
+                'completed_at' => $stop?->completed_at?->copy()->setTimezone('America/Merida')->format('H:i'),
             ];
         };
 

@@ -92,17 +92,17 @@ class GeneralSettingsManagementTest extends TestCase
         $this->assertTrue($res1259['can_receive']);
         $this->assertEquals('allowed', $res1259['reason']);
 
-        // 13:00: pedidos bloqueados por descanso.
+        // 13:00: pedidos en línea permitidos aunque la atención presencial esté en descanso.
         $res1300 = $this->scheduleService->checkOrderReception('13:00', $schedule);
-        $this->assertFalse($res1300['can_receive']);
-        $this->assertEquals('on_break', $res1300['reason']);
-        $this->assertEquals('La sucursal está en descanso.', $res1300['message']);
+        $this->assertTrue($res1300['can_receive']);
+        $this->assertFalse($res1300['is_store_open']);
+        $this->assertEquals('allowed', $res1300['reason']);
 
-        // 14:59: pedidos bloqueados por descanso.
+        // 14:59: pedidos en línea permitidos durante el descanso.
         $res1459 = $this->scheduleService->checkOrderReception('14:59', $schedule);
-        $this->assertFalse($res1459['can_receive']);
-        $this->assertEquals('on_break', $res1459['reason']);
-        $this->assertEquals('La sucursal está en descanso.', $res1459['message']);
+        $this->assertTrue($res1459['can_receive']);
+        $this->assertFalse($res1459['is_store_open']);
+        $this->assertEquals('allowed', $res1459['reason']);
 
         // 15:00: pedidos permitidos.
         $res1500 = $this->scheduleService->checkOrderReception('15:00', $schedule);

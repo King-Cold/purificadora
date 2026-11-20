@@ -42,7 +42,7 @@ class OrderController extends Controller
             ->with(['items'])
             ->latest('id');
 
-        if (in_array($status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_CANCELLED], true)) {
+        if (in_array($status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED], true)) {
             $query->where('status', $status);
         }
 
@@ -66,7 +66,7 @@ class OrderController extends Controller
                 'total_bottles' => $order->total_bottles,
                 'delivery_street' => $order->delivery_street,
                 'delivery_zone_label' => $addressSnapshot['delivery_zone_label'] ?? $order->delivery_zone,
-                'created_at' => $order->created_at->format('d/m/Y H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'can_cancel' => Gate::forUser(auth()->user())->allows('cancel', $order),
             ];
         });
@@ -82,7 +82,7 @@ class OrderController extends Controller
                 'status' => $activeOrder->status,
                 'status_label' => $activeOrder->status_label,
                 'operational_progress' => $activeOrder->getOperationalProgress(),
-                'created_at' => $activeOrder->created_at->format('d/m/Y H:i'),
+                'created_at' => $activeOrder->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'total_bottles' => $activeOrder->total_bottles,
             ] : null,
             'customer' => [
@@ -148,7 +148,7 @@ class OrderController extends Controller
                 'folio' => $activeOrder->folio,
                 'status' => $activeOrder->status,
                 'status_label' => $activeOrder->status_label,
-                'created_at' => $activeOrder->created_at->format('d/m/Y H:i'),
+                'created_at' => $activeOrder->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'total_bottles' => $activeOrder->total_bottles,
             ];
         }
@@ -163,6 +163,11 @@ class OrderController extends Controller
 
         $canOrder = !in_array(true, $blocks, true);
 
+        $unitPrice = app(\App\Services\SettingService::class)->getCurrentRefillPrice();
+        $weeklyPromo = $customer
+            ? app(\App\Services\WeeklyPromotionService::class)->getWeeklyProgress($customer)
+            : null;
+
         return Inertia::render('Cliente/Orders/Create', [
             'customer' => $customerData,
             'address' => $addressData,
@@ -171,6 +176,10 @@ class OrderController extends Controller
             'scheduleSummary' => $scheduleSummary,
             'blocks' => $blocks,
             'canOrder' => $canOrder,
+            'pricing' => [
+                'unit_price' => (float) $unitPrice,
+                'has_free_bottle_promo' => (bool) ($weeklyPromo['can_redeem'] ?? false),
+            ],
         ]);
     }
 
@@ -241,7 +250,7 @@ class OrderController extends Controller
                 'new_status' => $h->new_status,
                 'new_status_label' => Order::STATUSES[$h->new_status] ?? $h->new_status,
                 'reason' => $h->reason,
-                'created_at' => $h->created_at->format('d/m/Y H:i'),
+                'created_at' => $h->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
             ];
         });
 
@@ -298,7 +307,7 @@ class OrderController extends Controller
                 'exchange_quantity' => $order->exchange_quantity,
                 'total_bottles' => $order->total_bottles,
                 'notes' => $order->notes,
-                'created_at' => $order->created_at->format('d/m/Y H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'cancellation_reason' => $cancellationReason,
                 'address' => $historicalAddress,
                 'history' => $history,

@@ -42,8 +42,8 @@ class PlantQuickRefillController extends Controller
                 'unit_price' => (float) $r->unit_price,
                 'total_amount' => (float) $r->total_amount,
                 'operator_name' => $r->operator?->name ?? 'Operador',
-                'time' => $r->created_at->format('H:i'),
-                'created_at' => $r->created_at->format('d/m/Y H:i'),
+                'time' => $r->created_at?->copy()->setTimezone('America/Merida')->format('H:i'),
+                'created_at' => $r->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'notes' => $r->notes,
             ]);
 

@@ -74,7 +74,7 @@ class OrderController extends Controller
                 'is_pending' => $order->isPending(),
                 'is_confirmed' => $order->isConfirmed(),
                 'is_cancelled' => $order->isCancelled(),
-                'created_at' => $order->created_at->format('d/m/Y H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'fixed_quantity' => $order->fixed_quantity,
                 'exchange_quantity' => $order->exchange_quantity,
                 'total_bottles' => $order->total_bottles,
@@ -151,7 +151,7 @@ class OrderController extends Controller
                 'user_name' => $h->user?->name ?? 'Sistema',
                 'user_role' => $h->user?->roles->first()?->name ?? 'Usuario',
                 'reason' => $h->reason,
-                'created_at' => $h->created_at->format('d/m/Y H:i'),
+                'created_at' => $h->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
             ];
         });
 
@@ -249,7 +249,7 @@ class OrderController extends Controller
                 'exchange_quantity' => $order->exchange_quantity,
                 'total_bottles' => $order->total_bottles,
                 'notes' => $order->notes,
-                'created_at' => $order->created_at->format('d/m/Y H:i'),
+                'created_at' => $order->created_at?->copy()->setTimezone('America/Merida')->format('d/m/Y H:i'),
                 'cancellation_reason' => $cancellationReason,
                 'address' => $historicalAddress,
                 'history' => $history,

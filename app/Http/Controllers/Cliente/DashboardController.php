@@ -70,6 +70,7 @@ class DashboardController extends Controller
         return Inertia::render('Cliente/Dashboard', [
             'customer' => $customer ? [
                 'code' => $customer->code,
+                'name' => $customer->name ?: $request->user()?->name,
                 'nickname' => $customer->nickname,
                 'can_place_orders' => true,
                 'fixed_bottles_count' => (int) $customer->fixed_bottles_count,

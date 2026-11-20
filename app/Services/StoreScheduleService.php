@@ -100,13 +100,13 @@ class StoreScheduleService
             ];
         }
 
-        // 4. Durante el descanso
+        // 4. Durante el descanso: el local presencial descansa, pero los pedidos en línea SÍ se permiten
         if ($currentTime >= $breakStart && $currentTime < $breakEnd) {
             return [
-                'can_receive' => false,
+                'can_receive' => true,
                 'is_store_open' => false,
-                'reason' => 'on_break',
-                'message' => 'La sucursal está en descanso.',
+                'reason' => 'allowed',
+                'message' => 'Recepción de pedidos en línea disponible.',
                 'evaluated_time' => $currentTime,
                 'timezone' => self::TIMEZONE,
             ];
@@ -124,11 +124,8 @@ class StoreScheduleService
             ];
         }
 
-        // 6. Horarios válidos de recepción
-        $inMorning = ($currentTime >= $open && $currentTime < $breakStart);
-        $inAfternoon = ($currentTime >= $breakEnd && $currentTime < $cutoff);
-
-        if ($inMorning || $inAfternoon) {
+        // 6. Horarios válidos de recepción (de apertura hasta la hora límite antes de cerrar)
+        if ($currentTime >= $open && $currentTime < $cutoff) {
             return [
                 'can_receive' => true,
                 'is_store_open' => true,
@@ -212,8 +209,7 @@ class StoreScheduleService
             'break_period' => "{$breakStart} a {$breakEnd}",
             'afternoon_attention' => "{$breakEnd} a {$close}",
             'order_intervals' => [
-                "{$open} a {$breakStart}",
-                "{$breakEnd} a {$cutoff}",
+                "{$open} a {$cutoff}",
             ],
             'days_applied' => 'Lunes a Domingo',
             'timezone' => self::TIMEZONE,

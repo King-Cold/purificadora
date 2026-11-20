@@ -394,21 +394,15 @@ class OrderBusinessLogicTest extends TestCase
         $this->assertNotNull($order0800);
         $this->orderService->cancelOrder($order0800, $this->adminUser, 'Completado');
 
-        // 13:00 -> En descanso
-        try {
-            $this->orderService->createOrder($this->clientUser, ['fixed_quantity' => 1], '13:00');
-            $this->fail('Debió rechazar durante el descanso.');
-        } catch (OrderBusinessRuleException $e) {
-            $this->assertEquals('La sucursal está en descanso.', $e->getMessage());
-        }
+        // 13:00 -> En descanso: Permitido hacer pedidos en línea
+        $order1300 = $this->orderService->createOrder($this->clientUser, ['fixed_quantity' => 1], '13:00');
+        $this->assertNotNull($order1300);
+        $this->orderService->cancelOrder($order1300, $this->adminUser, 'Completado');
 
-        // 14:59 -> En descanso
-        try {
-            $this->orderService->createOrder($this->clientUser, ['fixed_quantity' => 1], '14:59');
-            $this->fail('Debió rechazar durante el descanso.');
-        } catch (OrderBusinessRuleException $e) {
-            $this->assertEquals('La sucursal está en descanso.', $e->getMessage());
-        }
+        // 14:59 -> En descanso: Permitido hacer pedidos en línea
+        $order1459 = $this->orderService->createOrder($this->clientUser, ['fixed_quantity' => 1], '14:59');
+        $this->assertNotNull($order1459);
+        $this->orderService->cancelOrder($order1459, $this->adminUser, 'Completado');
 
         // 15:00 -> Fin descanso: Permitido
         $order1500 = $this->orderService->createOrder($this->clientUser, ['fixed_quantity' => 1], '15:00');

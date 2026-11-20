@@ -1,6 +1,25 @@
 <script setup>
+import { ref, computed } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    Droplets,
+    ClipboardList,
+    RefreshCw,
+    CheckCircle2,
+    AlertCircle,
+    Gift,
+    MapPin,
+    ChevronRight,
+    ChevronDown,
+    Truck,
+    Receipt,
+    Wallet,
+    ArrowRight,
+    Package,
+    UserCog,
+    Sparkles,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     customer: {
@@ -13,7 +32,11 @@ const props = defineProps({
     },
     debt: {
         type: Object,
-        default: () => ({ pending_bottles: 0, pending_amount: 0, disclaimer: 'Son botellones pendientes de pago, no envases por devolver.' }),
+        default: () => ({
+            pending_bottles: 0,
+            pending_amount: 0,
+            clarification_note: 'Son botellones pendientes de pago, no envases por devolver.',
+        }),
     },
     weekly_promo: {
         type: Object,
@@ -33,510 +56,511 @@ const props = defineProps({
     },
 });
 
-const reloadData = () => {
-    router.reload({ preserveScroll: true });
+const page = usePage();
+const isRefreshing = ref(false);
+const activeDrawer = ref(null); // null | 'account' | 'promo'
+
+const toggleDrawer = (drawer) => {
+    activeDrawer.value = activeDrawer.value === drawer ? null : drawer;
 };
 
-const getStageBadgeClass = (stageKey) => {
-    switch (stageKey) {
-        case 'entregado':
-            return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-        case 'en_reparticion':
-            return 'bg-blue-50 text-blue-800 border-blue-200';
-        case 'lavando':
-        case 'listo_para_entregar':
-        case 'llevando_a_planta':
-            return 'bg-purple-50 text-purple-800 border-purple-200';
-        case 'asignado_a_ruta':
-            return 'bg-cyan-50 text-cyan-800 border-cyan-200';
-        case 'confirmado':
-            return 'bg-indigo-50 text-indigo-800 border-indigo-200';
-        case 'cancelado':
-            return 'bg-rose-50 text-rose-800 border-rose-200';
-        default:
-            return 'bg-amber-50 text-amber-800 border-amber-200';
-    }
+const refreshDashboard = () => {
+    isRefreshing.value = true;
+    router.reload({
+        preserveScroll: true,
+        onFinish: () => {
+            isRefreshing.value = false;
+        },
+    });
 };
+
+const formatCurrency = (val) => {
+    const num = Number(val) || 0;
+    return num.toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+};
+
+const hasDebt = computed(() => (props.debt?.pending_bottles ?? 0) > 0);
+const missingAddress = computed(() => !props.customer?.has_address);
+const missingBottles = computed(() => (props.customer?.total_bottles ?? 0) <= 0);
+const needsSetup = computed(() => !props.customer || missingAddress.value || missingBottles.value);
+
+const greetingName = computed(() => {
+    return (
+        props.customer?.name ||
+        page.props.auth?.user?.name ||
+        props.customer?.nickname ||
+        'Cliente'
+    );
+});
+
+const promoPaid = computed(() => Math.min(props.weekly_promo?.paid_count ?? 0, props.weekly_promo?.required ?? 9));
+const promoRequired = computed(() => props.weekly_promo?.required ?? 9);
+const promoPercent = computed(() => {
+    if (!props.weekly_promo) return 0;
+    if (props.weekly_promo.status === 'available' || props.weekly_promo.status === 'redeemed') return 100;
+    return Math.min(100, Math.round((promoPaid.value / Math.max(1, promoRequired.value)) * 100));
+});
+
+const activeOrderIsFixed = computed(() => Number(props.activeOrder?.fixed_quantity || 0) > 0);
+
+const activeOrderTotalSteps = computed(() => (activeOrderIsFixed.value ? 4 : 2));
+
+const activeOrderStepIndex = computed(() => {
+    const key = props.activeOrder?.operational_progress?.overall_stage_key || props.activeOrder?.status;
+    if (!activeOrderIsFixed.value) {
+        return key === 'entregado' ? 2 : 1;
+    }
+    if (key === 'entregado') return 4;
+    if (key === 'lavando' || key === 'listo_para_entregar' || key === 'en_reparticion') {
+        return 3;
+    }
+    if (key === 'llevando_a_planta') return 2;
+    return 1;
+});
+
+const activeOrderBadge = computed(() => {
+    const key = props.activeOrder?.operational_progress?.overall_stage_key || props.activeOrder?.status;
+    if (key === 'entregado') {
+        return 'bg-emerald-50 text-emerald-700';
+    }
+    if (key === 'en_reparticion' || key === 'asignado_a_ruta' || key === 'in_route') {
+        return 'bg-sky-50 text-sky-800';
+    }
+    if (key === 'confirmado' || key === 'confirmed' || key === 'listo_para_entregar' || key === 'lavando' || key === 'llevando_a_planta') {
+        return 'bg-violet-50 text-[#6D28D9]';
+    }
+    return 'bg-amber-50 text-amber-800';
+});
 </script>
 
 <template>
     <Head title="Inicio" />
 
     <AuthenticatedLayout>
-        <!-- 1. ENCABEZADO ÚNICO: Saludo breve y acciones de pedidos -->
-        <template #header>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                        Hola, {{ customer?.nickname || $page.props.auth.user.name }}
-                    </h1>
-                    <p class="text-xs text-slate-500">
-                        Resumen de tu cuenta y pedidos de agua purificada
-                    </p>
-                </div>
-
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <!-- Botón de actualización de consulta -->
-                    <button
-                        @click="reloadData"
-                        type="button"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition active:scale-95"
-                        title="Actualizar información"
-                    >
-                        <i class="fa-solid fa-arrows-rotate text-[11px] text-slate-400"></i>
-                        <span>Actualizar</span>
-                    </button>
-
-                    <!-- Acción secundaria: Ver mis pedidos -->
-                    <Link
-                        :href="route('cliente.orders.index')"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 transition shadow-2xs cursor-pointer"
-                    >
-                        <i class="fa-regular fa-file-lines text-slate-500 text-xs"></i>
-                        <span>Ver mis pedidos</span>
-                    </Link>
-
-                    <!-- Acción principal: Nuevo pedido (respeta bloqueo por pedido activo) -->
-                    <Link
-                        v-if="!activeOrder"
-                        :href="route('cliente.orders.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs cursor-pointer"
-                    >
-                        <i class="fa-solid fa-plus text-xs"></i>
-                        <span>Nuevo pedido</span>
-                    </Link>
-                    <span
-                        v-else
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed select-none"
-                        title="Ya cuentas con un pedido activo en proceso. No puedes solicitar otro hasta que se complete o cancele."
-                    >
-                        <i class="fa-solid fa-lock text-xs"></i>
-                        <span>Nuevo pedido</span>
-                    </span>
-                </div>
-            </div>
-        </template>
-
-        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-            <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-5">
-
-                <!-- Indicador de última actualización -->
-                <div v-if="last_updated_at" class="flex justify-end text-[11px] text-slate-400">
-                    <span>Consulta actualizada: {{ last_updated_at }}</span>
-                </div>
-
-                <!-- ========================================================================= -->
-                <!-- 2. SEGUIMIENTO DE PEDIDO ACTIVO (CON AVANCE OPERATIVO REAL)                -->
-                <!-- ========================================================================= -->
-                <div
-                    v-if="activeOrder"
-                    class="bg-white rounded-2xl border border-blue-200/80 p-5 sm:p-6 shadow-xs space-y-4"
+        <div class="bg-[#F5F4F8] py-4 sm:py-7">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-5">
+                <!-- ========================================== -->
+                <!-- 1. HERO MORADO PURITRONIC + ACCIÓN RÁPIDA  -->
+                <!-- ========================================== -->
+                <section
+                    aria-label="Bienvenida y acción principal"
+                    class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E1545] via-[#2A1E5E] to-[#3B297D] text-white shadow-md p-5 sm:p-7 border border-[#34266E]"
                 >
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                        <div class="flex items-start sm:items-center gap-3">
-                            <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-                                <i class="fa-solid fa-truck-fast text-base"></i>
-                            </div>
-                            <div class="space-y-0.5">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="text-xs text-slate-500 font-medium">Pedido en curso:</span>
-                                    <span class="font-mono font-bold text-sm text-slate-900">{{ activeOrder.folio }}</span>
-                                    <span
-                                        class="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
-                                        :class="getStageBadgeClass(activeOrder.operational_progress?.overall_stage_key)"
-                                    >
-                                        {{ activeOrder.operational_progress?.overall_stage_label || activeOrder.status_label }}
-                                    </span>
-                                </div>
-                                <p class="text-xs text-slate-600">
-                                    {{ activeOrder.operational_progress?.explanation || `${activeOrder.total_bottles} botellones en proceso.` }}
-                                </p>
-                            </div>
+                    <div
+                        aria-hidden="true"
+                        class="pointer-events-none absolute -right-12 -top-12 w-56 h-56 rounded-full bg-violet-400/15 blur-2xl"
+                    ></div>
+                    <svg
+                        aria-hidden="true"
+                        class="pointer-events-none absolute -right-8 -bottom-10 w-52 h-52 text-white/[0.06]"
+                        viewBox="0 0 200 200"
+                        fill="currentColor"
+                    >
+                        <path d="M44.7,-64.2C57.6,-55.8,67.5,-42.3,73.1,-27.2C78.7,-12.1,80,4.5,75.4,19.4C70.8,34.3,60.3,47.5,47.1,57.4C33.9,67.3,18,73.9,1.1,72.4C-15.9,70.9,-31.8,61.3,-45.7,50.1C-59.6,38.9,-71.5,26.1,-75.9,10.7C-80.3,-4.7,-77.2,-22.7,-67.6,-36.8C-58,-50.9,-41.9,-61.1,-26.1,-68.1C-10.3,-75.1,5.2,-78.9,19.9,-75.5C34.6,-72.1,31.8,-72.6,44.7,-64.2Z" transform="translate(100 100)" />
+                    </svg>
+
+                    <div class="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+                        <div class="space-y-0.5 min-w-0">
+                            <p class="text-xs sm:text-sm font-medium text-violet-200">
+                                Hola, bienvenido
+                            </p>
+                            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white break-words">
+                                {{ greetingName }}
+                            </h1>
+                        </div>
+
+                        <div class="flex items-center gap-2.5 shrink-0">
+                            <Link
+                                v-if="!activeOrder"
+                                :href="route('cliente.orders.create')"
+                                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[48px] rounded-2xl text-sm font-extrabold text-[#1E1545] bg-white hover:bg-violet-50 shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1545]"
+                            >
+                                <Droplets class="w-[18px] h-[18px] text-[#6D28D9] shrink-0" aria-hidden="true" />
+                                <span>Pedir botellones</span>
+                            </Link>
+
+                            <Link
+                                v-else
+                                :href="route('cliente.orders.show', activeOrder.id)"
+                                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[48px] rounded-2xl text-sm font-extrabold text-[#1E1545] bg-white hover:bg-violet-50 shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1545]"
+                            >
+                                <Truck class="w-[18px] h-[18px] text-[#6D28D9] shrink-0" aria-hidden="true" />
+                                <span>Ver pedido activo</span>
+                            </Link>
+
+                            <Link
+                                :href="route('cliente.orders.index')"
+                                class="hidden sm:inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-2xl text-xs font-bold text-white bg-white/15 hover:bg-white/25 border border-white/20 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            >
+                                <ClipboardList class="w-4 h-4 shrink-0" aria-hidden="true" />
+                                <span>Mis pedidos</span>
+                            </Link>
+
+                            <button
+                                type="button"
+                                @click="refreshDashboard"
+                                :disabled="isRefreshing"
+                                aria-label="Actualizar panel"
+                                title="Actualizar"
+                                class="inline-flex items-center justify-center h-12 w-12 rounded-2xl text-white bg-white/15 hover:bg-white/25 border border-white/20 transition cursor-pointer disabled:opacity-60 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            >
+                                <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isRefreshing }" aria-hidden="true" />
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ========================================== -->
+                <!-- 2. CHECKLIST COMPACTO DE CONFIGURACIÓN     -->
+                <!-- ========================================== -->
+                <section
+                    v-if="needsSetup"
+                    aria-label="Pasos rápidos para completar tu perfil"
+                    class="rounded-2xl bg-amber-50/90 border border-amber-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                >
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="h-8 w-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                            <Sparkles class="w-4 h-4" aria-hidden="true" />
+                        </span>
+                        <span class="text-xs sm:text-sm font-bold text-amber-950">
+                            Completa tu cuenta para pedir más rápido:
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Link
+                            v-if="missingAddress"
+                            :href="route('cliente.addresses.create')"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl text-xs font-extrabold text-white bg-amber-700 hover:bg-amber-800 transition"
+                        >
+                            <MapPin class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>Registrar domicilio</span>
+                        </Link>
+                        <Link
+                            v-if="missingBottles"
+                            :href="route('profile.edit')"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl text-xs font-extrabold text-amber-950 bg-white border border-amber-300 hover:bg-amber-100 transition"
+                        >
+                            <UserCog class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>Definir botellones</span>
+                        </Link>
+                    </div>
+                </section>
+
+                <!-- ========================================== -->
+                <!-- 3. PEDIDO ACTIVO CON TRACKER EN 4 PASOS    -->
+                <!-- ========================================== -->
+                <section
+                    v-if="activeOrder"
+                    aria-labelledby="active-order-heading"
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 space-y-4"
+                >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex flex-wrap items-center gap-2 min-w-0">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold" :class="activeOrderBadge">
+                                {{ activeOrder.operational_progress?.overall_stage_label || activeOrder.status_label }}
+                            </span>
+                            <span class="text-xs font-bold font-mono text-[#1E1545] tabular-nums">
+                                {{ activeOrder.folio }}
+                            </span>
                         </div>
 
                         <Link
                             :href="route('cliente.orders.show', activeOrder.id)"
-                            class="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition shrink-0 cursor-pointer"
+                            class="inline-flex items-center gap-1 text-xs font-extrabold text-[#6D28D9] hover:text-[#1E1545] transition min-h-[36px] px-2 shrink-0"
                         >
-                            <span>Ver seguimiento</span>
-                            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            <span>Detalle</span>
+                            <ArrowRight class="w-3.5 h-3.5" aria-hidden="true" />
                         </Link>
                     </div>
 
-                    <!-- Desglose de Modalidad del Pedido -->
-                    <div v-if="activeOrder.operational_progress" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        <!-- Tarjeta de Cambio -->
-                        <div
-                            v-if="activeOrder.operational_progress.exchange"
-                            class="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs space-y-1.5"
-                        >
-                            <div class="flex items-center justify-between font-bold">
-                                <span class="text-blue-950 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-arrows-rotate text-blue-900"></i> Cambio (Llenos por vacíos)
-                                </span>
-                                <span
-                                    class="px-2 py-0.5 rounded-md text-[11px] border"
-                                    :class="getStageBadgeClass(activeOrder.operational_progress.exchange.stage_key)"
-                                >
-                                    {{ activeOrder.operational_progress.exchange.stage_label }}
-                                </span>
-                            </div>
-                            <div class="flex justify-between text-slate-600 text-[11px]">
-                                <span>Solicitados: {{ activeOrder.operational_progress.exchange.quantity_requested }}</span>
-                                <span>Entregados: {{ activeOrder.operational_progress.exchange.delivered_quantity }}</span>
-                                <span v-if="activeOrder.operational_progress.exchange.cancelled_quantity > 0" class="text-rose-600 font-bold">
-                                    Cancelados: {{ activeOrder.operational_progress.exchange.cancelled_quantity }}
-                                </span>
-                            </div>
-                            <p v-if="activeOrder.operational_progress.exchange.cancellation_reason" class="text-[11px] text-rose-700 bg-rose-50 p-1.5 rounded-lg border border-rose-100">
-                                Motivo: {{ activeOrder.operational_progress.exchange.cancellation_reason }}
-                            </p>
-                        </div>
-
-                        <!-- Tarjeta de Fijos -->
-                        <div
-                            v-if="activeOrder.operational_progress.fixed"
-                            class="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs space-y-1.5"
-                        >
-                            <div class="flex items-center justify-between font-bold">
-                                <span class="text-purple-950 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-tag text-purple-900"></i> Fijos (Tus envases)
-                                </span>
-                                <span
-                                    class="px-2 py-0.5 rounded-md text-[11px] border"
-                                    :class="getStageBadgeClass(activeOrder.operational_progress.fixed.stage_key)"
-                                >
-                                    {{ activeOrder.operational_progress.fixed.stage_label }}
-                                </span>
-                            </div>
-                            <div class="flex justify-between text-slate-600 text-[11px]">
-                                <span>Solicitados: {{ activeOrder.operational_progress.fixed.quantity_requested }}</span>
-                                <span>Recogidos: {{ activeOrder.operational_progress.fixed.collected_quantity }}</span>
-                                <span>Devueltos: {{ activeOrder.operational_progress.fixed.delivered_quantity }}</span>
-                            </div>
-                            <p v-if="activeOrder.operational_progress.fixed.cancelled_quantity > 0" class="text-[11px] text-rose-700 bg-rose-50 p-1.5 rounded-lg border border-rose-100">
-                                Unidades no entregadas/canceladas: {{ activeOrder.operational_progress.fixed.cancelled_quantity }} ({{ activeOrder.operational_progress.fixed.cancellation_reason }})
-                            </p>
-                        </div>
+                    <div>
+                        <h2 id="active-order-heading" class="text-base font-extrabold text-[#1E1545]">
+                            {{ activeOrder.total_bottles }} {{ activeOrder.total_bottles === 1 ? 'botellón' : 'botellones' }} en curso
+                        </h2>
+                        <p v-if="activeOrder.operational_progress?.explanation" class="text-xs sm:text-sm text-slate-600 mt-0.5 leading-relaxed">
+                            {{ activeOrder.operational_progress.explanation }}
+                        </p>
                     </div>
-                </div>
 
-                <!-- ========================================================================= -->
-                <!-- 3. SALDO Y PROMOCIÓN DEL CLIENTE                                          -->
-                <!-- ========================================================================= -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start">
+                    <!-- Barra de progreso tipo delivery acorde al flujo real -->
+                    <div
+                        class="grid gap-1.5 pt-1"
+                        :class="activeOrderTotalSteps === 2 ? 'grid-cols-2' : 'grid-cols-4'"
+                        aria-hidden="true"
+                    >
+                        <div
+                            v-for="step in activeOrderTotalSteps"
+                            :key="step"
+                            class="h-2 rounded-full transition-colors"
+                            :class="step <= activeOrderStepIndex ? 'bg-[#6D28D9]' : 'bg-[#ECEAEF]'"
+                        ></div>
+                    </div>
+                </section>
 
-                    <!-- TARJETA: SALDO Y PENDIENTES DE PAGO -->
-                    <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
-                        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                            <div class="flex items-center gap-2.5">
-                                <div class="h-8 w-8 rounded-lg bg-amber-50 text-amber-800 flex items-center justify-center shrink-0">
-                                    <i class="fa-solid fa-receipt text-sm"></i>
-                                </div>
-                                <div>
-                                    <h2 class="text-sm font-bold text-slate-900">
-                                        Estado de cuenta
-                                    </h2>
-                                    <p class="text-[11px] text-slate-500">
-                                        Pendientes de pago e historial
-                                    </p>
-                                </div>
+                <!-- ========================================== -->
+                <!-- 4. RESUMEN RÁPIDO COMPACTO (2 COLUMNAS)    -->
+                <!-- ========================================== -->
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                        <!-- Tile 1: Saldo -->
+                        <button
+                            type="button"
+                            @click="toggleDrawer('account')"
+                            :aria-expanded="activeDrawer === 'account'"
+                            class="min-w-0 text-left rounded-2xl bg-white border p-3.5 sm:p-5 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                            :class="activeDrawer === 'account'
+                                ? 'border-[#6D28D9] ring-1 ring-[#6D28D9]/25'
+                                : 'border-[#E9E7F0] hover:border-slate-300'"
+                        >
+                            <div class="flex items-center justify-between gap-2">
+                                <span
+                                    class="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+                                    :class="hasDebt ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'"
+                                >
+                                    <AlertCircle v-if="hasDebt" class="w-[18px] h-[18px]" aria-hidden="true" />
+                                    <CheckCircle2 v-else class="w-[18px] h-[18px]" aria-hidden="true" />
+                                </span>
+
+                                <ChevronDown
+                                    class="w-4 h-4 text-slate-400 transition-transform shrink-0"
+                                    :class="{ 'rotate-180 text-[#6D28D9]': activeDrawer === 'account' }"
+                                    aria-hidden="true"
+                                />
                             </div>
 
-                            <span
-                                class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                                :class="debt.pending_bottles > 0 ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-emerald-50 text-emerald-900 border-emerald-300'"
+                            <div class="mt-3 min-w-0">
+                                <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 block truncate">
+                                    Estado de cuenta
+                                </span>
+                                <span
+                                    class="text-lg sm:text-2xl font-black tabular-nums block mt-0.5 truncate"
+                                    :class="hasDebt ? 'text-rose-700' : 'text-[#1E1545]'"
+                                >
+                                    ${{ formatCurrency(debt.pending_amount) }}
+                                </span>
+                                <span
+                                    class="inline-flex mt-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold max-w-full truncate"
+                                    :class="hasDebt ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'"
+                                >
+                                    {{ hasDebt ? `${debt.pending_bottles} fiado(s)` : 'Al corriente' }}
+                                </span>
+                            </div>
+                        </button>
+
+                        <!-- Tile 2: Promoción 9+1 -->
+                        <button
+                            type="button"
+                            @click="toggleDrawer('promo')"
+                            :aria-expanded="activeDrawer === 'promo'"
+                            class="min-w-0 text-left rounded-2xl bg-white border p-3.5 sm:p-5 shadow-sm transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                            :class="activeDrawer === 'promo'
+                                ? 'border-[#6D28D9] ring-1 ring-[#6D28D9]/25'
+                                : 'border-[#E9E7F0] hover:border-slate-300'"
+                        >
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="h-9 w-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                    <Gift class="w-[18px] h-[18px]" aria-hidden="true" />
+                                </span>
+
+                                <ChevronDown
+                                    class="w-4 h-4 text-slate-400 transition-transform shrink-0"
+                                    :class="{ 'rotate-180 text-[#6D28D9]': activeDrawer === 'promo' }"
+                                    aria-hidden="true"
+                                />
+                            </div>
+
+                            <div class="mt-3 min-w-0">
+                                <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 block truncate">
+                                    Promo 9 + 1
+                                </span>
+                                <span class="text-lg sm:text-2xl font-black text-[#1E1545] tabular-nums block mt-0.5 truncate">
+                                    {{ promoPaid }} <span class="text-xs sm:text-sm font-bold text-slate-400">/ {{ promoRequired }}</span>
+                                </span>
+
+                                <div
+                                    class="mt-2 h-2 w-full rounded-full bg-slate-100 overflow-hidden"
+                                    role="progressbar"
+                                    :aria-valuenow="promoPaid"
+                                    aria-valuemin="0"
+                                    :aria-valuemax="promoRequired"
+                                    :aria-label="`Progreso de promoción semanal: ${promoPaid} de ${promoRequired}`"
+                                >
+                                    <div
+                                        class="h-full rounded-full transition-all duration-500"
+                                        :class="weekly_promo?.can_redeem ? 'bg-emerald-500' : 'bg-gradient-to-r from-[#6D28D9] to-amber-500'"
+                                        :style="{ width: `${promoPercent}%` }"
+                                    ></div>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Panel expandible: Detalle Estado de Cuenta -->
+                    <section
+                        v-if="activeDrawer === 'account'"
+                        aria-label="Detalle de pagos y adeudos"
+                        class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-4 sm:p-5 space-y-3.5"
+                    >
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                            <h2 class="text-sm font-extrabold text-[#1E1545] flex items-center gap-2">
+                                <Wallet class="w-4 h-4 text-[#6D28D9] shrink-0" aria-hidden="true" />
+                                <span>Movimientos recientes</span>
+                            </h2>
+                            <p v-if="debt?.clarification_note" class="text-[11px] text-slate-500">
+                                {{ debt.clarification_note }}
+                            </p>
+                        </div>
+
+                        <div v-if="payment_history.length > 0" class="space-y-2">
+                            <div
+                                v-for="p in payment_history"
+                                :key="p.id"
+                                class="flex items-center justify-between gap-2 text-xs py-2.5 px-3 rounded-xl bg-[#F5F4F8] border border-[#E9E7F0]"
                             >
-                                {{ debt.pending_bottles > 0 ? `${debt.pending_bottles} botellones pendientes` : 'Al día' }}
+                                <div class="min-w-0">
+                                    <span class="font-extrabold text-[#1E1545] tabular-nums block truncate">
+                                        ${{ formatCurrency(p.amount) }}
+                                        <span v-if="p.order_folio" class="font-mono text-slate-500 font-medium">• {{ p.order_folio }}</span>
+                                    </span>
+                                    <span class="text-[11px] text-slate-500">{{ p.date }}</span>
+                                </div>
+                                <span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md tabular-nums shrink-0">
+                                    {{ p.bottles_count }} u.
+                                </span>
+                            </div>
+                        </div>
+                        <p v-else class="text-xs text-slate-500">
+                            Aún no hay pagos registrados recientemente.
+                        </p>
+
+                        <div v-if="free_deliveries.length > 0" class="pt-3 border-t border-[#E9E7F0] space-y-2">
+                            <span class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                <Receipt class="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+                                Canjes gratuitos ({{ free_deliveries.length }})
                             </span>
-                        </div>
-
-                        <!-- Métricas de deuda -->
-                        <div class="grid grid-cols-2 gap-3 py-1">
-                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                                <span class="text-[11px] font-medium text-slate-500 block">Botellones pendientes</span>
-                                <span class="text-2xl font-black text-slate-900 font-mono mt-0.5 block">
-                                    {{ debt.pending_bottles }}
+                            <div
+                                v-for="item in free_deliveries"
+                                :key="item.id"
+                                class="flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-xl bg-amber-50 border border-amber-200/80"
+                            >
+                                <span class="font-semibold text-amber-950 truncate">
+                                    {{ item.order_folio || 'Promoción semanal' }} • {{ item.date }}
                                 </span>
-                            </div>
-                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                                <span class="text-[11px] font-medium text-slate-500 block">Importe pendiente</span>
-                                <span class="text-2xl font-black text-slate-900 font-mono mt-0.5 block">
-                                    ${{ debt.pending_amount }}
-                                </span>
+                                <span class="font-extrabold text-amber-900 tabular-nums shrink-0">{{ item.bottles_count }} gratis</span>
                             </div>
                         </div>
+                    </section>
 
-                        <!-- Aclaración requerida -->
-                        <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 text-xs flex items-start gap-2">
-                            <i class="fa-solid fa-circle-info text-amber-700 mt-0.5 text-xs shrink-0"></i>
-                            <span class="text-[11px] leading-relaxed">
-                                {{ debt.disclaimer }}
-                            </span>
-                        </div>
-
-                        <!-- Historial desplegable de pagos y entregas gratuitas -->
-                        <details class="group pt-2 border-t border-slate-100 text-xs">
-                            <summary class="cursor-pointer font-bold text-slate-600 hover:text-slate-900 flex items-center justify-between list-none select-none py-1">
-                                <span class="flex items-center gap-1.5">
-                                    <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
-                                    <span>Ver últimos pagos y entregas gratuitas</span>
-                                </span>
-                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform"></i>
-                            </summary>
-
-                            <div class="mt-3 space-y-2.5">
-                                <!-- Pagos en efectivo -->
-                                <div>
-                                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Últimos pagos registrados</span>
-                                    <div v-if="payment_history.length > 0" class="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
-                                        <div
-                                            v-for="p in payment_history"
-                                            :key="p.id"
-                                            class="p-2.5 bg-slate-50/50 flex items-center justify-between text-xs"
-                                        >
-                                            <div>
-                                                <span class="font-bold text-slate-800">${{ p.amount }} pagados</span>
-                                                <span class="text-slate-400 block text-[10px]">{{ p.bottles_count }} botellón(es) liquidado(s) · {{ p.date }}</span>
-                                            </div>
-                                            <span v-if="p.order_folio" class="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                                {{ p.order_folio }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p v-else class="text-[11px] text-slate-400 italic">No hay pagos recientes registrados.</p>
-                                </div>
-
-                                <!-- Entregas gratuitas -->
-                                <div class="pt-2 border-t border-slate-100">
-                                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Entregas gratuitas recibidas</span>
-                                    <div v-if="free_deliveries.length > 0" class="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
-                                        <div
-                                            v-for="f in free_deliveries"
-                                            :key="f.id"
-                                            class="p-2.5 bg-emerald-50/40 flex items-center justify-between text-xs text-emerald-950"
-                                        >
-                                            <div>
-                                                <span class="font-bold text-emerald-800 flex items-center gap-1.5">
-                                                    <i class="fa-solid fa-gift text-emerald-600"></i>
-                                                    <span>1 botellón gratuito bonificado</span>
-                                                </span>
-                                                <span class="text-emerald-700 block text-[10px]">{{ f.date }}</span>
-                                            </div>
-                                            <span v-if="f.order_folio" class="text-[10px] font-mono text-emerald-800 bg-white px-1.5 py-0.5 rounded border border-emerald-200">
-                                                {{ f.order_folio }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p v-else class="text-[11px] text-slate-400 italic">No hay promociones canjeadas registradas.</p>
-                                </div>
-                            </div>
-                        </details>
-                    </div>
-
-                    <!-- TARJETA: PROMOCIÓN SEMANAL (9+1) -->
-                    <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
-                        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                            <div class="flex items-center gap-2.5">
-                                <div class="h-8 w-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-                                    <i class="fa-solid fa-gift text-sm"></i>
-                                </div>
-                                <div>
-                                    <h2 class="text-sm font-bold text-slate-900">
-                                        Promoción Semanal (9 + 1)
-                                    </h2>
-                                    <p class="text-[11px] text-slate-500">
-                                        Por cada 9 botellones pagados, el 10.º es gratis
-                                    </p>
-                                </div>
-                            </div>
-
+                    <!-- Panel expandible: Sellos Promo 9+1 -->
+                    <section
+                        v-if="activeDrawer === 'promo'"
+                        aria-label="Detalle de promoción semanal 9+1"
+                        class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-4 sm:p-5 space-y-3.5"
+                    >
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h2 class="text-sm font-extrabold text-[#1E1545]">
+                                Sellos semanales (9 pagados + 1 gratis)
+                            </h2>
                             <span
                                 v-if="weekly_promo"
-                                class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                                :class="weekly_promo.can_redeem ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : (weekly_promo.status === 'redeemed' ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-100 text-slate-700 border-slate-200')"
+                                class="px-2 py-0.5 rounded-md text-[11px] font-bold"
+                                :class="weekly_promo.can_redeem
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-800'"
                             >
                                 {{ weekly_promo.status_label }}
                             </span>
                         </div>
 
-                        <!-- Barra y avance de botellones pagados -->
-                        <div v-if="weekly_promo" class="space-y-2">
-                            <div class="flex items-center justify-between text-xs font-bold text-slate-800">
-                                <span>Progreso de la semana:</span>
-                                <span class="font-mono text-blue-900">{{ weekly_promo.paid_count }} de {{ weekly_promo.required }} pagados</span>
-                            </div>
-
-                            <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                                <div
-                                    class="h-full rounded-full transition-all duration-500"
-                                    :class="weekly_promo.paid_count >= weekly_promo.required ? 'bg-emerald-500' : 'bg-blue-600'"
-                                    :style="{ width: `${Math.min(100, Math.round((weekly_promo.paid_count / weekly_promo.required) * 100))}%` }"
-                                ></div>
-                            </div>
-
-                            <p class="text-xs text-slate-600 pt-1 leading-relaxed">
-                                {{ weekly_promo.label }}
-                            </p>
-
-                            <!-- Fecha límite de beneficio disponible -->
+                        <div class="grid grid-cols-5 sm:grid-cols-10 gap-1.5" aria-hidden="true">
                             <div
-                                v-if="weekly_promo.can_redeem"
-                                class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs space-y-1"
+                                v-for="step in 9"
+                                :key="step"
+                                class="h-9 rounded-xl flex items-center justify-center text-xs font-extrabold border"
+                                :class="step <= promoPaid
+                                    ? 'bg-[#1E1545] text-white border-[#1E1545]'
+                                    : 'bg-[#F5F4F8] text-slate-400 border-[#E9E7F0]'"
                             >
-                                <span class="font-bold flex items-center gap-1.5 text-emerald-900">
-                                    <i class="fa-solid fa-gift text-emerald-600"></i> ¡Tienes 1 botellón de 20L gratuito disponible!
-                                </span>
-                                <p class="text-[11px] text-emerald-800">
-                                    Válido hasta el <strong>{{ weekly_promo.expires_at_label }}</strong> (horario de Hocabá, Yucatán). Recuerda tener listo tu envase vacío para el intercambio.
-                                </p>
+                                {{ step }}
                             </div>
-
                             <div
-                                v-else-if="weekly_promo.status === 'expired'"
-                                class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs"
+                                class="h-9 rounded-xl flex items-center justify-center text-[11px] font-black border"
+                                :class="weekly_promo?.status === 'available' || weekly_promo?.status === 'redeemed'
+                                    ? 'bg-emerald-600 text-white border-emerald-600'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'"
                             >
-                                El beneficio no utilizado venció al concluir el ciclo semanal.
+                                +1
                             </div>
                         </div>
 
-                        <div class="p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed border border-slate-100">
-                            * Se contabilizan bajo la zona horaria oficial de Mérida. Los botellones a crédito suman al ser liquidados en efectivo.
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- 4. CONTROL: BOTELLONES Y DOMICILIO -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start">
-
-                    <!-- TARJETA UNIFICADA: BOTELLONES REGISTRADOS (20 LITROS) -->
-                    <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between pb-3.5 border-b border-slate-100">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="h-8 w-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-                                        <i class="fa-solid fa-bottle-water text-sm"></i>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-sm font-semibold text-slate-900">
-                                            Botellones (20 litros)
-                                        </h2>
-                                        <p class="text-[11px] text-slate-500">
-                                            Inventario registrado en tu cuenta
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <Link
-                                    :href="route('profile.edit')"
-                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition cursor-pointer"
-                                    title="Modificar tus cantidades de botellones"
-                                >
-                                    <i class="fa-solid fa-pen-to-square text-[11px] text-slate-500"></i>
-                                    <span>Ajustar</span>
-                                </Link>
-                            </div>
-
-                            <!-- Métricas de botellones -->
-                            <div class="grid grid-cols-3 gap-2.5 py-4">
-                                <div class="p-3 rounded-xl bg-slate-50/70 border border-slate-100 text-center">
-                                    <span class="text-[11px] font-medium text-slate-500 block">Fijos</span>
-                                    <span class="text-2xl font-semibold text-slate-900 font-mono mt-0.5 block">
-                                        {{ customer?.fixed_bottles_count ?? 0 }}
-                                    </span>
-                                </div>
-
-                                <div class="p-3 rounded-xl bg-slate-50/70 border border-slate-100 text-center">
-                                    <span class="text-[11px] font-medium text-slate-500 block">De cambio</span>
-                                    <span class="text-2xl font-semibold text-slate-900 font-mono mt-0.5 block">
-                                        {{ customer?.exchange_bottles_count ?? 0 }}
-                                    </span>
-                                </div>
-
-                                <div class="p-3 rounded-xl bg-blue-50/50 border border-blue-100 text-center">
-                                    <span class="text-[11px] font-medium text-blue-900 block">Total</span>
-                                    <span class="text-2xl font-semibold text-blue-950 font-mono mt-0.5 block">
-                                        {{ customer?.total_bottles ?? 0 }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- TARJETA: DOMICILIO DE ENTREGA -->
-                    <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between pb-3.5 border-b border-slate-100">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0">
-                                        <i class="fa-solid fa-location-dot text-sm"></i>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-sm font-semibold text-slate-900">
-                                            Domicilio de entrega
-                                        </h2>
-                                        <p class="text-[11px] text-slate-500">
-                                            Dirección para tus pedidos en Hocabá
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <span
-                                    v-if="customer?.zone_label"
-                                    class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200"
-                                >
-                                    {{ customer.zone_label }}
-                                </span>
-                            </div>
-
-                            <!-- Información de la dirección -->
-                            <div class="py-4 space-y-2">
-                                <template v-if="customer?.has_address">
-                                    <div class="space-y-0.5">
-                                        <span class="text-[11px] font-medium text-slate-500 block">Dirección</span>
-                                        <p class="text-sm font-semibold text-slate-900 leading-snug">
-                                            {{ customer.address_summary }}
-                                        </p>
-                                    </div>
-
-                                    <div v-if="customer?.between_streets" class="text-xs text-slate-600 pt-1">
-                                        <span class="text-slate-400 text-[11px]">Cruzamientos:</span>
-                                        <span class="ml-1 text-slate-700 font-medium">{{ customer.between_streets }}</span>
-                                    </div>
-
-                                    <div v-if="customer?.reference" class="text-xs text-slate-600">
-                                        <span class="text-slate-400 text-[11px]">Referencia:</span>
-                                        <span class="ml-1 text-slate-700 font-medium">{{ customer.reference }}</span>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="py-3 text-center space-y-1">
-                                        <p class="text-xs font-medium text-slate-700">
-                                            Aún no has registrado tu domicilio de entrega.
-                                        </p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Enlace para administrarlo -->
-                        <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
-                            <span class="text-[11px] text-slate-400">
-                                Hocabá, Yucatán
+                        <p v-if="weekly_promo" class="text-xs text-slate-600">
+                            {{ weekly_promo.label }}
+                            <span v-if="weekly_promo.expires_at_label" class="block text-[11px] text-slate-400 mt-1 tabular-nums">
+                                Vigencia hasta {{ weekly_promo.expires_at_label }}
                             </span>
-                            <Link
-                                :href="route('cliente.addresses.index')"
-                                class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-900 hover:text-blue-800 transition cursor-pointer"
-                            >
-                                <span>{{ customer?.has_address ? 'Administrar domicilio' : 'Registrar domicilio' }}</span>
-                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                            </Link>
-                        </div>
-                    </div>
-
+                        </p>
+                    </section>
                 </div>
 
+                <!-- ========================================== -->
+                <!-- 5. ACCESOS RÁPIDOS DE MI CUENTA            -->
+                <!-- ========================================== -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                    <!-- Botellones -->
+                    <Link
+                        :href="route('profile.edit')"
+                        class="group rounded-2xl bg-white border border-[#E9E7F0] hover:border-[#6D28D9]/40 shadow-sm p-4 sm:p-5 flex items-center justify-between gap-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                    >
+                        <div class="flex items-center gap-3.5 min-w-0">
+                            <div class="h-11 w-11 rounded-2xl bg-violet-100 text-[#6D28D9] flex items-center justify-center shrink-0">
+                                <Package v-if="(customer?.fixed_bottles_count ?? 0) > 0" class="w-5 h-5" aria-hidden="true" />
+                                <Droplets v-else class="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                                    Mis botellones (20 L)
+                                </span>
+                                <span class="text-sm sm:text-base font-extrabold text-[#1E1545] block mt-0.5 tabular-nums">
+                                    {{ customer?.total_bottles ?? 0 }} en tu cuenta
+                                </span>
+                                <span class="text-xs text-slate-500 block truncate">
+                                    {{ (customer?.fixed_bottles_count ?? 0) > 0 ? 'Modalidad Fijos' : (customer?.exchange_bottles_count ?? 0) > 0 ? 'Modalidad De cambio' : 'Sin configurar aún' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <ChevronRight class="w-5 h-5 text-slate-400 group-hover:text-[#6D28D9] shrink-0 transition" aria-hidden="true" />
+                    </Link>
+
+                    <!-- Domicilio -->
+                    <Link
+                        :href="route('cliente.addresses.index')"
+                        class="group rounded-2xl bg-white border border-[#E9E7F0] hover:border-emerald-400 shadow-sm p-4 sm:p-5 flex items-center justify-between gap-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                    >
+                        <div class="flex items-center gap-3.5 min-w-0">
+                            <div class="h-11 w-11 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                <MapPin class="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                                    Domicilio de entrega
+                                </span>
+                                <span class="text-sm sm:text-base font-extrabold text-[#1E1545] block truncate mt-0.5">
+                                    {{ customer?.has_address ? customer.address_summary : 'Sin domicilio registrado' }}
+                                </span>
+                                <span class="text-xs text-slate-500 block truncate">
+                                    {{ customer?.zone_label || 'Toca para registrar dirección' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <ChevronRight class="w-5 h-5 text-slate-400 group-hover:text-emerald-700 shrink-0 transition" aria-hidden="true" />
+                    </Link>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>

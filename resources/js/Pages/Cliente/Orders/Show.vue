@@ -1,8 +1,23 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import {
+    RefreshCw,
+    Droplets,
+    Package,
+    MapPin,
+    Receipt,
+    Wallet,
+    Clock,
+    CheckCircle2,
+    XCircle,
+    AlertTriangle,
+    FileText,
+    Truck,
+    Check,
+    ChevronDown,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     order: {
@@ -11,35 +26,39 @@ const props = defineProps({
     },
     last_updated_at: {
         type: String,
-        default: null,
+        default: '',
     },
 });
 
-const isReloading = ref(false);
-const reloadData = () => {
-    isReloading.value = true;
-    router.reload({
-        preserveScroll: true,
-        onFinish: () => {
-            isReloading.value = false;
-        },
-    });
-};
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
+const flashError = computed(() => page.props.flash?.error);
 
+const isRefreshing = ref(false);
 const showCancelModal = ref(false);
+const showHistory = ref(false);
 
 const cancelForm = useForm({
     reason: '',
 });
 
+const refreshOrder = () => {
+    isRefreshing.value = true;
+    router.reload({
+        preserveScroll: true,
+        onFinish: () => {
+            isRefreshing.value = false;
+        },
+    });
+};
+
 const openCancelModal = () => {
+    cancelForm.reset();
     cancelForm.clearErrors();
-    cancelForm.reason = '';
     showCancelModal.value = true;
 };
 
 const closeCancelModal = () => {
-    if (cancelForm.processing) return;
     showCancelModal.value = false;
 };
 
@@ -52,514 +71,498 @@ const submitCancellation = () => {
     });
 };
 
-const getStageBadgeClass = (stageKey) => {
-    switch (stageKey) {
-        case 'entregado':
-            return 'bg-emerald-50 text-emerald-800 border-emerald-300';
-        case 'en_reparticion':
-            return 'bg-indigo-50 text-indigo-900 border-indigo-300';
-        case 'asignado_a_ruta':
-            return 'bg-purple-50 text-purple-900 border-purple-300';
-        case 'llevando_a_planta':
-        case 'lavando':
-        case 'listo_para_entregar':
-            return 'bg-sky-50 text-sky-900 border-sky-300';
-        case 'confirmed':
-        case 'confirmado':
-            return 'bg-blue-50 text-blue-900 border-blue-300';
-        case 'cancelled':
-        case 'cancelado':
-            return 'bg-rose-50 text-rose-800 border-rose-300';
-        case 'pending':
-        case 'pendiente':
-        default:
-            return 'bg-amber-50 text-amber-900 border-amber-300';
-    }
+const formatCurrency = (val) => {
+    const num = Number(val) || 0;
+    return num.toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 };
 
-const getStageIconClass = (stageKey) => {
-    switch (stageKey) {
-        case 'entregado':
-            return 'fa-solid fa-check-double text-emerald-600';
-        case 'en_reparticion':
-            return 'fa-solid fa-truck-fast text-indigo-600';
-        case 'asignado_a_ruta':
-            return 'fa-solid fa-route text-purple-600';
-        case 'llevando_a_planta':
-            return 'fa-solid fa-truck-arrow-right text-sky-600';
-        case 'lavando':
-            return 'fa-solid fa-soap text-sky-600';
-        case 'listo_para_entregar':
-            return 'fa-solid fa-boxes-packing text-sky-600';
-        case 'confirmed':
-        case 'confirmado':
-            return 'fa-solid fa-circle-check text-blue-700';
-        case 'cancelled':
-        case 'cancelado':
-            return 'fa-solid fa-ban text-rose-600';
-        case 'pending':
-        case 'pendiente':
-        default:
-            return 'fa-regular fa-clock text-amber-600';
+const exchangeProgress = computed(() => props.order.operational_progress?.exchange || null);
+const fixedProgress = computed(() => props.order.operational_progress?.fixed || null);
+
+// Modalidad exclusiva actual (con soporte limpio si un pedido histórico tuviera ambos)
+const orderModality = computed(() => {
+    const fixedQty = Number(props.order.fixed_quantity || 0);
+    const exchangeQty = Number(props.order.exchange_quantity || 0);
+    const total = Number(props.order.total_bottles || 0);
+
+    if (fixedQty > 0 && exchangeQty > 0) {
+        return {
+            type: 'mixed',
+            badge: `${fixedQty} Fijos + ${exchangeQty} Cambio (20 L)`,
+            pillClass: 'bg-white/15 text-white border-white/20',
+            isFixed: false,
+        };
     }
-};
+    if (fixedQty > 0) {
+        return {
+            type: 'fixed',
+            badge: `${fixedQty} ${fixedQty === 1 ? 'botellón Fijo' : 'botellones Fijos'} (20 L)`,
+            pillClass: 'bg-indigo-400/20 text-indigo-100 border-indigo-300/30',
+            isFixed: true,
+        };
+    }
+    return {
+        type: 'exchange',
+        badge: `${exchangeQty || total} ${(exchangeQty || total) === 1 ? 'botellón de Cambio' : 'botellones de Cambio'} (20 L)`,
+        pillClass: 'bg-sky-400/20 text-sky-100 border-sky-300/30',
+        isFixed: false,
+    };
+});
+
+// Solo mostrar métricas operativas parciales cuando hay avance real o incidencia/custodia (no ceros innecesarios)
+const activeStageHighlights = computed(() => {
+    const list = [];
+
+    if (exchangeProgress.value) {
+        const e = exchangeProgress.value;
+        const hasPartialOrDone = e.delivered_quantity > 0 || e.cancelled_quantity > 0;
+        if (hasPartialOrDone && !props.order.is_cancelled) {
+            list.push({
+                id: 'exchange',
+                title: e.label,
+                summary: `${e.delivered_quantity} de ${e.quantity_requested} entregados`,
+                cancelled: e.cancelled_quantity > 0 ? `${e.cancelled_quantity} cancelado(s)` : null,
+                tone: 'sky',
+            });
+        }
+    }
+
+    if (fixedProgress.value) {
+        const f = fixedProgress.value;
+        const hasCustodyOrDelivery =
+            f.collected_quantity > 0 || f.delivered_quantity > 0 || f.cancelled_quantity > 0;
+        if (hasCustodyOrDelivery && !props.order.is_cancelled) {
+            list.push({
+                id: 'fixed',
+                title: f.label,
+                summary:
+                    f.delivered_quantity > 0
+                        ? `${f.delivered_quantity} de ${f.quantity_requested} devueltos`
+                        : `${f.collected_quantity} de ${f.quantity_requested} recolectados`,
+                cancelled: f.cancelled_quantity > 0 ? `${f.cancelled_quantity} cancelado(s)` : null,
+                tone: 'indigo',
+            });
+        }
+    }
+
+    return list;
+});
+
+const statusStyle = computed(() => {
+    const key = props.order.operational_progress?.overall_stage_key || props.order.status;
+    if (key === 'cancelado' || props.order.is_cancelled) {
+        return {
+            pill: 'bg-rose-100 text-rose-900',
+            label: props.order.operational_progress?.overall_stage_label || props.order.status_label,
+        };
+    }
+    if (key === 'entregado') {
+        return {
+            pill: 'bg-emerald-100 text-emerald-900',
+            label: props.order.operational_progress?.overall_stage_label || props.order.status_label,
+        };
+    }
+    if (key === 'en_reparticion' || key === 'asignado_a_ruta') {
+        return {
+            pill: 'bg-sky-100 text-sky-900',
+            label: props.order.operational_progress?.overall_stage_label || props.order.status_label,
+        };
+    }
+    return {
+        pill: 'bg-violet-100 text-violet-950',
+        label: props.order.operational_progress?.overall_stage_label || props.order.status_label,
+    };
+});
+
+const trackerSteps = computed(() => {
+    const isFixedFlow = orderModality.value.isFixed;
+    const key = props.order.operational_progress?.overall_stage_key || props.order.status;
+
+    if (!isFixedFlow) {
+        const isDelivered = key === 'entregado';
+        const labels = ['Pendiente', 'Entregado'];
+        return labels.map((label, idx) => ({
+            number: idx + 1,
+            label,
+            done: isDelivered || idx < 0,
+            active: !isDelivered && idx === 0,
+        }));
+    }
+
+    let currentStep = 1;
+    if (key === 'entregado') {
+        currentStep = 4;
+    } else if (key === 'lavando' || key === 'listo_para_entregar' || key === 'en_reparticion') {
+        currentStep = 3;
+    } else if (key === 'llevando_a_planta') {
+        currentStep = 2;
+    }
+
+    const labels = ['Pendiente', 'Recolección', 'En planta', 'Devuelto'];
+
+    return labels.map((label, idx) => ({
+        number: idx + 1,
+        label,
+        done: currentStep > idx + 1 || key === 'entregado',
+        active: currentStep === idx + 1 && key !== 'entregado',
+    }));
+});
+
+const hasBilling = computed(() => {
+    return (props.order.charges && props.order.charges.length > 0) ||
+           (props.order.payments && props.order.payments.length > 0);
+});
 </script>
 
 <template>
     <Head :title="`Pedido ${order.folio}`" />
 
     <AuthenticatedLayout>
-        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-            <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="bg-[#F5F4F8] py-4 sm:py-7">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-5">
+                <!-- ========================================== -->
+                <!-- 1. HERO COMPACTO DEL PEDIDO                -->
+                <!-- ========================================== -->
+                <header
+                    class="rounded-3xl bg-[#1E1545] text-white shadow-md p-5 sm:p-6 border border-[#2E2363]"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="space-y-2 min-w-0">
+                            <div class="flex flex-wrap items-center gap-2.5">
+                                <span class="px-2.5 py-0.5 rounded-md text-xs font-extrabold" :class="statusStyle.pill">
+                                    {{ statusStyle.label }}
+                                </span>
+                                <span class="text-xs font-medium text-white/80 tabular-nums">
+                                    {{ order.created_at }}
+                                </span>
+                            </div>
 
-                <!-- BARRA SUPERIOR DE NAVEGACIÓN Y ACCIONES -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div class="flex items-center gap-3">
-                        <Link
-                            :href="route('cliente.orders.index')"
-                            class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
-                        >
-                            <i class="fa-solid fa-arrow-left text-xs"></i>
-                            <span>Volver a mis pedidos</span>
-                        </Link>
-                    </div>
+                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight font-mono tabular-nums break-all">
+                                {{ order.folio }}
+                            </h1>
 
-                    <div class="flex items-center gap-3">
+                            <div class="pt-0.5">
+                                <span
+                                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-100"
+                                >
+                                    <Package v-if="orderModality.isFixed" class="w-3.5 h-3.5 shrink-0 text-violet-200" aria-hidden="true" />
+                                    <Droplets v-else class="w-3.5 h-3.5 shrink-0 text-sky-300" aria-hidden="true" />
+                                    <span>{{ orderModality.badge }}</span>
+                                </span>
+                            </div>
+                        </div>
+
                         <button
                             type="button"
-                            @click="reloadData"
-                            :disabled="isReloading"
-                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition shadow-2xs cursor-pointer"
-                            title="Recalcular estado actual"
+                            @click="refreshOrder"
+                            :disabled="isRefreshing"
+                            aria-label="Actualizar estado del pedido"
+                            title="Actualizar estado"
+                            class="inline-flex items-center justify-center h-11 w-11 rounded-2xl text-white bg-white/15 hover:bg-white/25 border border-white/25 transition cursor-pointer disabled:opacity-60 shrink-0"
                         >
-                            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin text-blue-900': isReloading }"></i>
-                            <span>{{ isReloading ? 'Actualizando...' : 'Actualizar' }}</span>
+                            <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isRefreshing }" aria-hidden="true" />
                         </button>
-
-                        <!-- Botón Cancelar (Disponible mientras no inicie atención física) -->
-                        <div v-if="order.can_cancel" class="flex items-center">
-                            <button
-                                type="button"
-                                @click="openCancelModal"
-                                class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition shadow-2xs cursor-pointer"
-                            >
-                                <i class="fa-solid fa-ban"></i>
-                                <span>Cancelar Pedido</span>
-                            </button>
-                        </div>
                     </div>
+                </header>
+
+                <!-- Alertas Flash -->
+                <div
+                    v-if="flashSuccess"
+                    role="status"
+                    class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3 text-sm font-semibold text-emerald-950"
+                >
+                    <CheckCircle2 class="w-5 h-5 text-emerald-600 shrink-0" aria-hidden="true" />
+                    <span>{{ flashSuccess }}</span>
                 </div>
 
-                <!-- TARJETA PRINCIPAL DE ESTADO Y ETAPA OPERATIVA -->
-                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/80 space-y-4">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                        <div class="space-y-1">
-                            <div class="flex flex-wrap items-center gap-2.5">
-                                <span class="text-xl sm:text-2xl font-black tracking-tight text-slate-900 font-mono">
-                                    {{ order.folio }}
-                                </span>
-                                <span
-                                    :class="[
-                                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                                        getStageBadgeClass(order.operational_progress?.overall_stage_key || order.status)
-                                    ]"
-                                >
-                                    <i :class="getStageIconClass(order.operational_progress?.overall_stage_key || order.status)" class="text-[11px]"></i>
-                                    <span>{{ order.operational_progress?.overall_stage_label || order.status_label }}</span>
-                                </span>
-                            </div>
-                            <p class="text-xs text-slate-500">
-                                Registrado el {{ order.created_at }} &bull; Presentación de 20 Litros
-                            </p>
-                        </div>
-
-                        <div v-if="last_updated_at" class="text-right text-[11px] text-slate-400 font-mono">
-                            Calculado al: {{ last_updated_at }}
-                        </div>
-                    </div>
-
-                    <!-- Explicación de la etapa actual -->
-                    <div v-if="order.operational_progress?.explanation" class="p-4 rounded-xl bg-blue-50/70 border border-blue-200/70 text-xs sm:text-sm text-blue-950 font-medium leading-relaxed flex items-start gap-3">
-                        <i class="fa-solid fa-circle-info text-blue-800 text-base mt-0.5 shrink-0"></i>
-                        <span>{{ order.operational_progress.explanation }}</span>
-                    </div>
-
-                    <!-- DESGLOSE OPERATIVO INDEPENDIENTE (CAMBIO VS FIJOS) -->
-                    <div v-if="order.operational_progress" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        <!-- Tarjeta Cambio -->
-                        <div
-                            v-if="order.operational_progress.exchange"
-                            class="p-4 rounded-xl border border-sky-200 bg-sky-50/40 space-y-2.5"
-                        >
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold uppercase tracking-wider text-sky-900 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-arrows-rotate text-sky-700"></i>
-                                    <span>Botellones de Cambio</span>
-                                </span>
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-sky-900 border border-sky-300">
-                                    {{ order.operational_progress.exchange.stage_label }}
-                                </span>
-                            </div>
-
-                            <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                                <div class="bg-white p-2 rounded-lg border border-sky-100">
-                                    <span class="text-[10px] text-slate-400 uppercase block">Solicitados</span>
-                                    <span class="font-mono font-bold text-slate-900 text-sm">{{ order.operational_progress.exchange.quantity_requested }}</span>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border border-sky-100">
-                                    <span class="text-[10px] text-emerald-600 uppercase block">Entregados</span>
-                                    <span class="font-mono font-bold text-emerald-700 text-sm">{{ order.operational_progress.exchange.delivered_quantity }}</span>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border border-sky-100">
-                                    <span class="text-[10px] text-rose-500 uppercase block">Cancelados</span>
-                                    <span class="font-mono font-bold text-rose-700 text-sm">{{ order.operational_progress.exchange.cancelled_quantity }}</span>
-                                </div>
-                            </div>
-
-                            <p v-if="order.operational_progress.exchange.cancellation_reason" class="text-xs text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                                <span class="font-bold">Motivo de cancelación:</span> {{ order.operational_progress.exchange.cancellation_reason }}
-                            </p>
-                        </div>
-
-                        <!-- Tarjeta Fijos -->
-                        <div
-                            v-if="order.operational_progress.fixed"
-                            class="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5"
-                        >
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-id-badge text-blue-800"></i>
-                                    <span>Botellones Fijos (Identificados)</span>
-                                </span>
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-blue-900 border border-blue-300">
-                                    {{ order.operational_progress.fixed.stage_label }}
-                                </span>
-                            </div>
-
-                            <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
-                                <div class="bg-white p-2 rounded-lg border border-blue-100">
-                                    <span class="text-[9px] text-slate-400 uppercase block">Solicitados</span>
-                                    <span class="font-mono font-bold text-slate-900 text-xs">{{ order.operational_progress.fixed.quantity_requested }}</span>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border border-blue-100">
-                                    <span class="text-[9px] text-sky-600 uppercase block">Recolectados</span>
-                                    <span class="font-mono font-bold text-sky-800 text-xs">{{ order.operational_progress.fixed.collected_quantity }}</span>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border border-blue-100">
-                                    <span class="text-[9px] text-emerald-600 uppercase block">Devueltos</span>
-                                    <span class="font-mono font-bold text-emerald-700 text-xs">{{ order.operational_progress.fixed.delivered_quantity }}</span>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border border-blue-100">
-                                    <span class="text-[9px] text-rose-500 uppercase block">Cancelados</span>
-                                    <span class="font-mono font-bold text-rose-700 text-xs">{{ order.operational_progress.fixed.cancelled_quantity }}</span>
-                                </div>
-                            </div>
-
-                            <p v-if="order.operational_progress.fixed.cancellation_reason" class="text-xs text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                                <span class="font-bold">Motivo:</span> {{ order.operational_progress.fixed.cancellation_reason }}
-                            </p>
-                        </div>
-                    </div>
+                <div
+                    v-if="flashError"
+                    role="alert"
+                    class="rounded-2xl bg-rose-50 border border-rose-200 p-4 flex items-center gap-3 text-sm font-semibold text-rose-950"
+                >
+                    <AlertTriangle class="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />
+                    <span>{{ flashError }}</span>
                 </div>
 
-                <!-- 2. AVISO DE CANCELACIÓN (SI EL PEDIDO ESTÁ CANCELADO) -->
+                <!-- Motivo de cancelación -->
                 <div
                     v-if="order.is_cancelled"
-                    class="p-5 rounded-2xl bg-rose-50 border border-rose-200 shadow-xs text-rose-950 flex items-start gap-3.5"
+                    class="rounded-2xl bg-rose-50 border border-rose-200 p-4 sm:p-5 flex items-start gap-3"
                 >
-                    <div class="h-10 w-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 text-base">
-                        <i class="fa-solid fa-ban"></i>
+                    <div class="h-9 w-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                        <XCircle class="w-5 h-5" aria-hidden="true" />
                     </div>
-                    <div class="flex-1 space-y-1">
-                        <h4 class="text-sm font-bold text-rose-950 uppercase tracking-wider">
-                            Pedido Cancelado
-                        </h4>
-                        <p class="text-xs sm:text-sm text-rose-900 leading-relaxed">
-                            <span class="font-semibold">Motivo:</span> {{ order.cancellation_reason || 'Sin motivo registrado' }}
-                        </p>
-                        <p class="text-xs text-rose-800 pt-0.5">
-                            Este pedido ya no está en curso. Puedes registrar un nuevo pedido cuando lo requieras.
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-extrabold text-rose-950">Pedido cancelado</h2>
+                        <p class="text-xs sm:text-sm text-rose-900 mt-0.5 break-words">
+                            {{ order.cancellation_reason || 'El pedido fue cancelado.' }}
                         </p>
                     </div>
                 </div>
 
-                <!-- 3. CANTIDADES SOLICITADAS (EXCLUSIVAMENTE 20 LITROS) -->
-                <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                            <i class="fa-solid fa-bottle-water text-blue-900"></i>
-                            <span>Botellones Solicitados (20 Litros)</span>
-                        </h3>
-                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                            Presentación: 20L
-                        </span>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <!-- Fijos -->
-                        <div class="p-4 rounded-xl bg-blue-50/50 border border-blue-200/70 text-center">
-                            <span class="text-xs font-bold uppercase tracking-wider text-blue-900 block">
-                                Botellones Fijos
-                            </span>
-                            <span class="text-3xl font-extrabold text-blue-950 font-mono mt-1 block">
-                                {{ order.fixed_quantity }}
-                            </span>
-                            <span class="text-[11px] text-slate-500 mt-0.5 block">
-                                Envases rotulados de 20L
-                            </span>
+                <!-- ========================================== -->
+                <!-- 2. SEGUIMIENTO EN VIVO + HISTORIAL         -->
+                <!-- ========================================== -->
+                <section
+                    v-if="order.operational_progress"
+                    aria-labelledby="tracking-heading"
+                    class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 space-y-4"
+                >
+                    <div class="flex items-start gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-violet-100 text-[#6D28D9] flex items-center justify-center shrink-0">
+                            <Truck class="w-5 h-5" aria-hidden="true" />
                         </div>
-
-                        <!-- Cambio -->
-                        <div class="p-4 rounded-xl bg-sky-50/50 border border-sky-200/70 text-center">
-                            <span class="text-xs font-bold uppercase tracking-wider text-sky-800 block">
-                                Botellones de Cambio
-                            </span>
-                            <span class="text-3xl font-extrabold text-sky-950 font-mono mt-1 block">
-                                {{ order.exchange_quantity }}
-                            </span>
-                            <span class="text-[11px] text-slate-500 mt-0.5 block">
-                                Intercambio estándar de 20L
-                            </span>
-                        </div>
-
-                        <!-- Total -->
-                        <div class="p-4 rounded-xl bg-slate-900 text-white text-center">
-                            <span class="text-xs font-bold uppercase tracking-wider text-sky-200 block">
-                                Total de Botellones
-                            </span>
-                            <span class="text-3xl font-extrabold text-white font-mono mt-1 block">
-                                {{ order.total_bottles }}
-                            </span>
-                            <span class="text-[11px] text-slate-300 mt-0.5 block">
-                                Total a recibir en domicilio
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 4. CARGOS Y PAGOS DEL PEDIDO -->
-                <div v-if="order.charges?.length > 0 || order.payments?.length > 0" class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                            <i class="fa-solid fa-receipt text-blue-900"></i>
-                            <span>Cargos y Pagos de este Pedido</span>
-                        </h3>
-                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                            Precios históricos
-                        </span>
-                    </div>
-
-                    <!-- Lista de Cargos -->
-                    <div v-if="order.charges?.length > 0" class="space-y-3">
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cargos por entregas realizadas</h4>
-                        <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                            <div
-                                v-for="c in order.charges"
-                                :key="c.id"
-                                class="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white"
-                            >
-                                <div>
-                                    <div class="font-bold text-slate-900 text-xs sm:text-sm">
-                                        {{ c.quantity_delivered }} botellón(es) &bull; {{ c.bottle_type_label }}
-                                    </div>
-                                    <div class="text-xs text-slate-500">
-                                        Precio unitario: <span class="font-mono font-semibold">${{ Number(c.unit_price).toFixed(2) }}</span> &bull; Total: <span class="font-mono font-bold">${{ Number(c.total_amount).toFixed(2) }}</span>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-3 self-end sm:self-auto">
-                                    <span
-                                        :class="[
-                                            'px-2.5 py-0.5 rounded-full text-xs font-semibold border',
-                                            c.status === 'paid' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
-                                            c.status === 'waived_promotion' ? 'bg-purple-50 text-purple-900 border-purple-300' :
-                                            'bg-amber-50 text-amber-900 border-amber-300'
-                                        ]"
-                                    >
-                                        {{ c.status_label }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Lista de Pagos Recibidos -->
-                    <div v-if="order.payments?.length > 0" class="space-y-3 pt-2">
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Pagos en efectivo registrados</h4>
-                        <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                            <div
-                                v-for="p in order.payments"
-                                :key="p.id"
-                                class="p-3 flex items-center justify-between bg-slate-50/50 text-xs"
-                            >
-                                <div>
-                                    <span class="font-bold text-slate-900">{{ p.bottles_count }} botellón(es) pagado(s)</span>
-                                    <span class="text-slate-500 text-[11px] block">{{ p.date }}</span>
-                                </div>
-                                <div class="text-right">
-                                    <span class="font-mono font-black text-emerald-700 text-sm">${{ Number(p.amount).toFixed(2) }}</span>
-                                    <span v-if="p.cash_tendered > p.amount" class="text-[10px] text-slate-400 block">
-                                        Efectivo: ${{ Number(p.cash_tendered).toFixed(2) }} &bull; Cambio: ${{ Number(p.change_returned).toFixed(2) }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 5. DOMICILIO Y CONTACTO HISTÓRICOS INMUTABLES -->
-                <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-2">
-                            <i class="fa-solid fa-house-chimney text-emerald-700"></i>
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500">
-                                Domicilio de Entrega Histórico
-                            </h3>
-                        </div>
-                        <span v-if="order.address?.zone_label" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 border border-blue-200">
-                            {{ order.address.zone_label }}
-                        </span>
-                    </div>
-
-                    <div class="space-y-3 text-sm">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-slate-100">
-                            <div>
-                                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                                    Receptor
-                                </span>
-                                <p class="text-sm font-bold text-slate-900 mt-0.5">
-                                    {{ order.address?.recipient_name || 'Cliente' }}
-                                </p>
-                            </div>
-                            <div v-if="order.address?.recipient_phone">
-                                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                                    Teléfono de Contacto
-                                </span>
-                                <p class="text-sm font-mono font-semibold text-slate-900 mt-0.5">
-                                    {{ order.address.recipient_phone }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-1">
-                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                                Dirección Registrada
-                            </span>
-                            <p class="text-sm font-bold text-slate-900">
-                                {{ order.address?.full_address }}
-                            </p>
-                            <p v-if="order.address?.between_streets" class="text-xs text-slate-600 pt-0.5">
-                                <span class="font-medium text-slate-500">Entre calles:</span> {{ order.address.between_streets }}
-                            </p>
-                            <p v-if="order.address?.reference" class="text-xs text-slate-600">
-                                <span class="font-medium text-slate-500">Referencias:</span> {{ order.address.reference }}
+                        <div class="min-w-0">
+                            <h2 id="tracking-heading" class="text-base font-extrabold text-[#1E1545]">
+                                Seguimiento de entrega
+                            </h2>
+                            <p class="text-xs sm:text-sm text-slate-600 mt-0.5 leading-relaxed">
+                                {{ order.operational_progress.explanation }}
                             </p>
                         </div>
-
-                        <p class="text-[11px] text-slate-400 pt-2 border-t border-slate-100 flex items-center gap-1.5">
-                            <i class="fa-solid fa-lock text-[10px]"></i>
-                            <span>Copia histórica inmutable guardada al momento de crear el pedido.</span>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- 6. OBSERVACIONES -->
-                <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-3">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                        <i class="fa-regular fa-comment-dots text-slate-500"></i>
-                        <span>Observaciones de Entrega</span>
-                    </h3>
-                    <p v-if="order.notes" class="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200/70">
-                        {{ order.notes }}
-                    </p>
-                    <p v-else class="text-xs text-slate-400 italic">
-                        Sin observaciones o instrucciones adicionales registradas en este pedido.
-                    </p>
-                </div>
-
-                <!-- 7. HISTORIAL CRONOLÓGICO DE ESTADOS (SIN EXPONER DATOS INTERNOS DE PERSONAL) -->
-                <div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 space-y-4">
-                    <div class="border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                            <i class="fa-solid fa-timeline text-blue-900"></i>
-                            <span>Historial de Estados</span>
-                        </h3>
                     </div>
 
-                    <div class="space-y-4 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200">
-                        <div
-                            v-for="(historyItem, idx) in order.history"
-                            :key="historyItem.id || idx"
-                            class="relative flex items-start gap-4 pl-1"
+                    <!-- Stepper limpio acorde al flujo real (2 pasos para Cambio, 4 para Fijos) -->
+                    <ol
+                        v-if="!order.is_cancelled"
+                        class="grid gap-2 pt-1"
+                        :class="trackerSteps.length === 2 ? 'grid-cols-2 max-w-xs mx-auto' : 'grid-cols-4 gap-1.5 sm:gap-2'"
+                        aria-label="Etapas del pedido"
+                    >
+                        <li
+                            v-for="step in trackerSteps"
+                            :key="step.number"
+                            class="min-w-0 flex flex-col items-center text-center gap-1.5"
                         >
-                            <div class="h-7 w-7 rounded-full bg-white border-2 border-blue-900 text-blue-900 flex items-center justify-center shrink-0 z-10 text-[10px] shadow-2xs">
-                                <i :class="getStageIconClass(historyItem.new_status)"></i>
+                            <div
+                                class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-extrabold border transition"
+                                :class="step.done
+                                    ? 'bg-emerald-600 text-white border-emerald-600'
+                                    : step.active
+                                        ? 'bg-[#1E1545] text-white border-[#1E1545] ring-4 ring-violet-200'
+                                        : 'bg-[#F5F4F8] text-slate-400 border-[#E9E7F0]'"
+                            >
+                                <Check v-if="step.done" class="w-4 h-4" aria-hidden="true" />
+                                <span v-else>{{ step.number }}</span>
                             </div>
+                            <span
+                                class="text-[10px] sm:text-[11px] leading-tight w-full truncate"
+                                :class="step.done || step.active ? 'font-bold text-[#1E1545]' : 'font-medium text-slate-400'"
+                            >
+                                {{ step.label }}
+                            </span>
+                        </li>
+                    </ol>
 
-                            <div class="flex-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-1">
-                                <div class="flex flex-wrap items-center justify-between gap-2">
-                                    <span class="text-xs font-bold text-slate-900">
-                                        Estado: <strong class="text-blue-950">{{ historyItem.new_status_label }}</strong>
+                    <!-- Avance real solo cuando ya existe progreso parcial/custodia -->
+                    <div v-if="activeStageHighlights.length > 0" class="space-y-2 pt-1">
+                        <div
+                            v-for="hl in activeStageHighlights"
+                            :key="hl.id"
+                            class="rounded-xl px-3.5 py-2.5 border flex flex-wrap items-center justify-between gap-2 text-xs"
+                            :class="hl.tone === 'indigo'
+                                ? 'bg-indigo-50/75 border-indigo-200 text-indigo-950'
+                                : 'bg-sky-50/75 border-sky-200 text-sky-950'"
+                        >
+                            <span class="font-bold">{{ hl.summary }}</span>
+                            <span v-if="hl.cancelled" class="font-bold text-rose-700">{{ hl.cancelled }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Acordeón discreto para historial de estados -->
+                    <div v-if="order.history && order.history.length > 0" class="pt-2 border-t border-[#E9E7F0]">
+                        <button
+                            type="button"
+                            @click="showHistory = !showHistory"
+                            :aria-expanded="showHistory"
+                            class="w-full flex items-center justify-between px-3 py-2 min-h-[40px] rounded-xl text-xs font-bold text-[#1E1545] bg-[#F5F4F8] hover:bg-[#ECE8F8] transition cursor-pointer"
+                        >
+                            <span class="flex items-center gap-2">
+                                <Clock class="w-3.5 h-3.5 text-[#6D28D9]" aria-hidden="true" />
+                                <span>Historial de movimientos ({{ order.history.length }})</span>
+                            </span>
+                            <ChevronDown
+                                class="w-4 h-4 text-slate-500 transition-transform"
+                                :class="{ 'rotate-180': showHistory }"
+                                aria-hidden="true"
+                            />
+                        </button>
+
+                        <ol v-show="showHistory" class="mt-3 relative border-l-2 border-[#E9E7F0] ml-3 space-y-4 pl-5 pb-1">
+                            <li v-for="item in order.history" :key="item.id" class="relative">
+                                <span
+                                    class="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white shadow-sm"
+                                    :class="item.new_status === 'cancelled'
+                                        ? 'bg-rose-600'
+                                        : item.new_status === 'delivered'
+                                            ? 'bg-emerald-600'
+                                            : 'bg-[#6D28D9]'"
+                                    aria-hidden="true"
+                                ></span>
+                                <div class="flex flex-wrap items-center justify-between gap-1">
+                                    <span class="text-xs sm:text-sm font-bold text-[#1E1545]">
+                                        {{ item.new_status_label }}
                                     </span>
-                                    <span class="text-[11px] font-mono text-slate-400">
-                                        {{ historyItem.created_at }}
+                                    <span class="text-[11px] text-slate-500 tabular-nums">
+                                        {{ item.created_at }}
                                     </span>
                                 </div>
-                                <p v-if="historyItem.reason" class="text-xs text-slate-600">
-                                    {{ historyItem.reason }}
+                                <p v-if="item.reason" class="text-xs text-slate-600 mt-0.5 break-words">
+                                    {{ item.reason }}
                                 </p>
+                            </li>
+                        </ol>
+                    </div>
+                </section>
+
+                <!-- ========================================== -->
+                <!-- 3. ENTREGA, NOTAS Y PAGOS EN UNA TARJETA   -->
+                <!-- ========================================== -->
+                <section class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 space-y-4">
+                    <!-- Dirección -->
+                    <div v-if="order.address" class="space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h2 class="text-sm font-extrabold text-[#1E1545] flex items-center gap-2">
+                                <MapPin class="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
+                                <span>Dirección de entrega</span>
+                            </h2>
+                            <span v-if="order.address.zone_label" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800">
+                                {{ order.address.zone_label }}
+                            </span>
+                        </div>
+
+                        <div class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-3.5 space-y-1">
+                            <p class="text-sm font-extrabold text-[#1E1545] break-words">
+                                {{ order.address.full_address }}
+                            </p>
+                            <p v-if="order.address.between_streets" class="text-xs text-slate-600 break-words">
+                                {{ order.address.between_streets }}
+                            </p>
+                            <p v-if="order.address.reference" class="text-xs text-slate-500 break-words">
+                                Ref.: {{ order.address.reference }}
+                            </p>
+                            <p v-if="order.address.recipient_name" class="text-xs text-slate-500 pt-1.5 border-t border-[#E9E7F0]/80 break-words">
+                                Recibe: <strong class="text-slate-800">{{ order.address.recipient_name }}</strong>
+                                <span v-if="order.address.recipient_phone"> • {{ order.address.recipient_phone }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Notas del pedido -->
+                    <div v-if="order.notes" class="pt-3 border-t border-[#E9E7F0] space-y-1.5">
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <FileText class="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+                            <span>Indicaciones</span>
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-700 leading-relaxed break-words">
+                            {{ order.notes }}
+                        </p>
+                    </div>
+
+                    <!-- Importes y pagos (solo si ya existen) -->
+                    <div v-if="hasBilling" class="pt-3 border-t border-[#E9E7F0] space-y-3">
+                        <h3 class="text-sm font-extrabold text-[#1E1545] flex items-center gap-2">
+                            <Receipt class="w-4 h-4 text-[#6D28D9]" aria-hidden="true" />
+                            <span>Importes y pagos</span>
+                        </h3>
+
+                        <div v-if="order.charges && order.charges.length > 0" class="space-y-2">
+                            <div
+                                v-for="charge in order.charges"
+                                :key="charge.id"
+                                class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-3 flex flex-wrap items-center justify-between gap-2"
+                            >
+                                <div class="min-w-0">
+                                    <span class="text-xs sm:text-sm font-bold text-[#1E1545] block">
+                                        {{ charge.bottle_type_label }} × {{ charge.quantity_delivered }}
+                                    </span>
+                                    <span
+                                        class="inline-flex mt-1 px-2 py-0.5 rounded-md text-[11px] font-bold"
+                                        :class="charge.is_waived_promotion
+                                            ? 'bg-amber-100 text-amber-900'
+                                            : charge.status === 'paid'
+                                                ? 'bg-emerald-100 text-emerald-900'
+                                                : 'bg-rose-100 text-rose-900'"
+                                    >
+                                        {{ charge.status_label }}
+                                    </span>
+                                </div>
+                                <span class="text-base font-black text-[#1E1545] tabular-nums shrink-0">
+                                    {{ charge.is_waived_promotion ? '$0.00' : `$${formatCurrency(charge.total_amount)}` }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-if="order.payments && order.payments.length > 0" class="space-y-2">
+                            <div
+                                v-for="payment in order.payments"
+                                :key="payment.id"
+                                class="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3 flex flex-wrap items-center justify-between gap-2"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <Wallet class="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
+                                    <div>
+                                        <span class="text-xs sm:text-sm font-bold text-emerald-950 block tabular-nums">
+                                            Pago ${{ formatCurrency(payment.amount) }} ({{ payment.bottles_count }} u.)
+                                        </span>
+                                        <span class="text-[11px] text-emerald-800">{{ payment.date }}</span>
+                                    </div>
+                                </div>
+                                <span v-if="payment.change_returned > 0" class="text-xs font-semibold text-emerald-900 tabular-nums">
+                                    Cambio: ${{ formatCurrency(payment.change_returned) }}
+                                </span>
                             </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
-                <!-- 8. BOTONES DE NAVEGACIÓN INFERIOR -->
-                <div class="flex items-center justify-between pt-2">
-                    <Link
-                        :href="route('cliente.orders.index')"
-                        class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 transition"
+                <!-- ========================================== -->
+                <!-- 4. ACCIÓN DISCRETA DE CANCELACIÓN          -->
+                <!-- ========================================== -->
+                <div v-if="order.can_cancel" class="pt-1">
+                    <button
+                        type="button"
+                        @click="openCancelModal"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-2xl text-xs sm:text-sm font-extrabold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                     >
-                        &larr; Volver a Mis Pedidos
-                    </Link>
-
-                    <Link
-                        :href="route('cliente.orders.create')"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition shadow-xs"
-                    >
-                        <i class="fa-solid fa-plus-circle text-sky-400"></i>
-                        <span>Nuevo Pedido</span>
-                    </Link>
+                        <XCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span>Cancelar este pedido</span>
+                    </button>
                 </div>
-
             </div>
         </div>
 
-        <!-- MODAL DE CANCELACIÓN DE PEDIDO PENDIENTE -->
+        <!-- Modal accesible de cancelación -->
         <div
             v-if="showCancelModal"
-            class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-            aria-labelledby="modal-cancel-title"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="cancel-modal-title"
+            class="fixed inset-0 z-50 overflow-y-auto bg-[#1E1545]/50 backdrop-blur-sm flex items-center justify-center p-4"
+            @keydown.escape="closeCancelModal"
         >
-            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-scaleIn">
-                <div class="flex items-start gap-4">
-                    <div class="h-11 w-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 text-lg">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
+            <div class="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#E9E7F0] shadow-xl p-6 space-y-4">
+                <div class="flex items-start gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                        <AlertTriangle class="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div>
-                        <h3 id="modal-cancel-title" class="text-base font-bold text-slate-900">
-                            ¿Deseas cancelar el pedido {{ order.folio }}?
+                        <h3 id="cancel-modal-title" class="text-base font-extrabold text-[#1E1545]">
+                            Cancelar pedido {{ order.folio }}
                         </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Esta acción cancelará la entrega de tus {{ order.total_bottles }} botellón(es). No se alterarán los conteos de tu cuenta.
+                        <p class="text-xs text-slate-600 mt-0.5">
+                            Esta acción no se puede deshacer. Cuéntanos brevemente el motivo.
                         </p>
                     </div>
                 </div>
 
                 <form @submit.prevent="submitCancellation" class="space-y-4">
                     <div>
-                        <label for="cancel-reason" class="text-xs font-bold text-slate-700 block mb-1">
-                            Motivo de cancelación <span class="text-rose-600">*</span>
+                        <label for="cancel-reason" class="text-xs font-bold text-[#1E1545] block mb-1.5">
+                            Motivo de cancelación *
                         </label>
                         <textarea
                             id="cancel-reason"
@@ -567,40 +570,32 @@ const getStageIconClass = (stageKey) => {
                             rows="3"
                             maxlength="500"
                             required
-                            placeholder="Ej. Salí de casa, ya no requiero los garrafones hoy, error en la cantidad..."
-                            class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-600 focus:ring-rose-600"
-                            :disabled="cancelForm.processing"
+                            placeholder="Ej. Ya no habrá nadie en casa hoy"
+                            class="w-full rounded-xl border-[#E9E7F0] text-base sm:text-sm text-[#1E1545] focus:border-rose-500 focus:ring-rose-500"
                         ></textarea>
-                        <div class="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-                            <span>El motivo es obligatorio para registrar la cancelación.</span>
-                            <span class="font-mono">{{ cancelForm.reason.length }} / 500</span>
-                        </div>
-                        <InputError :message="cancelForm.errors.reason" class="mt-1" />
+                        <p v-if="cancelForm.errors.reason" class="text-xs text-rose-600 mt-1 font-medium">
+                            {{ cancelForm.errors.reason }}
+                        </p>
                     </div>
 
-                    <div class="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                    <div class="flex flex-wrap items-center justify-end gap-2.5 pt-2">
                         <button
                             type="button"
                             @click="closeCancelModal"
-                            :disabled="cancelForm.processing"
-                            class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                            class="px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-slate-700 bg-[#F5F4F8] hover:bg-[#ECEAEF] transition cursor-pointer"
                         >
-                            No cancelar
+                            Volver
                         </button>
-
                         <button
                             type="submit"
                             :disabled="cancelForm.processing || !cancelForm.reason.trim()"
-                            class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                            class="px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 transition cursor-pointer"
                         >
-                            <i v-if="cancelForm.processing" class="fa-solid fa-circle-notch fa-spin"></i>
-                            <i v-else class="fa-solid fa-ban"></i>
-                            <span>{{ cancelForm.processing ? 'Cancelando...' : 'Sí, cancelar pedido' }}</span>
+                            {{ cancelForm.processing ? 'Cancelando...' : 'Sí, cancelar pedido' }}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
-
     </AuthenticatedLayout>
 </template>

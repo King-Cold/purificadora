@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
 import AppSidebar from '@/Components/AppSidebar.vue';
+import ClienteBottomNav from '@/Components/ClienteBottomNav.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { usePage } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 defineProps({
     wide: {
@@ -138,6 +139,18 @@ const shortName = computed(() => {
     const parts = fullName.trim().split(/\s+/);
     return parts[0];
 });
+
+// Rol exclusivo Cliente: en móvil usa experiencia PWA nativa sin menú lateral administrativo
+const isClientOnly = computed(() => {
+    const roles = page.props.auth?.user?.roles || [];
+    return (
+        roles.includes('Cliente') &&
+        !roles.includes('Administrador') &&
+        !roles.includes('Super Admin') &&
+        !roles.includes('Repartidor') &&
+        !roles.includes('Operador Planta')
+    );
+});
 </script>
 
 <template>
@@ -164,19 +177,38 @@ const shortName = computed(() => {
 
             <!-- Barra Superior Limpia y Minimalista (h-16 / 64px) -->
             <header class="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#E9E7F0] flex items-center justify-between px-4 sm:px-6">
-                <!-- Lado Izquierdo: Botón menú + Ruta de navegación -->
+                <!-- Lado Izquierdo: Botón menú (oculto en móvil para Cliente PWA) + Marca / Ruta -->
                 <div class="flex items-center gap-3 min-w-0">
                     <button
                         @click="handleMenuToggle"
                         type="button"
-                        class="h-9 w-9 inline-flex items-center justify-center rounded-xl bg-white hover:bg-[#E9F3F8] text-[#747181] hover:text-[#0071BA] border border-[#E9E7F0] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0071BA]/25 cursor-pointer shrink-0"
+                        class="h-9 w-9 items-center justify-center rounded-xl bg-white hover:bg-[#E9F3F8] text-[#747181] hover:text-[#0071BA] border border-[#E9E7F0] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0071BA]/25 cursor-pointer shrink-0"
+                        :class="isClientOnly ? 'hidden lg:inline-flex' : 'inline-flex'"
                         :title="sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'"
                         aria-label="Alternar menú de navegación"
                     >
                         <i class="fa-solid fa-bars text-sm"></i>
                     </button>
 
-                    <nav aria-label="Ubicación actual" class="flex items-center gap-2 min-w-0">
+                    <!-- Cabecera PWA limpia en móvil para Cliente con logo oficial -->
+                    <Link
+                        v-if="isClientOnly"
+                        :href="route('cliente.dashboard')"
+                        class="lg:hidden inline-flex items-center min-w-0 focus:outline-none"
+                        aria-label="Puritronic - Ir al inicio"
+                    >
+                        <img
+                            src="/images/logo.png"
+                            alt="Puritronic"
+                            class="h-8 w-auto max-w-[152px] object-contain shrink-0"
+                        />
+                    </Link>
+
+                    <nav
+                        aria-label="Ubicación actual"
+                        class="items-center gap-2 min-w-0"
+                        :class="isClientOnly ? 'hidden lg:flex' : 'flex'"
+                    >
                         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-[#E9F3F8] text-[#0071BA] shrink-0">
                             {{ currentModuleSubtitle }}
                         </span>
@@ -187,15 +219,21 @@ const shortName = computed(() => {
                     </nav>
                 </div>
 
-                <!-- Lado Derecho: Fecha discreta + Perfil del operador -->
+                <!-- Lado Derecho: Fecha discreta + Perfil del usuario -->
                 <div class="flex items-center gap-3 sm:gap-4 ml-auto shrink-0">
-                    <!-- Fecha en formato discreto -->
-                    <div class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-[#747181] px-2.5 py-1.5 rounded-lg bg-[#F4F3F8] border border-[#E9E7F0]">
+                    <!-- Fecha en formato discreto (no necesaria en móvil cliente PWA) -->
+                    <div
+                        class="items-center gap-1.5 text-xs font-medium text-[#747181] px-2.5 py-1.5 rounded-lg bg-[#F4F3F8] border border-[#E9E7F0]"
+                        :class="isClientOnly ? 'hidden lg:inline-flex' : 'hidden sm:inline-flex'"
+                    >
                         <i class="fa-regular fa-calendar text-[#0071BA] text-xs"></i>
                         <span>{{ shortFormattedDate }}</span>
                     </div>
 
-                    <span class="hidden sm:block h-5 w-px bg-[#E9E7F0]"></span>
+                    <span
+                        class="h-5 w-px bg-[#E9E7F0]"
+                        :class="isClientOnly ? 'hidden lg:block' : 'hidden sm:block'"
+                    ></span>
 
                     <!-- Menú de Usuario -->
                     <Dropdown align="right" width="56">
@@ -204,7 +242,10 @@ const shortName = computed(() => {
                                 type="button"
                                 class="group inline-flex items-center gap-2.5 py-1 px-1.5 sm:pr-2.5 rounded-xl hover:bg-[#F4F3F8] border border-transparent hover:border-[#E9E7F0] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0071BA]/25 cursor-pointer min-h-[40px]"
                             >
-                                <div class="h-8 w-8 rounded-lg bg-[#DCECF7] text-[#0071BA] font-semibold text-xs flex items-center justify-center shrink-0">
+                                <div
+                                    class="h-8 w-8 rounded-lg font-semibold text-xs flex items-center justify-center shrink-0"
+                                    :class="isClientOnly ? 'bg-[#ECE8F8] text-[#1E1545]' : 'bg-[#DCECF7] text-[#0071BA]'"
+                                >
                                     {{ getInitials($page.props.auth.user.name) }}
                                 </div>
                                 <div class="hidden sm:flex flex-col items-start text-left leading-tight">
@@ -273,10 +314,13 @@ const shortName = computed(() => {
             </div>
 
             <!-- Contenido Principal -->
-            <main class="flex-1">
+            <main class="flex-1" :class="isClientOnly ? 'pb-24 lg:pb-0' : ''">
                 <slot />
             </main>
         </div>
+
+        <!-- Navegación inferior PWA para Cliente en móvil -->
+        <ClienteBottomNav v-if="isClientOnly" />
 
     </div>
 </template>

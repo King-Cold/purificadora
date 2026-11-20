@@ -1,8 +1,19 @@
 <script setup>
 import { computed } from 'vue';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import InputError from '@/Components/InputError.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import {
+    Droplets,
+    Package,
+    MapPin,
+    Clock,
+    AlertTriangle,
+    CheckCircle2,
+    Minus,
+    Plus,
+    Truck,
+    UserCog,
+} from 'lucide-vue-next';
 
 const props = defineProps({
     customer: {
@@ -22,8 +33,8 @@ const props = defineProps({
         required: true,
     },
     scheduleSummary: {
-        type: Object,
-        required: true,
+        type: [Object, String],
+        default: '',
     },
     blocks: {
         type: Object,
@@ -33,388 +44,448 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    pricing: {
+        type: Object,
+        default: () => ({
+            unit_price: 15,
+            has_free_bottle_promo: false,
+        }),
+    },
 });
 
-const registeredFixed = computed(() => Number(props.customer?.fixed_bottles_count ?? 0));
-const registeredExchange = computed(() => Number(props.customer?.exchange_bottles_count ?? 0));
-const customerBottleType = computed(() => props.customer?.bottle_type);
+const registeredFixed = computed(() => props.customer?.fixed_bottles_count ?? 0);
+const registeredExchange = computed(() => props.customer?.exchange_bottles_count ?? 0);
+
+const activeModality = computed(() => {
+    if (registeredFixed.value > 0) return 'fixed';
+    if (registeredExchange.value > 0) return 'exchange';
+    return null;
+});
+
+const maxQuantity = computed(() => {
+    if (activeModality.value === 'fixed') return registeredFixed.value;
+    if (activeModality.value === 'exchange') return registeredExchange.value;
+    return 0;
+});
+
+const quickQuantities = computed(() => {
+    const max = maxQuantity.value;
+    if (max <= 0) return [];
+    const presets = [1, 2, 3, 5].filter((n) => n < max);
+    if (!presets.includes(max)) {
+        presets.push(max);
+    }
+    return presets;
+});
+
+const formattedSchedule = computed(() => {
+    const raw = props.scheduleSummary;
+    if (!raw) return null;
+
+    if (typeof raw === 'string') {
+        return {
+            days: 'Horario de recepción',
+            intervals: raw,
+            breakLabel: null,
+        };
+    }
+
+    const days = raw.days_applied || 'Lunes a Domingo';
+    const intervalsList = Array.isArray(raw.order_intervals) && raw.order_intervals.length > 0
+        ? raw.order_intervals
+        : [raw.morning_attention, raw.afternoon_attention].filter(Boolean);
+
+    return {
+        days,
+        intervals: intervalsList.join(' y '),
+        breakLabel: raw.break_period
+            ? `Descanso presencial: ${raw.break_period} (puedes pedir en línea)`
+            : null,
+    };
+});
+
+const formattedScheduleInline = computed(() => {
+    if (!formattedSchedule.value) return '';
+    return [formattedSchedule.value.days, formattedSchedule.value.intervals].filter(Boolean).join(' • ');
+});
 
 const form = useForm({
-    fixed_quantity: 0,
-    exchange_quantity: 0,
+    fixed_quantity: registeredFixed.value > 0 ? 1 : 0,
+    exchange_quantity: registeredFixed.value === 0 && registeredExchange.value > 0 ? 1 : 0,
     notes: '',
 });
 
-// Preseleccionar 1 garrafón del tipo registrado si está habilitado
-if (props.canOrder) {
-    if (customerBottleType.value === 'fixed' && registeredFixed.value > 0) {
-        form.fixed_quantity = 1;
-    } else if (customerBottleType.value === 'exchange' && registeredExchange.value > 0) {
-        form.exchange_quantity = 1;
+const currentQuantity = computed(() => {
+    return activeModality.value === 'fixed' ? form.fixed_quantity : form.exchange_quantity;
+});
+
+const totalSelectedBottles = computed(() => {
+    return (Number(form.fixed_quantity) || 0) + (Number(form.exchange_quantity) || 0);
+});
+
+const unitPrice = computed(() => Number(props.pricing?.unit_price ?? 15));
+const freePromoBottles = computed(() => {
+    return props.pricing?.has_free_bottle_promo && totalSelectedBottles.value >= 1 ? 1 : 0;
+});
+const subtotalAmount = computed(() => totalSelectedBottles.value * unitPrice.value);
+const discountAmount = computed(() => freePromoBottles.value * unitPrice.value);
+const totalAmountToPay = computed(() => Math.max(0, subtotalAmount.value - discountAmount.value));
+
+const formatCurrency = (val) => {
+    const num = Number(val) || 0;
+    return num.toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+};
+
+const isSubmitDisabled = computed(() => {
+    return !props.canOrder || form.processing || totalSelectedBottles.value <= 0;
+});
+
+const setQuantity = (qty) => {
+    if (activeModality.value === 'fixed') {
+        form.fixed_quantity = Math.min(Math.max(1, qty), registeredFixed.value);
+        form.exchange_quantity = 0;
+    } else if (activeModality.value === 'exchange') {
+        form.exchange_quantity = Math.min(Math.max(1, qty), registeredExchange.value);
+        form.fixed_quantity = 0;
     }
-}
+};
 
-const totalSelected = computed(() => {
-    return Number(form.fixed_quantity || 0) + Number(form.exchange_quantity || 0);
-});
-
-const hasValidQuantity = computed(() => {
-    if (customerBottleType.value === 'fixed') {
-        return Number(form.fixed_quantity || 0) > 0 && Number(form.fixed_quantity || 0) <= registeredFixed.value;
-    }
-    if (customerBottleType.value === 'exchange') {
-        return Number(form.exchange_quantity || 0) > 0 && Number(form.exchange_quantity || 0) <= registeredExchange.value;
-    }
-    return totalSelected.value > 0 &&
-        Number(form.fixed_quantity || 0) <= registeredFixed.value &&
-        Number(form.exchange_quantity || 0) <= registeredExchange.value;
-});
-
-const canSubmit = computed(() => {
-    return props.canOrder && hasValidQuantity.value && !form.processing;
-});
-
-const hasAnyBlock = computed(() => {
-    return Boolean(
-        props.blocks.has_active_order ||
-        props.blocks.outside_schedule ||
-        props.blocks.no_address ||
-        props.blocks.no_bottles ||
-        props.blocks.no_customer
-    );
-});
-
-const blockingReasonText = computed(() => {
-    if (props.blocks.has_active_order) return 'Tienes un pedido activo en curso.';
-    if (props.blocks.outside_schedule) return 'Recepción no disponible por horario.';
-    if (props.blocks.no_address) return 'Falta registrar tu domicilio de entrega.';
-    if (props.blocks.no_bottles) return 'Sin botellones de 20L en tu inventario.';
-    if (props.blocks.no_customer) return 'Cuenta sin cliente vinculado.';
-    if (totalSelected.value <= 0) return 'Selecciona al menos 1 botellón para continuar.';
-    return '';
-});
-
-// Controles para botellones fijos
 const incrementFixed = () => {
-    if (form.fixed_quantity < registeredFixed.value) {
-        form.fixed_quantity++;
-    }
+    if (form.fixed_quantity < registeredFixed.value) form.fixed_quantity++;
 };
 
 const decrementFixed = () => {
-    if (form.fixed_quantity > 0) {
-        form.fixed_quantity--;
-    }
+    if (form.fixed_quantity > 1) form.fixed_quantity--;
 };
 
-const setAllFixed = () => {
-    form.fixed_quantity = registeredFixed.value;
-};
-
-// Controles para botellones de cambio
 const incrementExchange = () => {
-    if (form.exchange_quantity < registeredExchange.value) {
-        form.exchange_quantity++;
-    }
+    if (form.exchange_quantity < registeredExchange.value) form.exchange_quantity++;
 };
 
 const decrementExchange = () => {
-    if (form.exchange_quantity > 0) {
-        form.exchange_quantity--;
-    }
+    if (form.exchange_quantity > 1) form.exchange_quantity--;
 };
 
-const setAllExchange = () => {
-    form.exchange_quantity = registeredExchange.value;
+const clampFixed = () => {
+    let val = parseInt(form.fixed_quantity, 10);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > registeredFixed.value) val = registeredFixed.value;
+    form.fixed_quantity = val;
+};
+
+const clampExchange = () => {
+    let val = parseInt(form.exchange_quantity, 10);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > registeredExchange.value) val = registeredExchange.value;
+    form.exchange_quantity = val;
 };
 
 const submitOrder = () => {
-    if (!canSubmit.value) return;
-
+    if (isSubmitDisabled.value) return;
     form.post(route('cliente.orders.store'), {
         preserveScroll: true,
     });
 };
+
+const activeErrorList = computed(() => {
+    return Object.entries(form.errors).map(([key, msg]) => ({ key, msg }));
+});
 </script>
 
 <template>
-    <Head title="Nuevo pedido" />
+    <Head title="Pedir botellones" />
 
     <AuthenticatedLayout>
-        <div class="py-6 sm:py-8 bg-slate-50/60 min-h-[calc(100vh-4rem)]">
-            <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 space-y-5">
+        <div class="bg-[#F5F4F8] py-4 sm:py-7 pb-24 lg:pb-8">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+                <!-- ========================================== -->
+                <!-- 1. HERO MORADO LIMPIO (SIN FLECHA)         -->
+                <!-- ========================================== -->
+                <header class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E1545] via-[#2A1E5E] to-[#3B297D] text-white shadow-md p-5 sm:p-7 border border-[#34266E]">
+                    <div
+                        aria-hidden="true"
+                        class="pointer-events-none absolute -right-10 -top-10 w-44 h-44 rounded-full bg-violet-400/15 blur-2xl"
+                    ></div>
 
-                <!-- Navegación de regreso y subtítulo breve -->
-                <div class="flex items-center justify-between">
-                    <Link
-                        :href="route('cliente.dashboard')"
-                        class="inline-flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-900 transition focus:outline-none"
-                    >
-                        <i class="fa-solid fa-arrow-left text-xs"></i>
-                        <span>Volver al inicio</span>
-                    </Link>
-                    <span class="text-xs text-slate-400">Botellones de 20 litros a domicilio</span>
-                </div>
-
-                <!-- 2. AVISOS COMPACTOS DE BLOQUEO (SI EXISTE ALGUNA CONDICIÓN) -->
-                <div
-                    v-if="hasAnyBlock"
-                    class="p-3.5 sm:p-4 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-950 text-xs sm:text-sm space-y-2.5"
-                >
-                    <!-- Pedido activo -->
-                    <div v-if="blocks.has_active_order && activeOrder" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div class="flex items-start gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-amber-700 mt-0.5 shrink-0"></i>
-                            <span>
-                                Tienes un pedido activo en curso (<strong>{{ activeOrder.folio }}</strong> - {{ activeOrder.status_label }}). Solo puedes tener un pedido activo a la vez.
-                            </span>
+                    <div class="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3.5">
+                        <div class="space-y-1">
+                            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                                Pedir botellones
+                            </h1>
+                            <p class="text-xs sm:text-sm text-violet-200 leading-relaxed">
+                                Agua purificada de 20 L directo a tu domicilio
+                            </p>
                         </div>
+
+                        <div
+                            class="inline-flex items-center gap-1.5 text-xs font-semibold self-start sm:self-auto shrink-0"
+                            :class="scheduleStatus.can_receive ? 'text-emerald-300' : 'text-rose-300'"
+                        >
+                            <Clock class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>{{ scheduleStatus.can_receive ? 'Recepción abierta' : 'Fuera de horario' }}</span>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- ========================================== -->
+                <!-- 2. BLOQUEOS COMERCIALES                    -->
+                <!-- ========================================== -->
+                <section v-if="!canOrder" aria-label="Requisitos para realizar pedido" class="space-y-3">
+                    <div
+                        v-if="blocks.has_active_order && activeOrder"
+                        class="rounded-2xl bg-white border border-violet-200 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm"
+                    >
+                        <div class="flex items-start gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-violet-100 text-[#6D28D9] flex items-center justify-center shrink-0">
+                                <Truck class="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-extrabold text-[#1E1545]">
+                                    Ya tienes un pedido activo ({{ activeOrder.folio }})
+                                </h2>
+                                <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                    Estado actual: <strong>{{ activeOrder.status_label }}</strong>.
+                                </p>
+                            </div>
+                        </div>
+
                         <Link
                             :href="route('cliente.orders.show', activeOrder.id)"
-                            class="font-semibold underline text-amber-900 hover:text-amber-950 shrink-0 text-xs ml-6 sm:ml-0"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-[#1E1545] hover:bg-[#2E2363] transition shrink-0"
                         >
-                            Ver pedido activo
+                            <span>Seguir pedido</span>
                         </Link>
                     </div>
 
-                    <!-- Fuera de horario -->
-                    <div v-if="blocks.outside_schedule" class="flex items-start gap-2">
-                        <i class="fa-solid fa-store-slash text-amber-700 mt-0.5 shrink-0"></i>
-                        <span>
-                            <strong>Fuera de horario de recepción:</strong> {{ scheduleStatus.message }}.
-                            Horarios: {{ scheduleSummary.order_intervals?.join(' y ') }} ({{ scheduleSummary.days_applied }}).
-                        </span>
+                    <div
+                        v-if="blocks.outside_schedule"
+                        class="rounded-2xl bg-amber-50 border border-amber-200 p-5 flex items-start gap-3"
+                    >
+                        <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                            <Clock class="w-5 h-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-extrabold text-amber-950">Horario cerrado</h2>
+                            <p class="text-xs sm:text-sm text-amber-900 mt-0.5">{{ scheduleStatus.message }}</p>
+                            <p v-if="formattedScheduleInline" class="text-xs text-amber-800 mt-1 font-semibold">
+                                Recepción: {{ formattedScheduleInline }}
+                            </p>
+                        </div>
                     </div>
 
-                    <!-- Sin domicilio -->
-                    <div v-if="blocks.no_address" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div class="flex items-start gap-2">
-                            <i class="fa-solid fa-location-dot text-amber-700 mt-0.5 shrink-0"></i>
-                            <span>Aún no tienes registrado tu domicilio de entrega en Hocabá.</span>
+                    <div
+                        v-if="blocks.no_address"
+                        class="rounded-2xl bg-white border border-rose-200 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm"
+                    >
+                        <div class="flex items-start gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                                <MapPin class="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-extrabold text-[#1E1545]">Registra tu domicilio</h2>
+                                <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                    Necesitamos tu dirección para enviar tus botellones.
+                                </p>
+                            </div>
                         </div>
+
                         <Link
                             :href="route('cliente.addresses.create')"
-                            class="font-semibold underline text-amber-900 hover:text-amber-950 shrink-0 text-xs ml-6 sm:ml-0"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 transition shrink-0"
                         >
-                            Registrar domicilio
+                            <MapPin class="w-4 h-4" aria-hidden="true" />
+                            <span>Registrar domicilio</span>
                         </Link>
                     </div>
 
-                    <!-- Sin botellones -->
-                    <div v-if="blocks.no_bottles" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div class="flex items-start gap-2">
-                            <i class="fa-solid fa-bottle-water text-amber-700 mt-0.5 shrink-0"></i>
-                            <span>No tienes botellones de 20L registrados en tu cuenta para solicitar pedidos.</span>
+                    <div
+                        v-if="blocks.no_bottles"
+                        class="rounded-2xl bg-white border border-indigo-200 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm"
+                    >
+                        <div class="flex items-start gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                                <Droplets class="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-extrabold text-[#1E1545]">Configura tus botellones</h2>
+                                <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                    Indica en tu cuenta cuántos botellones Fijos o de Cambio manejas.
+                                </p>
+                            </div>
                         </div>
+
                         <Link
                             :href="route('profile.edit')"
-                            class="font-semibold underline text-amber-900 hover:text-amber-950 shrink-0 text-xs ml-6 sm:ml-0"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-[#1E1545] hover:bg-[#2E2363] transition shrink-0"
                         >
-                            Indicar botellones
+                            <UserCog class="w-4 h-4" aria-hidden="true" />
+                            <span>Configurar envases</span>
                         </Link>
                     </div>
 
-                    <!-- Sin customer -->
-                    <div v-if="blocks.no_customer" class="flex items-start gap-2">
-                        <i class="fa-solid fa-user-xmark text-amber-700 mt-0.5 shrink-0"></i>
-                        <span>Tu cuenta de usuario no tiene un perfil de cliente asociado. Contacta al administrador.</span>
+                    <div
+                        v-if="blocks.no_customer"
+                        class="rounded-2xl bg-rose-50 border border-rose-200 p-5 flex items-start gap-3"
+                    >
+                        <AlertTriangle class="w-5 h-5 text-rose-700 shrink-0 mt-0.5" aria-hidden="true" />
+                        <p class="text-sm font-semibold text-rose-900">
+                            No encontramos un perfil de cliente activo vinculado a tu usuario.
+                        </p>
                     </div>
-                </div>
+                </section>
 
-                <!-- Errores de validación backend -->
+                <!-- Errores de validación -->
                 <div
-                    v-if="form.errors.schedule || form.errors.active_order || form.errors.address || form.errors.customer || form.errors.quantity || form.errors.fixed_quantity || form.errors.exchange_quantity"
-                    class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1"
+                    v-if="activeErrorList.length > 0"
+                    role="alert"
+                    class="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-1"
                 >
-                    <p v-if="form.errors.schedule" class="font-medium">{{ form.errors.schedule }}</p>
-                    <p v-if="form.errors.active_order" class="font-medium">{{ form.errors.active_order }}</p>
-                    <p v-if="form.errors.address" class="font-medium">{{ form.errors.address }}</p>
-                    <p v-if="form.errors.customer" class="font-medium">{{ form.errors.customer }}</p>
-                    <p v-if="form.errors.quantity" class="font-medium">{{ form.errors.quantity }}</p>
-                    <p v-if="form.errors.fixed_quantity" class="font-medium">{{ form.errors.fixed_quantity }}</p>
-                    <p v-if="form.errors.exchange_quantity" class="font-medium">{{ form.errors.exchange_quantity }}</p>
+                    <p class="text-xs font-extrabold text-rose-900 uppercase tracking-wide flex items-center gap-1.5">
+                        <AlertTriangle class="w-4 h-4" aria-hidden="true" />
+                        <span>Revisa tu pedido</span>
+                    </p>
+                    <ul class="list-disc list-inside text-xs sm:text-sm text-rose-800 space-y-0.5">
+                        <li v-for="err in activeErrorList" :key="err.key">{{ err.msg }}</li>
+                    </ul>
                 </div>
 
-                <!-- 3. ESTRUCTURA PRINCIPAL EN 2 COLUMNAS (FORMULARIO A LA IZQUIERDA, RESUMEN A LA DERECHA) -->
-                <form @submit.prevent="submitOrder">
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-                        <!-- COLUMNA IZQUIERDA: FORMULARIO -->
-                        <div class="lg:col-span-7 space-y-5">
-
-                            <!-- TARJETA: ¿CUÁNTOS NECESITAS? (MODALIDAD EXCLUSIVA) -->
-                            <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
-                                <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-                                    <h2 class="text-base font-semibold text-slate-900">
-                                        ¿Cuántos necesitas?
-                                    </h2>
-                                    <span v-if="customerBottleType" class="text-xs px-2.5 py-0.5 rounded-full font-bold"
-                                        :class="customerBottleType === 'fixed' ? 'bg-blue-100 text-blue-900' : 'bg-sky-100 text-sky-900'">
-                                        Modalidad: {{ customerBottleType === 'fixed' ? 'Fijos' : 'Cambios' }}
+                <!-- ========================================== -->
+                <!-- 3. SELECTOR LIMPIO Y RESUMEN               -->
+                <!-- ========================================== -->
+                <form @submit.prevent="submitOrder" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    <!-- Columna principal -->
+                    <div class="lg:col-span-7 space-y-5">
+                        <!-- Tarjeta única de cantidad -->
+                        <section class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm p-5 sm:p-6 space-y-5">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2.5">
+                                    <span
+                                        v-if="activeModality === 'fixed'"
+                                        class="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0"
+                                    >
+                                        <Package class="w-5 h-5" aria-hidden="true" />
                                     </span>
-                                </div>
+                                    <span
+                                        v-else
+                                        class="h-10 w-10 rounded-xl bg-sky-100 text-[#0275B8] flex items-center justify-center shrink-0"
+                                    >
+                                        <Droplets class="w-5 h-5" aria-hidden="true" />
+                                    </span>
 
-                                <!-- Únicamente la Modalidad Registrada del Cliente -->
-                                <div class="space-y-3.5">
-
-                                    <!-- 1. Si el cliente tiene Fijos -->
-                                    <div v-if="customerBottleType === 'fixed'" class="p-4 rounded-xl border border-blue-200 bg-blue-50/30">
-                                        <div v-if="registeredFixed > 0" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                            <div class="space-y-1">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-sm font-semibold text-slate-900">Botellones Fijos</span>
-                                                    <span class="text-xs text-slate-500">({{ registeredFixed }} registrados)</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    @click="setAllFixed"
-                                                    :disabled="!props.canOrder || form.fixed_quantity === registeredFixed"
-                                                    class="text-xs font-medium text-blue-900 hover:text-blue-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer underline"
-                                                >
-                                                    Pedir todos ({{ registeredFixed }})
-                                                </button>
-                                            </div>
-
-                                            <!-- Control Stepper: Botones táctiles de 44px -->
-                                            <div class="flex items-center gap-1.5 self-start sm:self-center">
-                                                <button
-                                                    type="button"
-                                                    @click="decrementFixed"
-                                                    :disabled="form.fixed_quantity <= 1 || !props.canOrder"
-                                                    class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
-                                                    title="Disminuir fijos"
-                                                    aria-label="Disminuir fijos"
-                                                >
-                                                    <i class="fa-solid fa-minus text-xs"></i>
-                                                </button>
-
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    :max="registeredFixed"
-                                                    v-model.number="form.fixed_quantity"
-                                                    :disabled="!props.canOrder"
-                                                    class="h-11 w-16 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
-                                                    aria-label="Cantidad de botellones fijos"
-                                                />
-
-                                                <button
-                                                    type="button"
-                                                    @click="incrementFixed"
-                                                    :disabled="form.fixed_quantity >= registeredFixed || !props.canOrder"
-                                                    class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
-                                                    title="Aumentar fijos"
-                                                    aria-label="Aumentar fijos"
-                                                >
-                                                    <i class="fa-solid fa-plus text-xs"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div v-else class="flex items-center justify-between py-1">
-                                            <span class="text-sm font-semibold text-slate-700">Fijos</span>
-                                            <span class="text-xs text-slate-500 font-normal">Sin botellones registrados</span>
-                                        </div>
-
-                                        <InputError :message="form.errors.fixed_quantity" class="mt-1" />
-                                    </div>
-
-                                    <!-- 2. Si el cliente tiene Cambios -->
-                                    <div v-else-if="customerBottleType === 'exchange'" class="p-4 rounded-xl border border-sky-200 bg-sky-50/30">
-                                        <div v-if="registeredExchange > 0" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                            <div class="space-y-1">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-sm font-semibold text-slate-900">Botellones de Cambio</span>
-                                                    <span class="text-xs text-slate-500">({{ registeredExchange }} registrados)</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    @click="setAllExchange"
-                                                    :disabled="!props.canOrder || form.exchange_quantity === registeredExchange"
-                                                    class="text-xs font-medium text-sky-900 hover:text-sky-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer underline"
-                                                >
-                                                    Pedir todos ({{ registeredExchange }})
-                                                </button>
-                                            </div>
-
-                                            <!-- Control Stepper: Botones táctiles de 44px -->
-                                            <div class="flex items-center gap-1.5 self-start sm:self-center">
-                                                <button
-                                                    type="button"
-                                                    @click="decrementExchange"
-                                                    :disabled="form.exchange_quantity <= 1 || !props.canOrder"
-                                                    class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
-                                                    title="Disminuir de cambio"
-                                                    aria-label="Disminuir de cambio"
-                                                >
-                                                    <i class="fa-solid fa-minus text-xs"></i>
-                                                </button>
-
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    :max="registeredExchange"
-                                                    v-model.number="form.exchange_quantity"
-                                                    :disabled="!props.canOrder"
-                                                    class="h-11 w-16 text-center font-mono font-semibold text-base text-slate-900 border border-slate-200 rounded-xl bg-white focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
-                                                    aria-label="Cantidad de botellones de cambio"
-                                                />
-
-                                                <button
-                                                    type="button"
-                                                    @click="incrementExchange"
-                                                    :disabled="form.exchange_quantity >= registeredExchange || !props.canOrder"
-                                                    class="h-11 w-11 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed cursor-pointer focus:ring-2 focus:ring-blue-900/20"
-                                                    title="Aumentar de cambio"
-                                                    aria-label="Aumentar de cambio"
-                                                >
-                                                    <i class="fa-solid fa-plus text-xs"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div v-else class="flex items-center justify-between py-1">
-                                            <span class="text-sm font-semibold text-slate-700">De cambio</span>
-                                            <span class="text-xs text-slate-500 font-normal">Sin botellones registrados</span>
-                                        </div>
-
-                                        <InputError :message="form.errors.exchange_quantity" class="mt-1" />
-                                    </div>
-
-                                    <!-- 3. Sin botellones -->
-                                    <div v-else class="p-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-xs text-center">
-                                        No tienes botellones registrados en tu cuenta.
+                                    <div>
+                                        <h2 class="text-base font-extrabold text-[#1E1545]">
+                                            {{ activeModality === 'fixed' ? 'Botellones Fijos' : activeModality === 'exchange' ? 'Botellones de Cambio' : 'Elige tu cantidad' }}
+                                        </h2>
+                                        <p class="text-xs text-slate-500">
+                                            {{ activeModality === 'fixed'
+                                                ? 'Se lavan, llenan y regresan tus propios envases'
+                                                : activeModality === 'exchange'
+                                                    ? 'Entregas envase vacío y recibes lleno al instante'
+                                                    : 'Configura tus botellones en Mi cuenta' }}
+                                        </p>
                                     </div>
                                 </div>
 
-                                <!-- Ayuda desplegable accesible -->
-                                <details class="group pt-2 border-t border-slate-100 text-xs">
-                                    <summary class="cursor-pointer font-medium text-slate-500 hover:text-slate-800 flex items-center justify-between list-none select-none py-1">
-                                        <span class="flex items-center gap-1.5">
-                                            <i class="fa-regular fa-circle-question text-slate-400"></i>
-                                            <span>¿Cuál es la diferencia?</span>
-                                        </span>
-                                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform"></i>
-                                    </summary>
-                                    <div class="mt-2 space-y-1.5 text-[11px] text-slate-600 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
-                                        <p>
-                                            <strong class="text-slate-800 font-semibold">Fijos:</strong> Envases marcados con tu nombre; se recogen vacíos, se lavan y rellenan en planta y se te regresan los mismos.
-                                        </p>
-                                        <p>
-                                            <strong class="text-slate-800 font-semibold">De cambio:</strong> Envases comerciales estándar que intercambias vacíos por llenos en el momento de la entrega.
-                                        </p>
-                                    </div>
-                                </details>
+                                <span
+                                    v-if="maxQuantity > 0"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#F5F4F8] text-slate-600 tabular-nums"
+                                >
+                                    Máx. {{ maxQuantity }}
+                                </span>
                             </div>
 
-                            <!-- TARJETA: INDICACIONES DE ENTREGA (OPCIONAL) -->
-                            <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <label for="order-notes" class="text-sm font-semibold text-slate-900">
-                                        Indicaciones de entrega <span class="text-xs font-normal text-slate-400">(opcional)</span>
+                            <!-- Selector protagonista -->
+                            <div
+                                v-if="activeModality === 'fixed' || activeModality === 'exchange'"
+                                class="rounded-2xl p-5 border flex flex-col items-center gap-4"
+                                :class="activeModality === 'fixed'
+                                    ? 'bg-indigo-50/50 border-indigo-200/80'
+                                    : 'bg-sky-50/60 border-sky-200/80'"
+                            >
+                                <label
+                                    :for="activeModality === 'fixed' ? 'fixed-qty-input' : 'exchange-qty-input'"
+                                    class="text-xs font-bold uppercase tracking-wider text-slate-500 text-center"
+                                >
+                                    Cantidad a solicitar (20 L) • <span class="text-[#1E1545] tabular-nums">${{ formatCurrency(unitPrice) }} c/u</span>
+                                </label>
+
+                                <div class="flex items-center justify-center gap-3">
+                                    <button
+                                        type="button"
+                                        @click="activeModality === 'fixed' ? decrementFixed() : decrementExchange()"
+                                        :disabled="!canOrder || currentQuantity <= 1"
+                                        :aria-label="activeModality === 'fixed' ? 'Disminuir botellones fijos' : 'Disminuir botellones de cambio'"
+                                        class="h-12 w-12 rounded-2xl bg-white border border-[#E9E7F0] text-[#1E1545] hover:bg-[#F5F4F8] shadow-sm disabled:opacity-40 flex items-center justify-center transition cursor-pointer"
+                                    >
+                                        <Minus class="w-5 h-5" aria-hidden="true" />
+                                    </button>
+
+                                    <input
+                                        v-if="activeModality === 'fixed'"
+                                        id="fixed-qty-input"
+                                        type="number"
+                                        min="1"
+                                        :max="registeredFixed"
+                                        v-model.number="form.fixed_quantity"
+                                        @blur="clampFixed"
+                                        :disabled="!canOrder"
+                                        class="w-24 h-12 text-center font-mono font-black text-2xl rounded-2xl border border-indigo-200 bg-white text-[#1E1545] tabular-nums shadow-sm"
+                                    />
+                                    <input
+                                        v-else
+                                        id="exchange-qty-input"
+                                        type="number"
+                                        min="1"
+                                        :max="registeredExchange"
+                                        v-model.number="form.exchange_quantity"
+                                        @blur="clampExchange"
+                                        :disabled="!canOrder"
+                                        class="w-24 h-12 text-center font-mono font-black text-2xl rounded-2xl border border-sky-200 bg-white text-[#1E1545] tabular-nums shadow-sm"
+                                    />
+
+                                    <button
+                                        type="button"
+                                        @click="activeModality === 'fixed' ? incrementFixed() : incrementExchange()"
+                                        :disabled="!canOrder || currentQuantity >= maxQuantity"
+                                        :aria-label="activeModality === 'fixed' ? 'Aumentar botellones fijos' : 'Aumentar botellones de cambio'"
+                                        class="h-12 w-12 rounded-2xl bg-white border border-[#E9E7F0] text-[#1E1545] hover:bg-[#F5F4F8] shadow-sm disabled:opacity-40 flex items-center justify-center transition cursor-pointer"
+                                    >
+                                        <Plus class="w-5 h-5" aria-hidden="true" />
+                                    </button>
+                                </div>
+
+                                <!-- Chips de selección rápida -->
+                                <div v-if="quickQuantities.length > 0 && canOrder" class="flex flex-wrap justify-center gap-2 pt-1" role="group" aria-label="Cantidades rápidas">
+                                    <button
+                                        v-for="qty in quickQuantities"
+                                        :key="qty"
+                                        type="button"
+                                        @click="setQuantity(qty)"
+                                        class="px-4 py-2 min-h-[40px] rounded-xl text-xs font-extrabold border transition cursor-pointer tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                                        :class="currentQuantity === qty
+                                            ? 'bg-[#1E1545] text-white border-[#1E1545] shadow-sm'
+                                            : 'bg-white text-[#1E1545] border-[#E9E7F0] hover:bg-[#ECE8F8]'"
+                                    >
+                                        {{ qty === maxQuantity ? `Todos (${qty})` : `${qty}` }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-else class="rounded-2xl bg-slate-50 border border-dashed border-slate-300 p-6 text-center text-xs text-slate-600">
+                                No hay botellones configurados en tu cuenta todavía.
+                            </div>
+
+                            <!-- Indicaciones dentro de la misma tarjeta para menos saltos visuales -->
+                            <div class="pt-3 border-t border-[#E9E7F0] space-y-2">
+                                <div class="flex items-baseline justify-between gap-3">
+                                    <label for="order-notes" class="text-sm font-extrabold text-[#1E1545]">
+                                        Indicaciones (opcional)
                                     </label>
-                                    <span class="text-[11px] font-mono text-slate-400">
-                                        {{ form.notes?.length || 0 }} / 500
+                                    <span class="text-xs font-semibold text-slate-400 tabular-nums shrink-0">
+                                        {{ form.notes.length }} / 500
                                     </span>
                                 </div>
 
@@ -423,99 +494,127 @@ const submitOrder = () => {
                                     v-model="form.notes"
                                     rows="2"
                                     maxlength="500"
-                                    :disabled="!props.canOrder"
-                                    placeholder="Ej. Tocar el timbre"
-                                    class="w-full rounded-xl border-slate-200 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 resize-none transition"
+                                    :disabled="!canOrder"
+                                    placeholder="Ej. Tocar el portón azul o dejar junto a la puerta"
+                                    class="w-full rounded-xl border-[#E9E7F0] bg-[#F5F4F8]/60 text-base sm:text-sm text-[#1E1545] placeholder:text-slate-400 focus:border-[#6D28D9] focus:ring-[#6D28D9] disabled:opacity-60"
                                 ></textarea>
-                                <InputError :message="form.errors.notes" />
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Columna derecha: Dirección + Horario legible + Confirmación escritorio -->
+                    <aside class="lg:col-span-5 lg:sticky lg:top-20 space-y-4">
+                        <div class="rounded-2xl bg-white border border-[#E9E7F0] shadow-sm overflow-hidden">
+                            <div class="bg-[#1E1545] text-white px-5 py-3.5 flex items-center justify-between">
+                                <h2 class="text-xs font-extrabold uppercase tracking-wider">
+                                    Resumen de entrega
+                                </h2>
+                                <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-white/15 text-violet-100 tabular-nums">
+                                    {{ totalSelectedBottles }} u.
+                                </span>
                             </div>
 
-                        </div>
-
-                        <!-- COLUMNA DERECHA: RESUMEN COMPACTO -->
-                        <div class="lg:col-span-5 space-y-4 lg:sticky lg:top-24">
-                            <div class="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
-                                <div class="border-b border-slate-100 pb-3">
-                                    <h2 class="text-sm font-semibold text-slate-900">
-                                        Resumen del pedido
-                                    </h2>
-                                </div>
-
-                                <!-- Vista previa del domicilio de entrega actual -->
-                                <div class="space-y-1">
-                                    <span class="text-[11px] font-medium text-slate-500 block">
-                                        Domicilio de entrega (vista previa)
-                                    </span>
-                                    <template v-if="address">
-                                        <p class="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">
-                                            {{ address.full_address }}
-                                        </p>
-                                        <p v-if="address.between_streets" class="text-[11px] text-slate-500">
-                                            <span class="text-slate-400">Entre calles:</span> {{ address.between_streets }}
-                                        </p>
-                                        <p v-if="address.reference" class="text-[11px] text-slate-500">
-                                            <span class="text-slate-400">Referencia:</span> {{ address.reference }}
-                                        </p>
-                                    </template>
-                                    <template v-else>
-                                        <p class="text-xs text-amber-700 font-medium">
-                                            Sin domicilio registrado.
-                                        </p>
-                                    </template>
-                                </div>
-
-                                <!-- Desglose de cantidades (omitiendo modalidades en cero) -->
-                                <div class="pt-3 border-t border-slate-100 space-y-2 text-xs">
-                                    <div v-if="form.fixed_quantity > 0" class="flex items-center justify-between text-slate-700">
-                                        <span>Fijos</span>
-                                        <span class="font-mono font-semibold">{{ form.fixed_quantity }}</span>
+                            <div class="p-5 space-y-4">
+                                <div v-if="address" class="space-y-1">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <MapPin class="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
+                                            <span>Entregar en</span>
+                                        </span>
+                                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800">
+                                            {{ address.zone_label }}
+                                        </span>
                                     </div>
-                                    <div v-if="form.exchange_quantity > 0" class="flex items-center justify-between text-slate-700">
-                                        <span>De cambio</span>
-                                        <span class="font-mono font-semibold">{{ form.exchange_quantity }}</span>
-                                    </div>
-                                    <div v-if="totalSelected === 0" class="text-[11px] text-slate-400 italic">
-                                        Sin botellones seleccionados
-                                    </div>
-                                </div>
-
-                                <!-- Total de botellones destacado en una sola línea -->
-                                <div class="pt-3 border-t border-slate-200 flex items-center justify-between">
-                                    <span class="text-xs sm:text-sm font-semibold text-slate-900">Total de botellones</span>
-                                    <span class="text-base sm:text-lg font-bold font-mono text-blue-900">{{ totalSelected }}</span>
-                                </div>
-
-                                <!-- Botones de acción -->
-                                <div class="pt-2 space-y-2">
-                                    <button
-                                        type="submit"
-                                        :disabled="!canSubmit"
-                                        class="w-full py-3 px-5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-blue-900 hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-xs flex items-center justify-center gap-2 cursor-pointer focus:ring-2 focus:ring-blue-900/20"
-                                    >
-                                        <i v-if="form.processing" class="fa-solid fa-spinner fa-spin text-xs"></i>
-                                        <span>{{ form.processing ? 'Registrando...' : 'Solicitar pedido' }}</span>
-                                    </button>
-
-                                    <!-- Motivo breve del bloqueo cerca del botón -->
-                                    <p v-if="!canSubmit && blockingReasonText" class="text-[11px] text-center text-slate-500 leading-tight">
-                                        {{ blockingReasonText }}
+                                    <p class="text-sm font-extrabold text-[#1E1545] break-words">
+                                        {{ address.full_address }}
                                     </p>
-
-                                    <!-- Acción secundaria Volver -->
-                                    <Link
-                                        :href="route('cliente.dashboard')"
-                                        class="block w-full py-2 text-center text-xs font-medium text-slate-500 hover:text-slate-800 transition cursor-pointer"
-                                    >
-                                        Volver
-                                    </Link>
+                                    <p v-if="address.between_streets" class="text-xs text-slate-600 break-words">
+                                        {{ address.between_streets }}
+                                    </p>
+                                    <p v-if="address.reference" class="text-xs text-slate-500 break-words">
+                                        Ref.: {{ address.reference }}
+                                    </p>
                                 </div>
 
+                                <!-- Horario legible -->
+                                <div v-if="formattedSchedule" class="rounded-xl bg-[#F5F4F8] border border-[#E9E7F0] p-3.5 flex items-start gap-2.5">
+                                    <Clock class="w-4 h-4 text-[#6D28D9] shrink-0 mt-0.5" aria-hidden="true" />
+                                    <div class="min-w-0 text-xs space-y-0.5">
+                                        <p class="font-extrabold text-[#1E1545]">
+                                            {{ formattedSchedule.days }}
+                                        </p>
+                                        <p class="text-slate-600 font-medium">
+                                            Recepción de pedidos: {{ formattedSchedule.intervals }}
+                                        </p>
+                                        <p v-if="formattedSchedule.breakLabel" class="text-[11px] text-slate-500">
+                                            {{ formattedSchedule.breakLabel }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="border-t border-[#E9E7F0] pt-3.5 space-y-2 text-sm">
+                                    <div class="flex items-center justify-between text-xs text-slate-600">
+                                        <span>
+                                            {{ totalSelectedBottles }} {{ totalSelectedBottles === 1 ? 'botellón' : 'botellones' }}
+                                            ({{ activeModality === 'fixed' ? 'Fijos' : 'De cambio' }}) × ${{ formatCurrency(unitPrice) }}
+                                        </span>
+                                        <span class="font-bold text-[#1E1545] tabular-nums">
+                                            ${{ formatCurrency(subtotalAmount) }}
+                                        </span>
+                                    </div>
+
+                                    <div v-if="freePromoBottles > 0" class="flex items-center justify-between text-xs text-emerald-700 font-semibold">
+                                        <span>Promoción semanal 9+1 (1 gratis)</span>
+                                        <span class="tabular-nums">-${{ formatCurrency(discountAmount) }}</span>
+                                    </div>
+
+                                    <div class="flex items-baseline justify-between pt-2 border-t border-[#E9E7F0]">
+                                        <span class="font-extrabold text-[#1E1545]">Total a pagar</span>
+                                        <span class="text-2xl font-black text-[#1E1545] tabular-nums">
+                                            ${{ formatCurrency(totalAmountToPay) }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    :disabled="isSubmitDisabled"
+                                    class="hidden lg:inline-flex w-full items-center justify-center gap-2 px-5 py-3.5 min-h-[48px] rounded-xl text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
+                                >
+                                    <CheckCircle2 class="w-5 h-5 text-emerald-400" aria-hidden="true" />
+                                    <span>{{ form.processing ? 'Registrando pedido...' : 'Confirmar pedido' }}</span>
+                                </button>
                             </div>
                         </div>
+                    </aside>
 
+                    <!-- Barra fija móvil de confirmación (encima del bottom nav) -->
+                    <div
+                        v-if="canOrder"
+                        class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 lg:hidden bg-white/95 backdrop-blur-md border-t border-[#E9E7F0] px-4 py-3 shadow-[0_-6px_20px_rgba(30,21,69,0.10)]"
+                    >
+                        <div class="max-w-lg mx-auto flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <span class="text-[11px] font-semibold text-slate-500 block truncate">
+                                    {{ totalSelectedBottles }} {{ totalSelectedBottles === 1 ? 'botellón' : 'botellones' }}
+                                    <template v-if="freePromoBottles > 0"> • 1 gratis (9+1)</template>
+                                </span>
+                                <span class="text-lg font-black text-[#1E1545] tabular-nums block leading-tight">
+                                    ${{ formatCurrency(totalAmountToPay) }}
+                                </span>
+                            </div>
+
+                            <button
+                                type="submit"
+                                :disabled="isSubmitDisabled"
+                                class="inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[48px] rounded-xl text-sm font-extrabold text-white bg-[#1E1545] hover:bg-[#2E2363] shadow-sm transition cursor-pointer disabled:opacity-50 shrink-0"
+                            >
+                                <CheckCircle2 class="w-[18px] h-[18px] text-emerald-400 shrink-0" aria-hidden="true" />
+                                <span>{{ form.processing ? 'Enviando...' : 'Confirmar pedido' }}</span>
+                            </button>
+                        </div>
                     </div>
                 </form>
-
             </div>
         </div>
     </AuthenticatedLayout>
